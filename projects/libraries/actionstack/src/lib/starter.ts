@@ -107,10 +107,18 @@ export const createStarter = () => {
    * @param next - Function to call the next middleware in the chain.
    * @returns Function - The actual middleware function that handles actions.
    */
-  const exclusive = (config: MiddlewareConfig) => (next: Function) => async (action: Action | AsyncAction) => {
+  const exclusive = (config: MiddlewareConfig) => {
     const handler = createActionHandler(config);
     const lockInstance = config.lock;
-    await handler(action, next, lockInstance);
+    const onError = console.warn;
+
+    return (next: Function) => async (action: { type: string }) => {
+      try {
+        await handler(action, next, lockInstance);
+      } catch (err: any) {
+        onError(`[starter] [exclusive] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${err.message}`);
+      }
+    };
   };
 
   /**
@@ -122,18 +130,52 @@ export const createStarter = () => {
    * @param next - Function to call the next middleware in the chain.
    * @returns Function - The actual middleware function that handles actions.
    */
-  const concurrent = (config: MiddlewareConfig) => (next: Function) => async (action: Action | AsyncAction) => {
-    let asyncActions: Promise<void>[] = [];
+  const concurrent = (config: MiddlewareConfig) => {
     const handler = createActionHandler(config);
-    const lockInstance = config.lock;
+    const inflight = new Set<Promise<void>>();
+    const onError = console.warn;
 
-    const asyncFunc = handler(action, next, lockInstance);
-    if (asyncFunc) {
-      asyncActions.push(asyncFunc);
-      asyncFunc.finally(() => {
-        asyncActions = asyncActions.filter(func => func !== asyncFunc);
+    // Attach small control surface for diagnostics/teardown
+    const middleware = (next: Function) => {
+      // expose helpers on the returned function (non-enumerable to be unobtrusive)
+      const fn = async (action: { type: string }) => {
+        // DO NOT await; return quickly for true concurrency
+        const p = (async () => {
+          const perActionLock = createLock(); // critical: do not use shared lock here
+          await handler(action, next, perActionLock);
+        })();
+
+        inflight.add(p);
+
+        // ensure cleanup + error reporting
+        p.catch(err => onError(`[starter] [concurrent] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${err.message}`)).finally(() => {
+          inflight.delete(p);
+        });
+
+        // For compatibility, return the promise in case caller wants to await.
+        return p;
+      };
+
+      Object.defineProperties(fn, {
+        pendingCount: {
+          get: () => inflight.size,
+        },
+        waitForAll: {
+          value: async () => {
+            if (inflight.size === 0) return;
+            // Snapshot to avoid mutation while awaiting
+            await Promise.allSettled(Array.from(inflight));
+          },
+        },
       });
-    }
+
+      return fn as typeof fn & {
+        readonly pendingCount: number;
+        waitForAll(): Promise<void>;
+      };
+    };
+
+    return middleware;
   };
 
   // Map strategy names to functions
@@ -148,7 +190,7 @@ export const createStarter = () => {
   const selectStrategy = ({ dispatch, getState, dependencies, strategy, lock, stack }: any) => (next: Function) => async (action: Action) => {
     let strategyFunc = strategies[strategy()];
     if (!strategyFunc) {
-      console.warn(`Unknown strategy: ${strategy}, default is used: ${defaultStrategy}`);
+      console.warn(`[starter] Unknown strategy: ${strategy}, default is used: ${defaultStrategy}`);
       strategyFunc = strategies[defaultStrategy];
     }
     return strategyFunc({ dispatch, getState, dependencies, lock, stack })(next)(action);
