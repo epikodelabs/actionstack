@@ -27,6 +27,7 @@ export function createActionHandler(config: MiddlewareConfig) {
   const getState = config.getState;
   const dependencies = config.dependencies;
 
+
   /**
    * Handles the given action, processing it either synchronously or asynchronously.
    *
@@ -40,48 +41,28 @@ export function createActionHandler(config: MiddlewareConfig) {
     next: Function,
     lock: SimpleLock
   ): Promise<void> => {
-    await lock.acquire();
-
-    try {
-      if (typeof action === 'function') {
-        const innerLock = createLock();
-        // Process async actions asynchronously and track them
-        await (action as AsyncAction)(
-          // dispatch function passed into thunk
-          async (dispatchedAction: Action | AsyncAction) => {
-            // recursively handle dispatched actions with its own lock
-            await handleAction(dispatchedAction, next, innerLock);
-          },
-          getState,
-          dependencies()
-        );
-      } else {
-        // Process regular synchronous actions
-        await next(action);
-        // After passing action, check registered thunks for triggers
-        for (const thunk of registeredThunks.values()) {
-          const triggers = (thunk as any).triggers;
-          if (!Array.isArray(triggers) || triggers.length === 0) continue;
-          const matches = triggers.some((t: any) => {
-            if (typeof t === 'string') return t === action.type;
-            if (typeof t === 'function') {
-              try {
-                return Boolean(t(action));
-              } catch {
-                return false;
-              }
-            }
-            return false;
-          });
-
-          if (matches) {
-            const innerLock = createLock();
-            await handleAction(thunk, next, innerLock);
+    if (typeof action === 'function') {
+      // Async thunk: we pass in a locked dispatcher
+      await (action as AsyncAction)(
+        async (dispatchedAction: Action | AsyncAction) => {
+          await lock.acquire();
+          try {
+            await handleAction(dispatchedAction, next, lock);
+          } finally {
+            lock.release();
           }
-        }
+        },
+        getState,
+        dependencies()
+      );
+    } else {
+      // Plain action: only wrap next(action)
+      await lock.acquire();
+      try {
+        await next(action);
+      } finally {
+        lock.release();
       }
-    } finally {
-      lock.release();
     }
   };
 
@@ -95,6 +76,40 @@ export function createActionHandler(config: MiddlewareConfig) {
  * @returns Function - The middleware creator function.
  */
 export const createStarter = () => {
+  /**
+   * Determines if a thunk should be triggered by a given action.
+   *
+   * Each thunk may define a `triggers` array. A trigger can be:
+   * 1. A string — representing an action type to match exactly.
+   * 2. A function — that receives the action and returns a boolean indicating
+   *    whether the thunk should run.
+   *
+   * This function evaluates all triggers for a given thunk and returns `true`
+   * if at least one trigger matches the action.
+   *
+   * @param {any} thunk - The thunk object that may have a `triggers` property.
+   * @param {Action} action - The action being dispatched in the middleware.
+   * @returns {boolean} `true` if the thunk should be executed for the given action; `false` otherwise.
+   *
+   * @example
+   * const thunk = { triggers: ['INCREMENT'] };
+   * matchesAction(thunk, { type: 'INCREMENT' }); // true
+   *
+   * const thunkFn = { triggers: [action => action.value > 10] };
+   * matchesAction(thunkFn, { type: 'SET_VALUE', value: 15 }); // true
+   */
+  function matchesAction(thunk: any, action: Action) {
+    const triggers = thunk.triggers;
+    if (!Array.isArray(triggers) || triggers.length === 0) return false;
+    return triggers.some((t: any) => {
+      if (typeof t === 'string') return t === action.type;
+      if (typeof t === 'function') {
+        try { return Boolean(t(action)); } catch { return false; }
+      }
+      return false;
+    });
+  }
+
   /**
    * Middleware function for handling actions exclusively.
    *
@@ -115,6 +130,13 @@ export const createStarter = () => {
     return (next: Function) => async (action: { type: string }) => {
       try {
         await handler(action, next, lockInstance);
+
+        // sequentially trigger matching thunks
+        for (const thunk of registeredThunks.values()) {
+          if (matchesAction(thunk, action)) {
+            await handler(thunk, next, lockInstance);
+          }
+        }
       } catch (err: any) {
         onError(`[starter] [exclusive] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${err.message}`);
       }
@@ -142,7 +164,17 @@ export const createStarter = () => {
       const fn = async (action: { type: string }) => {
         // DO NOT await; return quickly for true concurrency
         const p = (async () => {
+          // handle main action
           await handler(action, next, lockInstance);
+
+          // find matching thunks
+          const matching = Array.from(registeredThunks.values())
+            .filter(thunk => matchesAction(thunk, action));
+
+          // run thunks concurrently, but handle errors individually
+          await Promise.allSettled(
+            matching.map(thunk => handler(thunk, next, lockInstance))
+          );
         })();
 
         inflight.add(p);
