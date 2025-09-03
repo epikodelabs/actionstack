@@ -132,6 +132,7 @@ export const createStarter = () => {
    */
   const concurrent = (config: MiddlewareConfig) => {
     const handler = createActionHandler(config);
+    const lockInstance = config.lock;
     const inflight = new Set<Promise<void>>();
     const onError = console.warn;
 
@@ -141,8 +142,7 @@ export const createStarter = () => {
       const fn = async (action: { type: string }) => {
         // DO NOT await; return quickly for true concurrency
         const p = (async () => {
-          const perActionLock = createLock(); // critical: do not use shared lock here
-          await handler(action, next, perActionLock);
+          await handler(action, next, lockInstance);
         })();
 
         inflight.add(p);
