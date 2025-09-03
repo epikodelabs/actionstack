@@ -1,6 +1,6 @@
 {
   "name": "@actioncrew/actionstack",
-  "version": "3.0.12",
+  "version": "3.0.14",
   "dependencies": {
     "tslib": "^2.3.0"
   },

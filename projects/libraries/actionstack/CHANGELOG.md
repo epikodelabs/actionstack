@@ -1,8 +1,8 @@
 # Changelog
 
-## 3.0.12
+## 3.0.14
 
-Per-action lock in concurrent: createLock() for each dispatch → actions don’t serialize behind one lock.
+Refactored the starter middleware to fully support exclusive and concurrent strategies, added robust thunk triggering based on action type or predicate functions, optimized lock usage to minimize held time while preserving serialized state access, improved error handling with descriptive messages, and enhanced concurrent scheduling of thunks for better performance and reliability.
 
 ## 3.0.10
 
