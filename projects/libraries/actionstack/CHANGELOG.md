@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.12
+
+Per-action lock in concurrent: createLock() for each dispatch → actions don’t serialize behind one lock.
+
 ## 3.0.10
 
 Removed `ExecutionStack`, due to previously eliminated epics and sagas middlewares. Continued emphasis on using only thunks and callable thunks for handling asynchronous logic and side effects, enhancing simplicity and predictability. Small fixes in `module` implementation.
