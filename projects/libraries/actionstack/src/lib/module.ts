@@ -308,7 +308,7 @@ function isActionCreator(obj: any): obj is ActionCreator {
  * @template Selectors Shape of module selectors.
  * @template Dependencies Shape of module dependencies.
  * @param {Store<State>} store The store instance where modules are registered.
- * @param {...FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]} modules Modules to register.
+ * @param {FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>} module Module to register.
  * @returns {void}
  */
 function registerModule<
@@ -317,9 +317,9 @@ function registerModule<
   Actions extends Record<string, ActionCreator<ActionTypes> | ((...args: any[]) => any)>,
   Selectors extends Record<string, (...args: any[]) => (state: State) => any>,
   Dependencies extends Record<string, any> = {}
->(store: Store<State>, ...modules: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]) {
-  if(modules.length > 1) return store.populate(...modules);
-  else return modules.forEach(module => store.loadModule(module));
+>(store: Store<State>, module: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>) {
+  store.loadModule(module);
+  return module;
 }
 
 /**
@@ -335,7 +335,7 @@ function registerModule<
  * @template Dependencies Shape of module dependencies.
  * @param {Store<State>} store The store instance.
  * @param {boolean} [clearState=true] Whether to clear the module's state from the store.
- * @param {...FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]} modules Modules to unregister.
+ * @param {FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>} module Module to unregister.
  */
 function unregisterModule<
   State,
@@ -346,9 +346,24 @@ function unregisterModule<
 >(
   store: Store<State>,
   clearState: boolean = true,
-  ...modules: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]
+  module: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>
 ) {
-  modules.forEach(module => store.unloadModule(module, clearState));
+  store.unloadModule(module, clearState);
+  return module;
 }
 
-export { createModule, registerModule, unregisterModule };
+function populateStore<
+  State,
+  ActionTypes extends string,
+  Actions extends Record<string, any>,
+  Selectors extends Record<string, any>,
+  Dependencies extends Record<string, any>
+>(
+  store: Store<State>,
+  ...modules: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]
+) {
+  store.populate(...modules);
+  return module;
+}
+
+export { createModule, registerModule, unregisterModule, populateStore };
