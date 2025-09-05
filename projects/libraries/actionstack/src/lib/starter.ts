@@ -1,5 +1,5 @@
-import { registeredThunks } from './actions';
-import { createLock, SimpleLock } from './lock';
+import { getRegisteredThunks } from './actions';
+import { SimpleLock } from './lock';
 import { Action, AsyncAction } from './types';
 
 /**
@@ -132,7 +132,7 @@ export const createStarter = () => {
         await handler(action, next, lockInstance);
 
         // sequentially trigger matching thunks
-        for (const thunk of registeredThunks.values()) {
+        for (const thunk of getRegisteredThunks()) {
           if (matchesAction(thunk, action)) {
             await handler(thunk, next, lockInstance);
           }
@@ -168,7 +168,7 @@ export const createStarter = () => {
           await handler(action, next, lockInstance);
 
           // find matching thunks
-          const matching = Array.from(registeredThunks.values())
+          const matching = getRegisteredThunks()
             .filter(thunk => matchesAction(thunk, action));
 
           // run thunks concurrently, but handle errors individually
