@@ -708,7 +708,6 @@ export function createStore<T = any>(
       'font-weight: bold;'
     );
 
-    injectDependencies();
     sysActions.storeInitialized();
   };
 
