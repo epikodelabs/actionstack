@@ -36,6 +36,6 @@ export class HeroesComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    unregisterModule(store, true, heroesModule);
+    unregisterModule(store, heroesModule, true);
   }
 }

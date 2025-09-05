@@ -163,7 +163,7 @@ const featureModule = createDashboardModule();
 registerModule(store, featureModule);
 
 // Unload when no longer needed and clear state
-unregisterModule(store, true, featureModule);
+unregisterModule(store, featureModule, true);
 ```
 
 ### Stream Composition

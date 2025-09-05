@@ -345,8 +345,8 @@ function unregisterModule<
   Dependencies extends Record<string, any>
 >(
   store: Store<State>,
-  clearState: boolean = true,
-  module: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>
+  module: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>,
+  clearState: boolean = true
 ) {
   store.unloadModule(module, clearState);
   return module;
@@ -363,7 +363,7 @@ function populateStore<
   ...modules: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]
 ) {
   store.populate(...modules);
-  return module;
+  return modules;
 }
 
 export { createModule, registerModule, unregisterModule, populateStore };
