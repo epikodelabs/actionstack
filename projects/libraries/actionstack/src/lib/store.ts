@@ -23,7 +23,7 @@ import {
   Stream,
   Subscription,
 } from '@actioncrew/streamix';
-import { createModule } from './module';
+import { createModule, registerModule } from './module';
 import { AsyncReducer, Reducer } from './types';
 import { trackable } from './trackable';
 
@@ -696,7 +696,7 @@ export function createStore<T = any>(
    */
   const initializeStore = (storeInstance: Store<any>) => {
     // Bind system actions using the store's dispatch method
-    systemModule.init(storeInstance);
+    registerModule(storeInstance,systemModule);
 
     sysActions = systemModule.actions;
 

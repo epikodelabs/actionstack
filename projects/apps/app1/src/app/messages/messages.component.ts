@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { messagesModule } from './messages.slice';
 import { store } from '../app.module';
 import { Stream } from '@actioncrew/streamix';
+import { registerModule } from '@actioncrew/actionstack';
 
 @Component({
   selector: 'app-messages',
@@ -12,7 +13,7 @@ export class MessagesComponent {
   messages$!: Stream<any>;
 
   constructor() {
-    messagesModule.init(store);
+    registerModule(store, messagesModule);
   }
 
   async ngOnInit() {

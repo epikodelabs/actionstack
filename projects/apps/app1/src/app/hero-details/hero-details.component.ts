@@ -7,6 +7,7 @@ import { heroSelector, loadHero, heroDetailsModule } from './hero-details.slice'
 import { store } from '../app.module';
 import { Stream } from '@actioncrew/streamix';
 import { map, Subscription, tap } from 'rxjs';
+import { registerModule } from 'projects/libraries/actionstack/src/lib/module';
 
 @Component({
   selector: 'app-hero-details',
@@ -21,7 +22,7 @@ export class HeroDetailsComponent implements OnInit {
     private route: ActivatedRoute,
     private location: Location
   ) {
-    heroDetailsModule.init(store);
+    registerModule(store, heroDetailsModule);
   }
 
     async ngOnInit() {

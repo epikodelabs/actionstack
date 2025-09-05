@@ -1,11 +1,8 @@
 import {
   createReplaySubject,
   createSubject,
-  defer,
-  first,
   switchMap,
-  takeUntil,
-  tap
+  takeUntil
 } from '@actioncrew/streamix';
 import {
   ActionCreator,
@@ -36,7 +33,6 @@ function createModule<
     return pathParts.reduce((s, key) => (s ? s[key] : undefined), rootState);
   }
 
-  let loaded = false;
   let configured = false;
   const loaded$ = createReplaySubject<void>();
   const destroyed$ = createSubject<void>();
@@ -48,33 +44,17 @@ function createModule<
   const module = {
     slice,
     initialState: config.initialState,
-    actions: {} as Actions, // Will be populated immediately
+    actions: {} as Actions,
     selectors: processedSelectors,
     dependencies: config.dependencies,
     data$: {} as Streams<Selectors>,
     loaded$,
     destroyed$,
 
-    init(storeInstance: Store<State>) {
-      storeInstance.loadModule(this);
-      return this;
-    },
-
     configure(storeInstance: Store<State>) {
       if (configured) return this;
       configured = true;
       store = storeInstance;
-      return this;
-    },
-
-    destroy(clearState: boolean = true) {
-      if (loaded) {
-        loaded = false;
-        configured = false;
-        destroyed$.next();
-        store?.unloadModule(this, clearState);
-        store = undefined;
-      }
       return this;
     }
   };
@@ -236,4 +216,29 @@ function isActionCreator(obj: any): obj is ActionCreator {
   return obj && typeof obj.type === 'string' && obj?.isThunk !== true;
 }
 
-export { createModule };
+function registerModule<
+  State,
+  ActionTypes extends string,
+  Actions extends Record<string, ActionCreator<ActionTypes> | ((...args: any[]) => any)>,
+  Selectors extends Record<string, (...args: any[]) => (state: State) => any>,
+  Dependencies extends Record<string, any> = {}
+>(store: Store<State>, ...modules: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]) {
+  if(modules.length > 1) return store.populate(...modules);
+  else return modules.forEach(module => store.loadModule(module));
+}
+
+function unregisterModule<
+  State,
+  ActionTypes extends string,
+  Actions extends Record<string, any>,
+  Selectors extends Record<string, any>,
+  Dependencies extends Record<string, any>
+>(
+  store: Store<State>,
+  clearState: boolean = true,
+  ...modules: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]
+) {
+  modules.forEach(module => store.unloadModule(module, clearState));
+}
+
+export { createModule, registerModule, unregisterModule };
