@@ -2,10 +2,36 @@ import { Action, ActionCreator, ActionHandler, AsyncAction, FeatureModule, isAct
 
 export { createAction as action, createThunk as thunk };
 
+/**
+ * Internal registry of action handlers.
+ *
+ * Each key is a namespaced action type (string),
+ * and each value is the function that handles the action when dispatched.
+ *
+ * @type {Map<string, ActionHandler>}
+ */
 const actionHandlers = new Map<string, ActionHandler>();
+
+/**
+ * Internal registry of thunks (asynchronous action creators).
+ *
+ * Each key is a namespaced action type (string),
+ * and each value is a thunk creator function that can be invoked by the middleware.
+ *
+ * @type {Map<string, ThunkCreator<any, any, any>>}
+ */
 const registeredThunks = new Map<string, ThunkCreator<any, any, any>>();
 
+/**
+ * Returns an array of all registered thunk creators.
+ *
+ * Thunks are asynchronous action creators that can be automatically
+ * invoked by the middleware when their corresponding actions are dispatched.
+ *
+ * @returns {ThunkCreator<any, any, any>[]} Array of registered thunk creators.
+ */
 export const getRegisteredThunks = () => Array.from(registeredThunks.values());
+
 /**
  * Retrieves the registered handler function for a specific action type.
  *
