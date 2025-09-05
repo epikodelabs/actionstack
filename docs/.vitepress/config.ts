@@ -23,7 +23,7 @@ export default defineConfig({
       '/api/': [
         {
           text: 'API Reference',
-           items: [
+          items: [
             { text: 'Overview', link: '/api/' },
             { text: 'Enumerations', link: '/api/#enumerations' },
             { text: 'Functions', link: '/api/#functions' },
