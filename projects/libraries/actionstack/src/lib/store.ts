@@ -696,7 +696,7 @@ export function createStore<T = any>(
    */
   const initializeStore = (storeInstance: Store<any>) => {
     // Bind system actions using the store's dispatch method
-    registerModule(storeInstance,systemModule);
+    registerModule(storeInstance, systemModule);
 
     sysActions = systemModule.actions;
 
