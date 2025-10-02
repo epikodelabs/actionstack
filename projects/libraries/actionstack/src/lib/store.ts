@@ -18,7 +18,6 @@ import {
 } from './types';
 import {
   createBehaviorSubject,
-  createQueue,
   createSubject,
   Stream,
   Subscription,
@@ -26,6 +25,7 @@ import {
 import { createModule, registerModule } from './module';
 import { AsyncReducer, Reducer } from './types';
 import { trackable } from './trackable';
+import { createQueue } from './queue';
 
 /**
  * Class representing configuration options for a store.
