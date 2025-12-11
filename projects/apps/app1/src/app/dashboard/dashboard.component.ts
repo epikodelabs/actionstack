@@ -3,10 +3,10 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { Hero } from '../hero';
-import { HeroService } from './../hero.service';
-import { dashboardModule, initialState, loadHeroes, selectTopHeroes, slice } from './dashboard.slice';
+import { dashboardModule} from './dashboard.slice';
 import { store } from '../app.module';
 import { Stream } from '@actioncrew/streamix';
+import { registerModule } from 'projects/libraries/actionstack/src/lib/module';
 
 @Component({
   selector: 'app-dashboard',
@@ -19,7 +19,7 @@ export class DashboardComponent implements OnInit {
   heroes$!: Stream<Hero[]>;
 
   constructor() {
-    dashboardModule.init(store);
+    registerModule(store, dashboardModule);
   }
 
   async ngOnInit() {

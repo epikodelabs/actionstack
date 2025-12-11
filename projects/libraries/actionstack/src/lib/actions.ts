@@ -1,10 +1,125 @@
-import { Action, ActionCreator, ActionHandler, AsyncAction, isAction, ThunkCreator } from './types';
+import { Action, ActionCreator, ActionHandler, AsyncAction, FeatureModule, isAction, ThunkCreator } from './types';
 
 export { createAction as action, createThunk as thunk };
 
-export const actionHandlers = new Map<string, ActionHandler>();
-export const actionCreators = new Map<string, (...args: any[]) => Action>();
-export const registeredThunks = new Map<string, ThunkCreator<any, any, any>>();
+/**
+ * Internal registry of action handlers.
+ *
+ * Each key is a namespaced action type (string),
+ * and each value is the function that handles the action when dispatched.
+ *
+ * @type {Map<string, ActionHandler>}
+ */
+const actionHandlers = new Map<string, ActionHandler>();
+
+/**
+ * Internal registry of thunks (asynchronous action creators).
+ *
+ * Each key is a namespaced action type (string),
+ * and each value is a thunk creator function that can be invoked by the middleware.
+ *
+ * @type {Map<string, ThunkCreator<any, any, any>>}
+ */
+const registeredThunks = new Map<string, ThunkCreator<any, any, any>>();
+
+/**
+ * Returns an array of all registered thunk creators.
+ *
+ * Thunks are asynchronous action creators that can be automatically
+ * invoked by the middleware when their corresponding actions are dispatched.
+ *
+ * @returns {ThunkCreator<any, any, any>[]} Array of registered thunk creators.
+ */
+export const getRegisteredThunks = () => Array.from(registeredThunks.values());
+
+/**
+ * Retrieves the registered handler function for a specific action type.
+ *
+ * @param {string} type - The action type to look up.
+ * @returns {Function | undefined} The handler function associated with the action type, or `undefined` if none is registered.
+ */
+export const getActionHandlers = (type: string) => actionHandlers.get(type);
+
+/**
+ * Registers all action handlers defined in a feature module into the global action handler map.
+ *
+ * This function iterates over the module's actions and adds their handlers to an internal
+ * registry used for dispatching. If a handler is already registered for the same action type,
+ * a warning is logged and the existing handler is overwritten.
+ *
+ * @param module - The feature module containing actions with associated handlers.
+ */
+export const registerActionHandlers = (module: FeatureModule) => {
+  Object.values(module.actions).forEach((action: any) => {
+    if (action.type && actionHandlers.has(action.type)) {
+      console.warn(
+        `Action handler for "${action.type}" already registered - overwriting`
+      );
+    } else if (action.type) {
+      actionHandlers.set(action.type, action.handler);
+    }
+  });
+};
+
+/**
+ * Unregisters all action handlers associated with a feature module.
+ *
+ * This function removes the module's action handlers from the internal registry,
+ * effectively disabling those actions from being handled after the module is destroyed.
+ *
+ * @param module - The feature module whose action handlers should be removed.
+ */
+export const unregisterActionHandlers = (module: FeatureModule) => {
+  Object.values(module.actions).forEach((action: any) => {
+    if (action.type && actionHandlers.has(action.type)) {
+      actionHandlers.delete(action.type);
+    }
+  });
+};
+
+/**
+ * Registers all thunks defined in a feature module into the global thunk registry.
+ *
+ * This allows the store's middleware to automatically invoke thunks
+ * when their `triggers` match a dispatched action.
+ *
+ * If a thunk is already registered under the same type, a warning is logged and the
+ * existing thunk is overwritten.
+ *
+ * @param module - The feature module containing thunks to be registered.
+ */
+export const registerThunks = (module: FeatureModule) => {
+  Object.values(module.actions || {}).forEach((thunk: any) => {
+    if (thunk.isThunk && thunk.type) {
+      if (registeredThunks.has(thunk.type)) {
+        console.warn(
+          `Thunk "${thunk.type}" already registered - overwriting`
+        );
+        return;
+      }
+
+      registeredThunks.set(thunk.type, thunk);
+    }
+
+  });
+};
+
+/**
+ * Unregisters all thunks associated with a feature module.
+ *
+ * This removes the module's thunks from the internal registry,
+ * preventing them from being triggered automatically after
+ * the module is destroyed.
+ *
+ * @param module - The feature module whose thunks should be removed.
+ */
+export const unregisterThunks = (module: FeatureModule) => {
+  Object.values(module.actions || {}).forEach((thunk: any) => {
+    if (thunk.isThunk && thunk.type && registeredThunks.has(thunk.type)) {
+      registeredThunks.delete(thunk.type);
+    }
+  });
+};
 
 /**
  * Creates a synchronous action creator function.

@@ -9,5 +9,6 @@ export * from "./trackable";
 export * from "./tracker";
 export * from "./types";
 export * from "./utils";
+export * from "./queue";
 
 

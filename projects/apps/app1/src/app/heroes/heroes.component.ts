@@ -6,6 +6,7 @@ import { HeroService } from './../hero.service';
 import { heroesModule } from './heroes.slice';
 import { store } from '../app.module';
 import { Subscription } from '@actioncrew/streamix';
+import { registerModule, unregisterModule } from '@actioncrew/actionstack';
 
 @Component({
   selector: 'app-heroes',
@@ -18,7 +19,7 @@ export class HeroesComponent implements OnInit, OnDestroy {
 
 
   constructor(private heroService: HeroService) {
-    heroesModule.init(store);
+    registerModule(store, heroesModule);
   }
 
   async ngOnInit() {
@@ -35,6 +36,6 @@ export class HeroesComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    heroesModule.destroy();
+    unregisterModule(store, heroesModule, true);
   }
 }

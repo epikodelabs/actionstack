@@ -137,7 +137,7 @@ const todoModule = createModule({
 });
 
 // Usage
-todoModule.init(store);
+registerModule(store, todoModule);
 todoModule.actions.fetchTodos();
 
 // Reactive UI updates
@@ -153,17 +153,17 @@ todoModule.data$.selectActiveTodos().subscribe(activeTodos => {
 ### Static Module Loading
 ```typescript
 let store = createStore();
-store.populate(authModule, uiModule, settingsModule);
+populateStore(store, authModule, uiModule, settingsModule);
 ```
 
 ### Dynamic Module Loading
 ```typescript
 // Load modules at runtime
 const featureModule = createDashboardModule();
-featureModule.init(store);
+registerModule(store, featureModule);
 
 // Unload when no longer needed and clear state
-featureModule.destroy(true);
+unregisterModule(store, featureModule, true);
 ```
 
 ### Stream Composition

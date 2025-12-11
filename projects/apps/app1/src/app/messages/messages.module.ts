@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
 import { MessagesComponent } from './messages.component';
-import { initialState, messagesModule, slice } from './messages.slice';
 import { store } from '../app.module';
 
 @NgModule({

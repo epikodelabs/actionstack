@@ -6,11 +6,7 @@ import {
   filter,
   buffer,
   type Subscription,
-  withLatestFrom,
-  defer,
-  switchMap,
-  combineLatest,
-  shareReplay,
+  withLatestFrom
 } from '@actioncrew/streamix';
 import { counter } from './store';
 

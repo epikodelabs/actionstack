@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.15
+
+Modules are now managed entirely through the new helpers: registerModule(store, module) and  unregisterModule(store, clearState, module). We have finally removed the old init(store) and destroy(clearState) methods from modules (yeah, those were kinda creepy 😅).
+
+## 3.0.14
+
+Callable thunks also respect selected strategy (not just plain actions anymore), added robust thunk triggering based on action type or predicate functions, optimized lock usage to minimize held time while preserving serialized state access, improved error handling with descriptive messages, and enhanced concurrent scheduling of thunks for better performance and reliability.
+
 ## 3.0.10
 
 Removed `ExecutionStack`, due to previously eliminated epics and sagas middlewares. Continued emphasis on using only thunks and callable thunks for handling asynchronous logic and side effects, enhancing simplicity and predictability. Small fixes in `module` implementation.
