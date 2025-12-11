@@ -308,8 +308,8 @@ function isActionCreator(obj: any): obj is ActionCreator {
  * @template Selectors Shape of module selectors.
  * @template Dependencies Shape of module dependencies.
  * @param {Store<State>} store The store instance where modules are registered.
- * @param {FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>} module Module to register.
- * @returns {void}
+ * @param {...FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>} modules One or more modules to register.
+ * @returns {FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]} The modules that were passed in.
  */
 function registerModule<
   State,
@@ -317,9 +317,16 @@ function registerModule<
   Actions extends Record<string, ActionCreator<ActionTypes> | ((...args: any[]) => any)>,
   Selectors extends Record<string, (...args: any[]) => (state: State) => any>,
   Dependencies extends Record<string, any> = {}
->(store: Store<State>, module: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>) {
-  store.loadModule(module);
-  return module;
+>(store: Store<State>, ...modules: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]) {
+  if (modules.length === 0) return modules;
+
+  if (modules.length === 1) {
+    store.loadModule(modules[0]);
+  } else {
+    store.populate(...modules);
+  }
+
+  return modules;
 }
 
 /**
@@ -334,8 +341,8 @@ function registerModule<
  * @template Selectors Shape of module selectors.
  * @template Dependencies Shape of module dependencies.
  * @param {Store<State>} store The store instance.
- * @param {boolean} [clearState=true] Whether to clear the module's state from the store.
- * @param {FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>} module Module to unregister.
+ * @param {...(FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies> | boolean)} modulesOrClearState Modules to unregister, with an optional `clearState` boolean as the first or last argument.
+ * @returns {FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]} The modules that were passed in (excluding the clearState flag).
  */
 function unregisterModule<
   State,
@@ -345,11 +352,25 @@ function unregisterModule<
   Dependencies extends Record<string, any>
 >(
   store: Store<State>,
-  module: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>,
-  clearState: boolean = true
+  ...modulesOrClearState: Array<FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies> | boolean>
 ) {
-  store.unloadModule(module, clearState);
-  return module;
+  if (modulesOrClearState.length === 0) return [];
+
+  let clearState = true;
+  if (typeof modulesOrClearState[0] === 'boolean') {
+    clearState = modulesOrClearState.shift() as boolean;
+  }
+  if (modulesOrClearState.length && typeof modulesOrClearState[modulesOrClearState.length - 1] === 'boolean') {
+    clearState = modulesOrClearState.pop() as boolean;
+  }
+
+  const modules = modulesOrClearState as FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[];
+
+  modules.forEach((module) => {
+    store.unloadModule(module, clearState);
+  });
+
+  return modules;
 }
 
 function populateStore<

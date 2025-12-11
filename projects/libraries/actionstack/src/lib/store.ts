@@ -160,7 +160,7 @@ export function createStore<T = any>(
     settings = defaultStoreSettings; // Use default settings if not provided
   } else {
     // Otherwise, it's storeSettings
-    settings = { ...storeSettingsOrEnhancer, ...defaultStoreSettings };
+    settings = { ...defaultStoreSettings, ...storeSettingsOrEnhancer };
   }
 
   // Configure store pipeline
