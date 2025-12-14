@@ -23,11 +23,9 @@
     "module": "ES2022",
     "paths": {
       "@actioncrew/actionstack/tools": [
-        "./dist/actionstack/tools",
         "./projects/libraries/actionstack/tools/src/public-api.ts"
       ],
       "@actioncrew/actionstack": [
-        "./dist/actionstack",
         "./projects/libraries/actionstack/src/public-api.ts"
       ]
     },
