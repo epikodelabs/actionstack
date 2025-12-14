@@ -1,10 +1,10 @@
 import {
   Stream,
-  mergeMap,
-  map
+  map,
+  mergeMap
 } from '@actioncrew/streamix';
-import { Tracker } from './tracker';
 import { trackable } from './trackable';
+import { Tracker } from './tracker';
 
 /**
  * A selector extracts a value from state.
@@ -143,20 +143,39 @@ export function selector<
 ): Selector<StateOf<S1>, R>;
 
 export function selector(...fns: any[]): any {
-  // Single selector → projection / identity
+  // Single selector → identity
   if (fns.length === 1) {
-    return fns[0];
+    const sel = fns[0];
+    return (state: any) => {
+      try {
+        const v = sel(state);
+        return v == null ? undefined : v;
+      } catch {
+        return undefined;
+      }
+    };
   }
 
-  // Derived selector
   const projector = fns[fns.length - 1];
   const inputs = fns.slice(0, -1);
 
   return (state: any) => {
-    const values = inputs.map((sel: any) => sel(state));
+    const values = new Array(inputs.length);
+
+    for (let i = 0; i < inputs.length; i++) {
+      const v = inputs[i](state);
+
+      if (v == null) {
+        return undefined;
+      }
+
+      values[i] = v;
+    }
+
     return projector(...values);
   };
 }
+
 
 /**
  * Async variadic selector creator.
@@ -222,20 +241,38 @@ export function selectorAsync<
 ): (state: StateOf<S1>) => Promise<R>;
 
 export function selectorAsync(...fns: any[]): any {
-  // Single selector → async projection
   if (fns.length === 1) {
     const sel = fns[0];
-    return async (state: any) => sel(state);
+    return async (state: any) => {
+      try {
+        const v = await sel(state);
+        return v == null ? undefined : v;
+      } catch {
+        return undefined;
+      }
+    };
   }
 
   const projector = fns[fns.length - 1];
   const inputs = fns.slice(0, -1);
 
   return async (state: any) => {
-    const values = inputs.map((sel: any) => sel(state));
+    const values = new Array(inputs.length);
+
+    for (let i = 0; i < inputs.length; i++) {
+      const v = inputs[i](state);
+
+      if (v == null) {
+        return undefined;
+      }
+
+      values[i] = v;
+    }
+
     return await projector(...values);
   };
 }
+
 
 /**
  * Creates a trackable stream from a selector and a state stream.
