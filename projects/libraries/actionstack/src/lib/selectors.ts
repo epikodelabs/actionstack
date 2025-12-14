@@ -1,3 +1,5 @@
+import { Tracker } from './tracker';
+
 /**
  * A selector extracts a value from state.
  */
@@ -27,27 +29,42 @@ export type ValueAtPath<T, P extends readonly any[]> =
     : P extends readonly [infer K, ...infer Rest]
       ? K extends keyof T
         ? ValueAtPath<T[K], Extract<Rest, readonly any[]>>
-        : unknown
-      : unknown;
+        : never
+      : never;
+
+/**
+ * Represents a selector that can be tracked when used with streams.
+ * Extends the base Selector type with a tracker property.
+ */
+export type TrackableSelector<T, R> = Selector<T, R> & {
+  _tracker: Tracker;
+};
 
 /**
  * Creates a selector that extracts a property from state.
  * Supports both simple keys and nested paths.
+ * Note: Tracker is attached via processSelectors during module configuration.
  */
-export function createFeatureSelector<
-  T,
-  P extends keyof T | readonly (keyof T)[]
->(
+export function createFeatureSelector<K extends keyof any>(
+  key: K
+): <T extends Record<K, any>>(state: T) => T[K];
+
+export function createFeatureSelector<P extends readonly (keyof any)[]>(
+  path: P
+): <T>(state: T) => ValueAtPath<T, P>;
+
+export function createFeatureSelector<T, K extends keyof T>(
+  key: K
+): Selector<T, T[K]>;
+
+export function createFeatureSelector<T, P extends readonly (keyof any)[]>(
+  path: P
+): Selector<T, ValueAtPath<T, P>>;
+
+export function createFeatureSelector<T, P extends keyof T | readonly (keyof any)[]>(
   keyOrPath: P
-): Selector<
-  T,
-  P extends keyof T
-    ? T[P]
-    : P extends readonly (keyof T)[]
-      ? ValueAtPath<T, P>
-      : unknown
-> {
-  return (state: T) => {
+): any {
+  return (state: any) => {
     if (Array.isArray(keyOrPath)) {
       return keyOrPath.reduce<any>(
         (acc, key) => (acc == null ? undefined : acc[key]),
@@ -60,6 +77,13 @@ export function createFeatureSelector<
 }
 
 /**
+ * Helper type for extracting parameter types from selector functions
+ */
+type SelectorResults<T extends readonly AnySelector[]> = {
+  [K in keyof T]: T[K] extends (state: any) => infer R ? R : never;
+};
+
+/**
  * Variadic selector creator.
  *
  * Rules:
@@ -68,21 +92,43 @@ export function createFeatureSelector<
  * - selector(a, b, projector)        → derived
  *
  * The state type is inferred from the FIRST selector.
+ * Note: Tracker is attached via processSelectors during module configuration.
  */
-export function selector<
-  Fns extends readonly [AnySelector, ...AnySelector[]]
->(
-  ...fns: Fns
-): Selector<
-  StateOf<Fns[0]>,
-  Fns extends readonly [infer Only]
-    ? ResultOf<Only>
-    : Fns extends readonly [...infer _, infer Projector]
-      ? Projector extends (...args: any[]) => infer R
-        ? R
-        : never
-      : never
-> {
+
+// Single selector (identity/projection)
+export function selector<S, R>(
+  selectorFn: Selector<S, R>
+): Selector<S, R>;
+
+// Selector with projector
+export function selector<S, A, R>(
+  selector1: Selector<S, A>,
+  projector: (a: A) => R
+): Selector<S, R>;
+
+// Two selectors with projector
+export function selector<S, A, B, R>(
+  selector1: Selector<S, A>,
+  selector2: Selector<S, B>,
+  projector: (a: A, b: B) => R
+): Selector<S, R>;
+
+// Three selectors with projector
+export function selector<S, A, B, C, R>(
+  selector1: Selector<S, A>,
+  selector2: Selector<S, B>,
+  selector3: Selector<S, C>,
+  projector: (a: A, b: B, c: C) => R
+): Selector<S, R>;
+
+// Generic variadic version (implementation signature)
+export function selector(
+  ...args: any[]
+): any;
+
+export function selector(
+  ...fns: any[]
+): any {
   // Single selector → projection / identity
   if (fns.length === 1) {
     return fns[0] as any;
@@ -100,28 +146,34 @@ export function selector<
 
 /**
  * Async variadic selector creator.
- *
- * Rules:
- * - selectorAsync(fn)                     → async projection
- * - selectorAsync(a, asyncProjector)      → async derived
- * - selectorAsync(a, b, asyncProjector)   → async derived
- *
- * Input selectors are synchronous.
- * Only the projector may be async.
  */
-export function selectorAsync<
-  Fns extends readonly [AnySelector, ...AnySelector[]]
->(
-  ...fns: Fns
-): (state: StateOf<Fns[0]>) => Promise<
-  Fns extends readonly [infer Only]
-    ? ResultOf<Only>
-    : Fns extends readonly [...infer _, infer Projector]
-      ? Projector extends (...args: any[]) => infer R
-        ? R
-        : never
-      : never
-> {
+
+// Single async selector
+export function selectorAsync<S, R>(
+  selectorFn: Selector<S, R>
+): (state: S) => Promise<R>;
+
+// Selector with async projector
+export function selectorAsync<S, A, R>(
+  selector1: Selector<S, A>,
+  asyncProjector: (a: A) => Promise<R>
+): (state: S) => Promise<R>;
+
+// Two selectors with async projector
+export function selectorAsync<S, A, B, R>(
+  selector1: Selector<S, A>,
+  selector2: Selector<S, B>,
+  asyncProjector: (a: A, b: B) => Promise<R>
+): (state: S) => Promise<R>;
+
+// Generic variadic version (implementation signature)
+export function selectorAsync(
+  ...args: any[]
+): any;
+
+export function selectorAsync(
+  ...fns: any[]
+): any {
   // Single selector → async projection
   if (fns.length === 1) {
     const sel = fns[0] as AnySelector;

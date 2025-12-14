@@ -20,6 +20,7 @@ export type Tracker = {
 export const createTracker = (): Tracker => {
   const entries = new Map<Stream<any>, { status$: BehaviorSubject<boolean>; status: boolean }>();
   const timeout = 30000;
+  let allExecutedQueue: Promise<void> = Promise.resolve();
 
   const getStatus: Tracker['getStatus'] = (entry) => entries.get(entry)?.status ?? false;
 
@@ -62,33 +63,69 @@ export const createTracker = (): Tracker => {
     }
   };
 
-  const allExecuted: Tracker['allExecuted'] = () =>
-    new Promise<void>((resolve, reject) => {
-      if (entries.size === 0) {
-        resolve();
-        return;
-      }
+  const allExecuted: Tracker['allExecuted'] = () => {
+    allExecutedQueue = allExecutedQueue.then(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          queueMicrotask(() => {
+            if (entries.size === 0) {
+              reset();
+              resolve();
+              return;
+            }
 
-      const timeoutId = setTimeout(() => reject("Timeout reached"), timeout);
-      let pending = entries.size;
+            const snapshot = Array.from(entries.entries());
 
-      const handleCompletion = () => {
-        pending--;
-        if (pending === 0) {
-          clearTimeout(timeoutId);
-          resolve();
-        }
-      };
+            const timeoutId = setTimeout(
+              () => reject("Timeout reached"),
+              timeout
+            );
 
-      for (const entryData of entries.values()) {
-        entryData.status$.subscribe({
-          next: (status) => {
-            if (!status) handleCompletion();
-          },
-          complete: handleCompletion,
-        });
-      }
-    });
+            let pending = snapshot.length;
+            const done = new Set<Stream<any>>();
+            const activated = new Set<Stream<any>>();
+
+            const tryResolve = () => {
+              if (pending === 0) {
+                clearTimeout(timeoutId);
+                reset();
+                resolve();
+              }
+            };
+
+            for (const [entry, entryData] of snapshot) {
+              entryData.status$.subscribe({
+                next: (status) => {
+                  if (status) {
+                    activated.add(entry);
+                    return;
+                  }
+
+                  // ignore initial false
+                  if (!activated.has(entry)) return;
+
+                  if (!done.has(entry)) {
+                    done.add(entry);
+                    pending--;
+                    tryResolve();
+                  }
+                },
+                complete: () => {
+                  if (!done.has(entry)) {
+                    done.add(entry);
+                    pending--;
+                    tryResolve();
+                  }
+                },
+              });
+            }
+          });
+        })
+    );
+
+    return allExecutedQueue;
+  };
+
 
   return { timeout, getStatus, setStatus, complete, track, remove, reset, allExecuted };
 };

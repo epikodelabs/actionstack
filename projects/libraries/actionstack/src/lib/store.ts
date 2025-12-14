@@ -46,7 +46,7 @@ export type StoreSettings = {
  */
 const defaultStoreSettings: StoreSettings = {
   dispatchSystemActions: true,
-  awaitStatePropagation: false,
+  awaitStatePropagation: true,
   enableGlobalReducers: true,
   exclusiveActionProcessing: false,
 };
@@ -173,7 +173,7 @@ export function createStore<T = any>(
 
   let state = {} as T;
   let currentState = createBehaviorSubject<T>(state as T);
-  const tracker = settings.awaitStatePropagation ? createTracker() : undefined;
+  const tracker = createTracker();
   const lock = createLock();
   const queue = createQueue();
 
@@ -222,7 +222,6 @@ export function createStore<T = any>(
     // Wait for state propagation if required
     if (settings.awaitStatePropagation) {
       await tracker?.allExecuted();
-      tracker?.reset();
     }
   };
 

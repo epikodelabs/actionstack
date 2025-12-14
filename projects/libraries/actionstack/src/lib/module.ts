@@ -10,7 +10,10 @@ import {
   isAction,
   Store,
   Streams,
-  AsyncAction
+  AsyncAction,
+  TrackableSelector,
+  Tracker,
+  Selector
 } from '../lib';
 
 /**
@@ -39,7 +42,7 @@ function createModule<
   State,
   ActionTypes extends string,
   Actions extends Record<string, ActionCreator<ActionTypes> | ((...args: any[]) => any)>,
-  Selectors extends Record<string, (...args: any[]) => (state: State) => any>,
+  Selectors extends Record<string, (state: State) => any>,
   Dependencies extends Record<string, any> = {}
 >(config: {
   slice: string;
@@ -61,7 +64,7 @@ function createModule<
   const destroyed$ = createSubject<void>();
 
   const processedActions = processActions(config.actions ?? {}, slice, config.dependencies);
-  const processedSelectors = processSelectors(config.selectors ?? {}, selectSlice);
+  let processedSelectors: any = {};
   let store: Store<any> | undefined;
 
   const module = {
@@ -72,16 +75,35 @@ function createModule<
     destroyed$,
     data$: {} as Streams<Selectors>,
     actions: {} as Actions,
-    selectors: processedSelectors,
+    selectors: {} as any,
 
-    init(storeInstance: Store<any>) {
-      return this.configure(storeInstance);
+    init(storeInstance: Store<any>, tracker?: Tracker) {
+      return this.configure(storeInstance, tracker);
     },
 
-    configure(storeInstance: Store<any>) {
+    configure(storeInstance: Store<any>, tracker?: Tracker) {
       if (configured) return this;
       configured = true;
       store = storeInstance;
+      
+      // Get tracker from parameter or store
+      const moduleTracker = tracker || store.tracker;
+      
+      if (!moduleTracker) {
+        throw new Error(
+          `Module "${slice}" requires a tracker. Either pass one to configure() or ensure store has a tracker.`
+        );
+      }
+      
+      // Process selectors with tracker
+      processedSelectors = processSelectors(
+        moduleTracker,
+        config.selectors ?? {},
+        selectSlice
+      );
+      
+      // Update the module's selectors
+      this.selectors = processedSelectors;
       
       // Initialize data$ streams and actions with the store
       initializeDataStreams(this, processedSelectors, loaded$, destroyed$, () => store);
@@ -185,24 +207,24 @@ function processActions<Actions extends Record<string, any>>(
 }
 
 /**
- * Processes selector factories by binding them to the module slice.
+ * Processes slice-level selectors and transforms them into root-level selectors.
+ * Attaches the provided tracker to all selectors.
  *
- * Each processed selector is a function that, when called, returns a selector that operates
- * on the slice of state managed by the module.
- *
- * @template State The module state type.
+ * @template SliceState The module state type.
  * @template Selectors The shape of the selector factories.
- * @param {Selectors} selectors Original selector factories.
- * @param {(rootState: any) => State} selectSlice Function to extract the module slice from the root state.
- * @returns {Selectors} The processed selectors bound to the module slice.
+ * @param {Tracker} tracker The Tracker instance to attach to all selectors.
+ * @param {Selectors} selectors Original slice-level selector functions.
+ * @param {(rootState: any) => SliceState} selectSlice Function to extract the module slice from the root state.
+ * @returns {Selectors} The processed selectors bound to the module slice with tracker attached.
  */
 function processSelectors<
   SliceState,
-  Selectors extends Record<string, (state: SliceState) => any>
+  Selectors extends Record<string, Selector<SliceState, any>>
 >(
+  tracker: Tracker,
   selectors: Selectors,
   selectSlice: (rootState: any) => SliceState
-): { [K in keyof Selectors]: (rootState: any) => ReturnType<Selectors[K]> } {
+): { [K in keyof Selectors]: TrackableSelector<any, ReturnType<Selectors[K]>> } {
   const processed: any = {};
 
   for (const [name, sliceSelector] of Object.entries(selectors)) {
@@ -210,9 +232,14 @@ function processSelectors<
       throw new Error(`Selector "${name}" must be a function.`);
     }
 
-    // ✅ wrap slice selector into root selector
-    processed[name] = (rootState: any) =>
+    // Wrap slice selector into root selector
+    const rootSelector = (rootState: any) =>
       sliceSelector(selectSlice(rootState));
+    
+    // Attach the tracker
+    (rootSelector as TrackableSelector<any, any>)._tracker = tracker;
+    
+    processed[name] = rootSelector;
   }
 
   return processed;
@@ -264,7 +291,6 @@ function initializeDataStreams<
     };
   }
 }
-
 
 /**
  * Initializes module actions to dispatch through the store.
@@ -342,7 +368,7 @@ function registerModule<
   State,
   ActionTypes extends string,
   Actions extends Record<string, ActionCreator<ActionTypes> | ((...args: any[]) => any)>,
-  Selectors extends Record<string, (...args: any[]) => (state: State) => any>,
+  Selectors extends Record<string, (state: State) => any>,
   Dependencies extends Record<string, any> = {}
 >(store: Store<any>, ...modules: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]) {
   if (modules.length === 0) return modules;
