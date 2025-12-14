@@ -19,6 +19,8 @@ import {
 import {
   createBehaviorSubject,
   createSubject,
+  distinctUntilChanged,
+  map,
   Stream,
   Subscription,
 } from '@actioncrew/streamix';
@@ -336,15 +338,13 @@ export function createStore<T = any>(
           if (getProperty(state, slicePath) === undefined) {
             state = setProperty(state, slicePath, module.initialState);
           }
-
-          // Update current state
-          currentState.next(state);
-
+          
           // Dispatch system action
           sysActions.moduleLoaded(module);
-
           // Signal that module is loaded (this should be the last step)
           module.loaded$.next();
+          // Update current state
+          currentState.next(state);
         } catch (error) {
           console.warn(`Failed to load module ${module.slice}:`, error);
 
@@ -395,10 +395,10 @@ export function createStore<T = any>(
         state = setProperty(state, slicePath, module.initialState);
       }
 
-      currentState.next(state);
-
       sysActions.moduleLoaded(module);
       module.loaded$.next();
+      currentState.next(state);
+
     } finally {
       lock.release(); // Release lock regardless of success or failure
     }
@@ -425,7 +425,6 @@ export function createStore<T = any>(
         return Promise.resolve(); // Module not found, nothing to unload
       }
 
-      module.destroyed$.next();
       // Remove the module from the internal state
       modules.splice(moduleIndex, 1);
 
@@ -439,10 +438,11 @@ export function createStore<T = any>(
       if (clearState) {
         state = setProperty(state, slicePath, undefined);
       }
-      currentState.next(state);
-
       // Dispatch module unloaded action
       sysActions.moduleUnloaded(module);
+      module.destroyed$.next();
+      currentState.next(state);
+
     } finally {
       lock.release(); // Release lock regardless of success or failure
     }
@@ -499,73 +499,23 @@ export function createStore<T = any>(
    * @param {R} [defaultValue] - A fallback value to emit when the selected value is `undefined`.
    * @returns {Stream<R>} A trackable stream emitting selected values.
    */
-  const select = <R = any>(
-    selector: (state: T) => R | Promise<R>,
+  const select = <R>(
+    selector: (state: T) => R,
     defaultValue?: R
   ): Stream<R> => {
-    const subject = createSubject<R>();
-    let subscription: Subscription | null = null;
-    let subscriberCount = 0;
-
-    // Make the subject trackable if tracker exists
-    const trackedSubject = tracker ? trackable(subject, tracker) : subject;
-
-    const originalSubscribe = trackedSubject.subscribe.bind(trackedSubject);
-    trackedSubject.subscribe = (...args: any[]) => {
-      if (subscriberCount === 0) {
-        subscription = currentState.subscribe({
-          next: async (state: T) => {
-            if (state === undefined || state === null) {
-              if (defaultValue !== undefined) {
-                trackedSubject.next(defaultValue);
-              }
-              return;
-            }
-
-            try {
-              const result = selector(state);
-
-              if (result instanceof Promise) {
-                const value = await result;
-                const v = value === undefined ? defaultValue : value;
-                if (v !== undefined) trackedSubject.next(v);
-              } else {
-                const v = result === undefined ? defaultValue : result;
-                if (v !== undefined) trackedSubject.next(v);
-              }
-            } catch (err) {
-              trackedSubject.error(err);
-            }
-          },
-          error: (err) => {
-            trackedSubject.error(err);
-            subscription?.unsubscribe();
-          },
-          complete: () => {
-            trackedSubject.complete();
-            subscription?.unsubscribe();
-          }
-        });
-      }
-
-      subscriberCount++;
-      const sub = originalSubscribe(...args);
-
-      const originalUnsubscribe = sub.unsubscribe.bind(sub);
-      sub.unsubscribe = () => {
-        originalUnsubscribe();
-        subscriberCount--;
-
-        if (subscriberCount === 0 && subscription) {
-          subscription.unsubscribe();
-          subscription = null;
+    const source$ = currentState.pipe(
+      map((state: T) => {
+        if (state == null) {
+          return defaultValue as R;
         }
-      };
 
-      return sub;
-    };
+        const value = selector(state);
+        return value === undefined ? (defaultValue as R) : value;
+      }),
+      distinctUntilChanged()
+    );
 
-    return trackedSubject;
+    return tracker ? trackable(source$, tracker) : source$;
   };
 
   /**

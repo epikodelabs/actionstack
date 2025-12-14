@@ -10,6 +10,7 @@ import {
   isAction,
   Store,
   Streams,
+  AsyncAction
 } from '../lib';
 
 /**
@@ -61,33 +62,54 @@ function createModule<
 
   const processedActions = processActions(config.actions ?? {}, slice, config.dependencies);
   const processedSelectors = processSelectors(config.selectors ?? {}, selectSlice);
-  let store: Store<State> | undefined;
+  let store: Store<any> | undefined;
 
   const module = {
     slice,
     initialState: config.initialState,
-    actions: {} as Actions,
-    selectors: processedSelectors,
     dependencies: config.dependencies,
-    data$: {} as Streams<Selectors>,
     loaded$,
     destroyed$,
+    data$: {} as Streams<Selectors>,
+    actions: {} as Actions,
+    selectors: processedSelectors,
 
-    configure(storeInstance: Store<State>) {
+    init(storeInstance: Store<any>) {
+      return this.configure(storeInstance);
+    },
+
+    configure(storeInstance: Store<any>) {
       if (configured) return this;
       configured = true;
       store = storeInstance;
+      
+      // Initialize data$ streams and actions with the store
+      initializeDataStreams(this, processedSelectors, loaded$, destroyed$, () => store);
+      initializeActions(this, processedActions, slice, () => store);
+      
+      // Mark module as loaded
+      loaded$.next();
+      
+      return this;
+    },
+
+    destroy(clearState?: boolean) {
+      destroyed$.next();
+      destroyed$.complete();
+      
+      if (store && clearState !== false) {
+        store.unloadModule(this, true);
+      }
+      
+      configured = false;
+      store = undefined;
+      
       return this;
     }
   };
 
-  // Initialize data$ streams and actions immediately, but they'll defer to store availability
-  initializeDataStreams(module, processedSelectors, loaded$, destroyed$, () => store);
-  initializeActions(module, processedActions, slice, () => store);
-
   return module as FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
 }
-
 
 /**
  * Processes a set of actions and thunks for a module by namespacing them with the module slice.
@@ -122,11 +144,12 @@ function processActions<Actions extends Record<string, any>>(
       Object.assign(namespacedAction, action, {
         type: namespacedType,
         toString: () => namespacedType,
+        match: (act: any) => isAction(act) && act.type === namespacedType
       });
 
       (processed as any)[name] = namespacedAction;
     } else {
-      let thunkWithType = (...args: any[]) => {
+      const thunkWithType = (...args: any[]) => {
         const thunk = action(...args);
         return Object.assign(
           async (dispatch: any, getState: any, deps: any) => {
@@ -139,16 +162,16 @@ function processActions<Actions extends Record<string, any>>(
             type: `${slice}/${name}`,
             isThunk: true,
             toString: () => `${slice}/${name}`,
-            match: (action: any) => isAction(action) && action.type === `${slice}/${name}`
+            match: (act: any) => isAction(act) && act.type === `${slice}/${name}`
           }
         );
       };
 
-      thunkWithType = Object.assign(thunkWithType, {
+      Object.assign(thunkWithType, {
         type: `${slice}/${name}`,
         isThunk: true,
         toString: () => `${slice}/${name}`,
-        match: (action: any) => isAction(action) && action.type === `${slice}/${name}`,
+        match: (act: any) => isAction(act) && act.type === `${slice}/${name}`,
         triggers: action.triggers?.map((t: string) =>
           t.includes('/') ? t : `${slice}/${t}`
         )
@@ -174,22 +197,22 @@ function processActions<Actions extends Record<string, any>>(
  * @returns {Selectors} The processed selectors bound to the module slice.
  */
 function processSelectors<
-  State,
-  Selectors extends Record<string, (...args: any[]) => (state: State) => any>
+  SliceState,
+  Selectors extends Record<string, (state: SliceState) => any>
 >(
   selectors: Selectors,
-  selectSlice: (rootState: any) => State
-): Selectors {
-  const processed = {} as Selectors;
+  selectSlice: (rootState: any) => SliceState
+): { [K in keyof Selectors]: (rootState: any) => ReturnType<Selectors[K]> } {
+  const processed: any = {};
 
-  for (const [name, selectorFactory] of Object.entries(selectors)) {
-    (processed as any)[name] = (...args: any[]) => {
-      const baseSelector = selectorFactory(...args);
-      return (rootState: any) => {
-        const sliceState = selectSlice(rootState);
-        return baseSelector(sliceState);
-      };
-    };
+  for (const [name, sliceSelector] of Object.entries(selectors)) {
+    if (typeof sliceSelector !== 'function') {
+      throw new Error(`Selector "${name}" must be a function.`);
+    }
+
+    // ✅ wrap slice selector into root selector
+    processed[name] = (rootState: any) =>
+      sliceSelector(selectSlice(rootState));
   }
 
   return processed;
@@ -211,7 +234,7 @@ function processSelectors<
  */
 function initializeDataStreams<
   State,
-  Selectors extends Record<string, (...args: any[]) => (state: State) => any>
+  Selectors extends Record<string, (rootState: any) => any>
 >(
   moduleInstance: any,
   processedSelectors: Selectors,
@@ -219,25 +242,29 @@ function initializeDataStreams<
   destroyed$: any,
   getStore: () => Store<State> | undefined
 ) {
-  // Create the data$ functions that return deferred streams
   for (const key in processedSelectors) {
-    const factory = processedSelectors[key];
-    (moduleInstance.data$ as any)[key] = (...args: any[]) => {
+    const selectorFn = processedSelectors[key];
+
+    // ✅ data$.key() — zero args
+    (moduleInstance.data$ as any)[key] = () => {
       return loaded$.pipe(
         switchMap(() => {
-          // Access store via getter at runtime
           const store = getStore();
           if (!store) {
-            throw new Error(`Module "${moduleInstance.slice}" store not available for data$ streams`);
+            throw new Error(
+              `Module "${moduleInstance.slice}" store not available for data$ streams`
+            );
           }
-          const selectorFn = factory(...args);
+
+          // ✅ selectorFn is already (rootState) => value
           return store.select(selectorFn);
         }),
-        takeUntil(destroyed$) // stop emitting if module is destroyed
+        takeUntil(destroyed$)
       );
     };
   }
 }
+
 
 /**
  * Initializes module actions to dispatch through the store.
@@ -317,7 +344,7 @@ function registerModule<
   Actions extends Record<string, ActionCreator<ActionTypes> | ((...args: any[]) => any)>,
   Selectors extends Record<string, (...args: any[]) => (state: State) => any>,
   Dependencies extends Record<string, any> = {}
->(store: Store<State>, ...modules: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]) {
+>(store: Store<any>, ...modules: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]) {
   if (modules.length === 0) return modules;
 
   if (modules.length === 1) {
@@ -351,7 +378,7 @@ function unregisterModule<
   Selectors extends Record<string, any>,
   Dependencies extends Record<string, any>
 >(
-  store: Store<State>,
+  store: Store<any>,
   ...modulesOrClearState: Array<FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies> | boolean>
 ) {
   if (modulesOrClearState.length === 0) return [];
@@ -380,7 +407,7 @@ function populateStore<
   Selectors extends Record<string, any>,
   Dependencies extends Record<string, any>
 >(
-  store: Store<State>,
+  store: Store<any>,
   ...modules: FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>[]
 ) {
   store.populate(...modules);

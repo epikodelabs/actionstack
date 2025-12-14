@@ -256,8 +256,8 @@ export type ProcessingStrategy = "exclusive" | "concurrent";
  */
 export type SliceStrategy = "persistent" | "temporary";
 
-export type Streams<S extends Record<string, (...args: any[]) => (state: any) => any>> = {
-  [K in keyof S]: (...args: Parameters<S[K]>) => Stream<ReturnType<ReturnType<S[K]>>>;
+export type Streams<S extends Record<string, (state: any) => any>> = {
+  [K in keyof S]: () => Stream<ReturnType<S[K]>>;
 };
 
 /**
@@ -507,4 +507,3 @@ function isStream(obj: any): obj is Stream<unknown> {
 }
 
 export { isAction, isAsync, isBoxed, isStream, isPlainObject, isPromise, kindOf };
-
