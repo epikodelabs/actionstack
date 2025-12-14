@@ -1,5 +1,5 @@
 import { createTracker, Tracker } from '@actioncrew/actionstack';
-import { createBehaviorSubject, Stream } from '@actioncrew/streamix';
+import { createSubject } from '@actioncrew/streamix';
 
 describe('Tracker', () => {
   let tracker: Tracker;
@@ -14,13 +14,13 @@ describe('Tracker', () => {
     });
 
     it('should track a stream', () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.track(stream);
       expect(tracker.state(stream)).toBe(false);
     });
 
     it('should not track the same stream twice', () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.track(stream);
       tracker.track(stream);
       // Should still work without errors
@@ -28,33 +28,33 @@ describe('Tracker', () => {
     });
 
     it('should signal a tracked stream', () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.track(stream);
       tracker.signal(stream);
       expect(tracker.state(stream)).toBe(true);
     });
 
     it('should return false for untracked stream state', () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       expect(tracker.state(stream)).toBe(false);
     });
 
     it('should not signal untracked stream', () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.signal(stream);
       expect(tracker.state(stream)).toBe(false);
     });
 
     it('should remove a tracked stream', () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.track(stream);
       tracker.signal(stream);
-      tracker.remove(stream);
+      tracker.complete(stream);
       expect(tracker.state(stream)).toBe(false);
     });
 
     it('should complete a tracked stream', () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.track(stream);
       tracker.signal(stream);
       tracker.complete(stream);
@@ -62,8 +62,8 @@ describe('Tracker', () => {
     });
 
     it('should reset all tracked streams to false', () => {
-      const stream1 = createBehaviorSubject(1) as any;
-      const stream2 = createBehaviorSubject(2) as any;
+      const stream1 = createSubject();
+      const stream2 = createSubject();
       
       tracker.track(stream1);
       tracker.track(stream2);
@@ -86,7 +86,7 @@ describe('Tracker', () => {
     });
 
     it('should resolve when single stream signals', async () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.track(stream);
 
       const promise = tracker.waitAll();
@@ -100,9 +100,9 @@ describe('Tracker', () => {
     });
 
     it('should resolve when multiple streams signal', async () => {
-      const stream1 = createBehaviorSubject(1) as any;
-      const stream2 = createBehaviorSubject(2) as any;
-      const stream3 = createBehaviorSubject(3) as any;
+      const stream1 = createSubject();
+      const stream2 = createSubject();
+      const stream3 = createSubject();
       
       tracker.track(stream1);
       tracker.track(stream2);
@@ -119,7 +119,7 @@ describe('Tracker', () => {
     });
 
     it('should resolve when stream completes instead of signaling', async () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.track(stream);
 
       const promise = tracker.waitAll();
@@ -134,7 +134,7 @@ describe('Tracker', () => {
 
   describe('waitAll - Complex Scenarios', () => {
     it('should handle rapid successive signals', async () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.track(stream);
 
       const promise = tracker.waitAll();
@@ -148,8 +148,8 @@ describe('Tracker', () => {
     });
 
     it('should handle streams with different signal speeds', async () => {
-      const fastStream = createBehaviorSubject(1) as any;
-      const slowStream = createBehaviorSubject(2) as any;
+      const fastStream = createSubject();
+      const slowStream = createSubject();
       
       tracker.track(fastStream);
       tracker.track(slowStream);
@@ -166,9 +166,9 @@ describe('Tracker', () => {
     });
 
     it('should handle mixed completion and signal', async () => {
-      const stream1 = createBehaviorSubject(1) as any;
-      const stream2 = createBehaviorSubject(2) as any;
-      const stream3 = createBehaviorSubject(3) as any;
+      const stream1 = createSubject();
+      const stream2 = createSubject();
+      const stream3 = createSubject();
       
       tracker.track(stream1);
       tracker.track(stream2);
@@ -191,7 +191,7 @@ describe('Tracker', () => {
     });
 
     it('should queue multiple waitAll calls', async () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.track(stream);
 
       // First call
@@ -210,7 +210,7 @@ describe('Tracker', () => {
     });
 
     it('should handle stream added after waitAll called', async () => {
-      const stream1 = createBehaviorSubject(1) as any;
+      const stream1 = createSubject();
       tracker.track(stream1);
 
       const promise = tracker.waitAll();
@@ -220,7 +220,7 @@ describe('Tracker', () => {
       await expectAsync(promise).toBeResolved();
 
       // Add new stream after first waitAll completes
-      const stream2 = createBehaviorSubject(2) as any;
+      const stream2 = createSubject();
       tracker.track(stream2);
 
       const promise2 = tracker.waitAll();
@@ -231,8 +231,8 @@ describe('Tracker', () => {
     });
 
     it('should reset all states after waitAll resolves', async () => {
-      const stream1 = createBehaviorSubject(1) as any;
-      const stream2 = createBehaviorSubject(2) as any;
+      const stream1 = createSubject();
+      const stream2 = createSubject();
       
       tracker.track(stream1);
       tracker.track(stream2);
@@ -254,8 +254,8 @@ describe('Tracker', () => {
 
   describe('waitAll - Edge Cases', () => {
     it('should handle stream removed during waitAll', async () => {
-      const stream1 = createBehaviorSubject(1) as any;
-      const stream2 = createBehaviorSubject(2) as any;
+      const stream1 = createSubject();
+      const stream2 = createSubject();
       
       tracker.track(stream1);
       tracker.track(stream2);
@@ -264,7 +264,7 @@ describe('Tracker', () => {
 
       setTimeout(() => {
         tracker.signal(stream1);
-        tracker.remove(stream2); // Remove before signal
+        tracker.complete(stream2); // Remove before signal
       }, 10);
 
       await expectAsync(promise).toBeResolved();
@@ -277,7 +277,7 @@ describe('Tracker', () => {
         timeout: 100
       } as Tracker;
 
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       shortTracker.track(stream);
 
       const promise = shortTracker.waitAll();
@@ -287,7 +287,7 @@ describe('Tracker', () => {
     });
 
     it('should handle empty tracker after reset', async () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.track(stream);
       tracker.signal(stream);
       tracker.reset();
@@ -299,9 +299,9 @@ describe('Tracker', () => {
   describe('Real-world Scenarios', () => {
     it('should track selector iterations during state updates', async () => {
       // Simulate 3 selectors
-      const selector1 = createBehaviorSubject(1) as any;
-      const selector2 = createBehaviorSubject(2) as any;
-      const selector3 = createBehaviorSubject(3) as any;
+      const selector1 = createSubject();
+      const selector2 = createSubject();
+      const selector3 = createSubject();
 
       tracker.track(selector1);
       tracker.track(selector2);
@@ -325,7 +325,7 @@ describe('Tracker', () => {
     });
 
     it('should handle multiple dispatch cycles', async () => {
-      const selector = createBehaviorSubject(1) as any;
+      const selector = createSubject();
       tracker.track(selector);
 
       // First dispatch
@@ -347,7 +347,7 @@ describe('Tracker', () => {
     });
 
     it('should handle dynamic selector registration', async () => {
-      const selector1 = createBehaviorSubject(1) as any;
+      const selector1 = createSubject();
       tracker.track(selector1);
 
       const promise1 = tracker.waitAll();
@@ -357,7 +357,7 @@ describe('Tracker', () => {
       await promise1;
 
       // Register new selector after first execution
-      const selector2 = createBehaviorSubject(2) as any;
+      const selector2 = createSubject();
       tracker.track(selector2);
 
       const promise2 = tracker.waitAll();
@@ -373,9 +373,9 @@ describe('Tracker', () => {
     it('should handle module load/unload with selectors', async () => {
       // Simulate module load
       const moduleSelectors = [
-        createBehaviorSubject(1) as any,
-        createBehaviorSubject(2) as any,
-        createBehaviorSubject(3) as any
+        createSubject(),
+        createSubject(),
+        createSubject()
       ];
 
       moduleSelectors.forEach(s => tracker.track(s));
@@ -389,7 +389,7 @@ describe('Tracker', () => {
       await promise1;
 
       // Simulate module unload
-      moduleSelectors.forEach(s => tracker.remove(s));
+      moduleSelectors.forEach(s => tracker.complete(s));
 
       // Should resolve immediately (no tracked streams)
       await expectAsync(tracker.waitAll()).toBeResolved();
@@ -398,9 +398,7 @@ describe('Tracker', () => {
 
   describe('Performance', () => {
     it('should handle many streams efficiently', async () => {
-      const streams = Array.from({ length: 100 }, (_, i) => 
-        createBehaviorSubject(i) as any
-      );
+      const streams = Array.from({ length: 100 }, () => createSubject());
 
       streams.forEach(s => tracker.track(s));
 
@@ -418,7 +416,7 @@ describe('Tracker', () => {
     });
 
     it('should handle rapid waitAll calls', async () => {
-      const stream = createBehaviorSubject(1) as any;
+      const stream = createSubject();
       tracker.track(stream);
 
       const promises = Array.from({ length: 10 }, (_, i) => {

@@ -9,7 +9,6 @@ export type Tracker = {
   signal: (entry: Stream<any>) => void;
   complete: (entry: Stream<any>) => void;
   track: (entry: Stream<any>) => void;
-  remove: (entry: Stream<any>) => void;
   reset: () => void;
   waitAll: () => Promise<void>;
 };
@@ -45,14 +44,6 @@ export const createTracker = (): Tracker => {
     if (!entries.has(entry)) {
       const subject = createBehaviorSubject<boolean>(false);
       entries.set(entry, { status$: subject, status: false });
-    }
-  };
-
-  const remove: Tracker['remove'] = (entry) => {
-    const entryData = entries.get(entry);
-    if (entryData) {
-      entryData.status$.complete();
-      entries.delete(entry);
     }
   };
 
@@ -127,5 +118,5 @@ export const createTracker = (): Tracker => {
   };
 
 
-  return { timeout, state, signal, complete, track, remove, reset, waitAll };
+  return { timeout, state, signal, complete, track, reset, waitAll };
 };
