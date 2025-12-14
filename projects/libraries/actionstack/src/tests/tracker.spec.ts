@@ -1,6 +1,5 @@
-import { createTracker, Tracker } from '@actioncrew/actionstack';
+import { createTracker, selector, Tracker } from '@actioncrew/actionstack';
 import { createSubject, map } from '@actioncrew/streamix';
-import { selector } from '@actioncrew/actionstack';
 
 interface TestState {
   user: {
