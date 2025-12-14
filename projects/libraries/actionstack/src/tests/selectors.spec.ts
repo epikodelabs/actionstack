@@ -2,8 +2,6 @@ import {
   createFeatureSelector,
   selector,
   selectorAsync,
-  featureSelector,
-  Selector,
   TrackableSelector,
 } from '@actioncrew/actionstack';
 import { createTracker, Tracker } from '@actioncrew/actionstack';
@@ -68,12 +66,6 @@ describe('Selectors', () => {
       const selectCount = createFeatureSelector<TestState, 'count'>('count');
       const result = selectCount(null as any);
       expect(result).toBeUndefined();
-    });
-  });
-
-  describe('featureSelector (alias)', () => {
-    it('should be an alias for createFeatureSelector', () => {
-      expect(featureSelector).toBe(createFeatureSelector);
     });
   });
 

@@ -293,8 +293,3 @@ export function withAsyncTracker<T, R>(
   (asyncSelector as any)._tracker = tracker;
   return asyncSelector as ((state: T) => Promise<R>) & { _tracker: Tracker };
 }
-
-/**
- * Alias helpers (semantic sugar).
- */
-export const featureSelector = createFeatureSelector;

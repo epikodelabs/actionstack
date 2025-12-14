@@ -1,4 +1,4 @@
-import { action, featureSelector, selector, FeatureModule, createModule } from "@actioncrew/actionstack";
+import { action, selector, createModule } from "@actioncrew/actionstack";
 
 // --- Slice name
 export const slice = "messages";
