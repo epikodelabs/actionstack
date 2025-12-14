@@ -111,6 +111,23 @@ export const createStarter = () => {
   }
 
   /**
+   * Ensures we execute the thunk body rather than the thunk creator itself.
+   * Registered thunks are creators, so we call them without arguments to
+   * retrieve the actual async action.
+   */
+  const resolveThunk = (thunk: any) => {
+    if (typeof thunk === 'function' && thunk.isThunk) {
+      try {
+        return thunk();
+      } catch (err: any) {
+        console.warn(`[starter] Failed to instantiate thunk "${thunk.type ?? 'unknown'}": ${err?.message ?? err}`);
+        return null;
+      }
+    }
+    return thunk;
+  };
+
+  /**
    * Middleware function for handling actions exclusively.
    *
    * This middleware ensures only one action is processed at a time and queues new actions until the current one finishes.
@@ -134,7 +151,10 @@ export const createStarter = () => {
         // sequentially trigger matching thunks
         for (const thunk of getRegisteredThunks()) {
           if (matchesAction(thunk, action)) {
-            await handler(thunk, next, lockInstance);
+            const runnableThunk = resolveThunk(thunk);
+            if (runnableThunk) {
+              await handler(runnableThunk, next, lockInstance);
+            }
           }
         }
       } catch (err: any) {
@@ -173,7 +193,10 @@ export const createStarter = () => {
 
           // run thunks concurrently, but handle errors individually
           await Promise.allSettled(
-            matching.map(thunk => handler(thunk, next, lockInstance))
+            matching
+              .map(resolveThunk)
+              .filter(Boolean)
+              .map(thunk => handler(thunk as AsyncAction, next, lockInstance))
           );
         })();
 

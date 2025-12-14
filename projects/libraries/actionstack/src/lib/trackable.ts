@@ -1,5 +1,5 @@
 import {
-  CallbackReturnType,
+  MaybePromise,
   createReceiver,
   createSubscription,
   Receiver,
@@ -42,7 +42,7 @@ export function trackable<S extends Stream<T>, T = any>(
   const enhancedStream: S = Object.create(stream);
 
   enhancedStream.subscribe = (
-    receiver?: Receiver<T> | ((value: T) => CallbackReturnType)
+    receiver?: Receiver<T> | ((value: T) => MaybePromise)
   ): Subscription => {
     // 1. Register with tracker
     tracker.track(enhancedStream);
