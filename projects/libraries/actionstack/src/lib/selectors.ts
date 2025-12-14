@@ -1,13 +1,7 @@
 import {
-  MaybePromise,
-  createReceiver,
-  createSubscription,
-  Receiver,
   Stream,
-  StrictReceiver,
-  Subscription,
   mergeMap,
-  map,
+  map
 } from '@actioncrew/streamix';
 import { Tracker } from './tracker';
 import { trackable } from './trackable';
