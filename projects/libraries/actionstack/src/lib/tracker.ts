@@ -5,13 +5,13 @@ import { BehaviorSubject, createBehaviorSubject, Stream } from "@actioncrew/stre
  */
 export type Tracker = {
   timeout: number;
-  getStatus: (entry: Stream<any>) => boolean;
-  setStatus: (entry: Stream<any>, value: boolean) => void;
+  state: (entry: Stream<any>) => boolean;
+  signal: (entry: Stream<any>) => void;
   complete: (entry: Stream<any>) => void;
   track: (entry: Stream<any>) => void;
   remove: (entry: Stream<any>) => void;
   reset: () => void;
-  allExecuted: () => Promise<void>;
+  waitAll: () => Promise<void>;
 };
 
 /**
@@ -22,13 +22,13 @@ export const createTracker = (): Tracker => {
   const timeout = 30000;
   let allExecutedQueue: Promise<void> = Promise.resolve();
 
-  const getStatus: Tracker['getStatus'] = (entry) => entries.get(entry)?.status ?? false;
+  const state: Tracker['state'] = (entry) => entries.get(entry)?.status ?? false;
 
-  const setStatus: Tracker['setStatus'] = (entry, value) => {
+  const signal: Tracker['signal'] = (entry) => {
     const entryData = entries.get(entry);
     if (entryData) {
-      entryData.status = value;
-      entryData.status$.next(value);
+      entryData.status = true;
+      entryData.status$.next(true);
     }
   };
 
@@ -63,7 +63,7 @@ export const createTracker = (): Tracker => {
     }
   };
 
-  const allExecuted: Tracker['allExecuted'] = () => {
+  const waitAll: Tracker['waitAll'] = () => {
     allExecutedQueue = allExecutedQueue.then(
       () =>
         new Promise<void>((resolve, reject) => {
@@ -127,5 +127,5 @@ export const createTracker = (): Tracker => {
   };
 
 
-  return { timeout, getStatus, setStatus, complete, track, remove, reset, allExecuted };
+  return { timeout, state, signal, complete, track, remove, reset, waitAll };
 };

@@ -54,7 +54,7 @@ export function trackable<S extends Stream<T>, T = any>(
       next: async (value: T) => {
         try {
           await strictReceiver.next(value);
-          tracker.setStatus(enhancedStream, true);
+          tracker.signal(enhancedStream);
         } catch (err) {
           // If next() throws an error, we treat it as a stream error
           try {

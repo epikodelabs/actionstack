@@ -221,7 +221,7 @@ export function createStore<T = any>(
 
     // Wait for state propagation if required
     if (settings.awaitStatePropagation) {
-      await tracker?.allExecuted();
+      await tracker?.waitAll();
     }
   };
 
