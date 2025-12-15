@@ -2,10 +2,10 @@ import {
   createFeatureSelector,
   selector,
   selectorAsync,
-  TrackableSelector,
+  selectStream,
+  selectStreamAsync,
 } from '@actioncrew/actionstack';
-import { createTracker, Tracker } from '@actioncrew/actionstack';
-import { createBehaviorSubject, map } from '@actioncrew/streamix';
+import { createBehaviorSubject } from '@actioncrew/streamix';
 
 describe('Selectors', () => {
   interface TestState {
@@ -189,11 +189,9 @@ describe('Selectors', () => {
   });
 
   describe('selectStream', () => {
-    let tracker: Tracker;
     let stateSubject: ReturnType<typeof createBehaviorSubject<TestState>>;
 
     beforeEach(() => {
-      tracker = createTracker();
       stateSubject = createBehaviorSubject<TestState>(mockState);
     });
 
@@ -201,16 +199,11 @@ describe('Selectors', () => {
       stateSubject.complete();
     });
 
-    it('should create a stream from selector with tracker', (done) => {
-      const selectCount: any = selector((state: TestState) => state.count);
-      selectCount._tracker = tracker;
-
-      const stream: any = stateSubject.pipe(map((state: TestState) => selectCount(state))
-      );
-      stream._tracker = tracker;
+    it('should emit derived values when state changes', (done) => {
+      const selectCount = selector((state: TestState) => state.count);
+      const stream = selectStream(selectCount, stateSubject);
 
       const values: number[] = [];
-
       const subscription = stream.subscribe({
         next: (value: number) => {
           values.push(value);
@@ -222,54 +215,46 @@ describe('Selectors', () => {
         },
       });
 
-      // Emit new state
       setTimeout(() => {
         stateSubject.next({ ...mockState, count: 10 });
       }, 10);
     });
 
-    it('should emit only distinct values', (done) => {
-      const selectUserName: any = selector(
+    it('should react to nested selector values', (done) => {
+      const selectUserName = selector(
         (state: TestState) => state.user,
         (user) => user.name
       );
-      selectUserName._tracker = tracker;
+      const stream = selectStream(selectUserName, stateSubject);
 
       const values: string[] = [];
-
-      const subscription = stateSubject.subscribe({
-        next: (state: TestState) => {
-          const value = selectUserName(state);
-          if (values.length === 0 || values[values.length - 1] !== value) {
-            values.push(value);
+      const subscription = stream.subscribe({
+        next: (value: string) => {
+          values.push(value);
+          if (values.length === 3) {
+            expect(values).toEqual(['John Doe', 'John Doe', 'Jane Doe']);
+            subscription.unsubscribe();
+            done();
           }
         },
       });
 
-      // Emit states with same name
       setTimeout(() => stateSubject.next(mockState), 10);
-      setTimeout(() => stateSubject.next(mockState), 20);
-      setTimeout(() => {
-        stateSubject.next({
-          ...mockState,
-          user: { ...mockState.user, name: 'Jane Doe' },
-        });
-      }, 30);
-      setTimeout(() => {
-        // Should only have initial value and the changed value
-        expect(values).toEqual(['John Doe', 'Jane Doe']);
-        subscription.unsubscribe();
-        done();
-      }, 50);
+      setTimeout(
+        () =>
+          stateSubject.next({
+            ...mockState,
+            user: { ...mockState.user, name: 'Jane Doe' },
+          }),
+        20
+      );
     });
   });
 
   describe('selectStreamAsync', () => {
-    let tracker: Tracker;
     let stateSubject: ReturnType<typeof createBehaviorSubject<TestState>>;
 
     beforeEach(() => {
-      tracker = createTracker();
       stateSubject = createBehaviorSubject<TestState>(mockState);
     });
 
@@ -277,73 +262,57 @@ describe('Selectors', () => {
       stateSubject.complete();
     });
 
-    it('should process async selector emissions', (done) => {
-      const selectAsync: any = selectorAsync(
+    it('should emit derived values from async selectors', (done) => {
+      const selectAsync = selectorAsync(
         (state: TestState) => state.count,
         async (count) => {
-          await new Promise(resolve => setTimeout(resolve, 10));
+          await new Promise((resolve) => setTimeout(resolve, 10));
           return count * 2;
         }
       );
-      selectAsync._tracker = tracker;
+      const stream = selectStreamAsync(selectAsync, stateSubject);
 
       const values: number[] = [];
-
-      stateSubject.subscribe({
-        next: async (state: TestState) => {
-          const value = await selectAsync(state);
+      const subscription = stream.subscribe({
+        next: (value: number) => {
           values.push(value);
           if (values.length === 2) {
             expect(values).toEqual([10, 20]);
+            subscription.unsubscribe();
             done();
           }
         },
+        error: (err) => {
+          subscription.unsubscribe();
+          fail(err);
+        },
       });
 
-      // Emit new state after initial async processing
       setTimeout(() => {
         stateSubject.next({ ...mockState, count: 10 });
       }, 50);
     });
 
-    it('should handle async errors', (done) => {
-      const selectWithError: any = selectorAsync(
+    it('should propagate async errors', (done) => {
+      const selectWithError = selectorAsync(
         (state: TestState) => state.count,
-        async (count) => {
+        async () => {
           throw new Error('Async stream error');
         }
       );
-      selectWithError._tracker = tracker;
+      const stream = selectStreamAsync(selectWithError, stateSubject);
 
-      stateSubject.subscribe({
-        next: async (state: TestState) => {
-          try {
-            await selectWithError(state);
-            fail('Should have thrown an error');
-          } catch (err: any) {
-            expect(err.message).toBe('Async stream error');
-            done();
-          }
+      stream.subscribe({
+        next: () => fail('Should not emit next'),
+        error: (err: any) => {
+          expect(err.message).toBe('Async stream error');
+          done();
         },
       });
     });
   });
 
   describe('Integration: processSelectors-like behavior', () => {
-    it('should attach tracker to selector', () => {
-      const tracker = createTracker();
-
-      // Simulate what processSelectors does
-      const sliceSelector = selector((state: TestState) => state.count);
-      const trackedSelector = sliceSelector as TrackableSelector<TestState, number>;
-      trackedSelector._tracker = tracker;
-
-      expect(trackedSelector._tracker).toBe(tracker);
-      
-      const result = trackedSelector(mockState);
-      expect(result).toBe(5);
-    });
-
     it('should work with nested slice selectors', () => {
       interface RootState {
         feature: TestState;

@@ -11,8 +11,6 @@ import {
   Store,
   Streams,
   AsyncAction,
-  TrackableSelector,
-  Tracker,
   Selector
 } from '../lib';
 
@@ -77,27 +75,16 @@ function createModule<
     actions: {} as Actions,
     selectors: {} as any,
 
-    init(storeInstance: Store<any>, tracker?: Tracker) {
-      return this.configure(storeInstance, tracker);
+    init(storeInstance: Store<any>) {
+      return this.configure(storeInstance);
     },
 
-    configure(storeInstance: Store<any>, tracker?: Tracker) {
+    configure(storeInstance: Store<any>) {
       if (configured) return this;
       configured = true;
       store = storeInstance;
       
-      // Get tracker from parameter or store
-      const moduleTracker = tracker || store.tracker;
-      
-      if (!moduleTracker) {
-        throw new Error(
-          `Module "${slice}" requires a tracker. Either pass one to configure() or ensure store has a tracker.`
-        );
-      }
-      
-      // Process selectors with tracker
       processedSelectors = processSelectors(
-        moduleTracker,
         config.selectors ?? {},
         selectSlice
       );
@@ -208,23 +195,20 @@ function processActions<Actions extends Record<string, any>>(
 
 /**
  * Processes slice-level selectors and transforms them into root-level selectors.
- * Attaches the provided tracker to all selectors.
  *
  * @template SliceState The module state type.
  * @template Selectors The shape of the selector factories.
- * @param {Tracker} tracker The Tracker instance to attach to all selectors.
  * @param {Selectors} selectors Original slice-level selector functions.
  * @param {(rootState: any) => SliceState} selectSlice Function to extract the module slice from the root state.
- * @returns {Selectors} The processed selectors bound to the module slice with tracker attached.
+ * @returns {Selectors} The processed selectors bound to the module slice.
  */
 function processSelectors<
   SliceState,
   Selectors extends Record<string, Selector<SliceState, any>>
 >(
-  tracker: Tracker,
   selectors: Selectors,
   selectSlice: (rootState: any) => SliceState
-): { [K in keyof Selectors]: TrackableSelector<any, ReturnType<Selectors[K]>> } {
+): { [K in keyof Selectors]: Selector<any, ReturnType<Selectors[K]>> } {
   const processed: any = {};
 
   for (const [name, sliceSelector] of Object.entries(selectors)) {
@@ -232,12 +216,8 @@ function processSelectors<
       throw new Error(`Selector "${name}" must be a function.`);
     }
 
-    // Wrap slice selector into root selector
     const rootSelector = (rootState: any) =>
       sliceSelector(selectSlice(rootState));
-    
-    // Attach the tracker
-    (rootSelector as TrackableSelector<any, any>)._tracker = tracker;
     
     processed[name] = rootSelector;
   }

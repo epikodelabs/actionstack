@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.16
+
+Removed the tracker/trackable utilities and the 'awaitStatePropagation' option so state propagation no longer waits for tracked streams.
+
 ## 3.0.15
 
 Modules are now managed entirely through the new helpers: registerModule(store, module) and  unregisterModule(store, clearState, module). We have finally removed the old init(store) and destroy(clearState) methods from modules (yeah, those were kinda creepy 😅).
@@ -128,4 +132,3 @@ Corrections were made to fix issues and improve functionality. The version was r
 ## v1.0.1
 
 Initial commit to establish the foundation for ActionStack v1.0.1, introducing core state management features and setting up initial functionality.
-

@@ -3,8 +3,6 @@ import {
   map,
   mergeMap
 } from '@actioncrew/streamix';
-import { trackable } from './trackable';
-import { Tracker } from './tracker';
 
 /**
  * A selector extracts a value from state.
@@ -39,17 +37,8 @@ export type ValueAtPath<T, P extends readonly any[]> =
       : unknown;
 
 /**
- * Represents a selector that can be tracked when used with streams.
- * Extends the base Selector type with a tracker property.
- */
-export type TrackableSelector<T, R> = Selector<T, R> & {
-  _tracker: Tracker;
-};
-
-/**
  * Creates a selector that extracts a property from state.
  * Supports both simple keys and nested paths.
- * Note: Tracker is attached via processSelectors during module configuration.
  */
 export function createFeatureSelector<
   T,
@@ -89,7 +78,6 @@ export function createFeatureSelector<
  * - selector(a, b, projector)        → derived
  *
  * The state type is inferred from the FIRST selector.
- * Note: Tracker is attached via processSelectors during module configuration.
  */
 export function selector<
   S1 extends AnySelector,
@@ -187,7 +175,6 @@ export function selector(...fns: any[]): any {
  *
  * Input selectors are synchronous.
  * Only the projector may be async.
- * Note: Tracker is attached via processSelectors during module configuration.
  */
 export function selectorAsync<
   S1 extends AnySelector,
@@ -275,58 +262,27 @@ export function selectorAsync(...fns: any[]): any {
 
 
 /**
- * Creates a trackable stream from a selector and a state stream.
- * The resulting stream will be automatically tracked using the selector's
- * attached tracker.
+ * Creates a stream from a selector and a state stream.
  *
- * @param selector - A selector with an attached tracker
- * @param stateStream - The source stream of state values
- * @returns A stream that emits selected values, automatically tracked
+ * @param selector - A selector function used to derive a value from the state.
+ * @param stateStream - The source stream of state values.
  */
 export function selectStream<T, R>(
-  selector: TrackableSelector<T, R>,
+  selector: Selector<T, R>,
   stateStream: Stream<T>
 ): Stream<R> {
-  // Map the state stream through the selector
-  const selectedStream = stateStream.pipe(map(state => selector(state)));
-
-  // Wrap the stream with the selector's tracker
-  return trackable(selectedStream, selector._tracker);
+  return stateStream.pipe(map((state) => selector(state)));
 }
 
 /**
- * Creates a trackable stream from an async selector and a state stream.
- * The resulting stream will be automatically tracked using the selector's
- * attached tracker.
+ * Creates a stream from an async selector and a state stream.
  *
- * @param selector - An async selector with an attached tracker
- * @param stateStream - The source stream of state values
- * @returns A stream that emits selected values, automatically tracked
+ * @param selector - An async selector function.
+ * @param stateStream - The source stream of state values.
  */
 export function selectStreamAsync<T, R>(
-  selector: ((state: T) => Promise<R>) & { _tracker: Tracker },
+  selector: (state: T) => Promise<R>,
   stateStream: Stream<T>
 ): Stream<R> {
-  // Map the state stream through the async selector
-  const selectedStream = stateStream.pipe(mergeMap(async state => await selector(state)));
-
-  // Wrap the stream with the selector's tracker
-  return trackable(selectedStream, selector._tracker);
-}
-
-/**
- * Attaches a tracker to an async selector function.
- * This is useful when you need to manually create trackable async selectors
- * outside of the module system.
- *
- * @param tracker - The Tracker instance to attach
- * @param asyncSelector - The async selector function
- * @returns The async selector with tracker attached
- */
-export function withAsyncTracker<T, R>(
-  tracker: Tracker,
-  asyncSelector: (state: T) => Promise<R>
-): ((state: T) => Promise<R>) & { _tracker: Tracker } {
-  (asyncSelector as any)._tracker = tracker;
-  return asyncSelector as ((state: T) => Promise<R>) & { _tracker: Tracker };
+  return stateStream.pipe(mergeMap((state) => selector(state)));
 }

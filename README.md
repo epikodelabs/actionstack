@@ -193,7 +193,6 @@ for await (const data of eachValueFrom(dashboardData$)) {
 ```typescript
 const store = createStore({
   dispatchSystemActions: true,
-  awaitStatePropagation: true,
   enableGlobalReducers: false,
   exclusiveActionProcessing: false
 }, applyMiddleware(logger, devtools));

@@ -7,7 +7,6 @@ import {
 } from './utils';
 import { createLock } from './lock';
 import { starter } from './starter';
-import { createTracker, Tracker } from './tracker';
 import {
   Action,
   AsyncAction,
@@ -26,7 +25,6 @@ import {
 } from '@actioncrew/streamix';
 import { createModule, registerModule } from './module';
 import { AsyncReducer, Reducer } from './types';
-import { trackable } from './trackable';
 import { createQueue } from './queue';
 
 /**
@@ -35,18 +33,16 @@ import { createQueue } from './queue';
  */
 export type StoreSettings = {
   dispatchSystemActions?: boolean;
-  awaitStatePropagation?: boolean;
   enableGlobalReducers?: boolean;
   exclusiveActionProcessing?: boolean;
 };
 
 /**
- * The default settings for the store that configure various behaviors such as action dispatch,
- * state propagation, and reducer handling.
+ * The default settings for the store that configure various behaviors such as action dispatch
+ * and reducer handling.
  */
 const defaultStoreSettings: StoreSettings = {
   dispatchSystemActions: true,
-  awaitStatePropagation: true,
   enableGlobalReducers: true,
   exclusiveActionProcessing: false,
 };
@@ -71,7 +67,6 @@ export type Store<T = any> = {
   addReducer: (reducer: (state: T, action: Action) => T | Promise<T>) => void;
   getMiddlewareAPI: () => MiddlewareAPI;
   starter: Middleware;
-  tracker: Tracker;
 };
 
 interface SystemState {
@@ -173,7 +168,6 @@ export function createStore<T = any>(
 
   let state = {} as T;
   let currentState = createBehaviorSubject<T>(state as T);
-  const tracker = createTracker();
   const lock = createLock();
   const queue = createQueue();
 
@@ -219,10 +213,6 @@ export function createStore<T = any>(
       currentState.next(state as T);
     }
 
-    // Wait for state propagation if required
-    if (settings.awaitStatePropagation) {
-      await tracker?.waitAll();
-    }
   };
 
   /**
@@ -491,12 +481,11 @@ export function createStore<T = any>(
 
   /**
    * Selects and derives a value from the store's current state using the provided selector.
-   * The returned stream is automatically tracked for iteration completion.
    *
    * @template R The type of the derived value.
    * @param {(state: T) => R | Promise<R>} selector - A function that selects or derives a value from the current state.
    * @param {R} [defaultValue] - A fallback value to emit when the selected value is `undefined`.
-   * @returns {Stream<R>} A trackable stream emitting selected values.
+   * @returns {Stream<R>} A stream emitting selected values.
    */
   const select = <R>(
     selector: (state: T) => R,
@@ -514,7 +503,7 @@ export function createStore<T = any>(
       distinctUntilChanged()
     );
 
-    return tracker ? trackable(source$, tracker) : source$;
+    return source$;
   };
 
   /**
@@ -548,7 +537,6 @@ export function createStore<T = any>(
 
   let store = {
     starter,
-    tracker,
     dispatch,
     getState,
     select,
