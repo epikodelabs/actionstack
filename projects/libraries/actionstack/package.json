@@ -22,5 +22,6 @@
     "state management",
     "asynchronous store",
     "reactive state"
-  ]
+  ],
+  "type": "module"
 }
