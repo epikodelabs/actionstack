@@ -173,7 +173,15 @@ export const createStarter = () => {
             if (matchesAction(thunk, action as any)) {
               const runnableThunk = resolveThunk(thunk);
               if (runnableThunk) {
-                await handler(runnableThunk, next, lockInstance, true);
+                try {
+                  await handler(runnableThunk, next, lockInstance, true);
+                } catch (err: any) {
+                  const msg =
+                    err instanceof Error ? err.message : String(err ?? 'unknown');
+                  onError(
+                    `[starter] [exclusive] Thunk error while processing action "${action?.type ?? 'unknown'}": ${msg}`
+                  );
+                }
               }
             }
           }

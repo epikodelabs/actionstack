@@ -298,6 +298,72 @@ describe('Starter middleware', () => {
     });
   });
 
+  describe('error resilience', () => {
+    it('concurrent mode: continues processing subsequent actions after a thunk throws', async () => {
+      const warn = spyOn(console, 'warn');
+      const ran: string[] = [];
+
+      const errorThunk = thunk(
+        'TEST/RESILIENT_CONC_ERROR',
+        () => async () => {
+          throw new Error('thunk error');
+        },
+        ['PING']
+      );
+
+      const okThunk = thunk(
+        'TEST/RESILIENT_CONC_OK',
+        () => async () => {
+          ran.push('ok');
+        },
+        ['PONG']
+      );
+
+      registerTestModule({ errorThunk, okThunk });
+
+      const { dispatch: dispatchFn, received } = createHarness('concurrent');
+      const dispatch = dispatchFn as any;
+
+      await dispatch({ type: 'PING' });
+      expect(warn).toHaveBeenCalled();
+      expect(dispatch.pendingCount()).toBe(0);
+      expect(await dispatch.waitForAll()).toEqual([]);
+
+      await dispatch({ type: 'PONG' });
+      expect(ran).toEqual(['ok']);
+      expect(received.map(a => a.type)).toEqual(['PING', 'PONG']);
+    });
+
+    it('exclusive mode: a failing thunk does not prevent other matching thunks from running', async () => {
+      const warn = spyOn(console, 'warn');
+      const ran: string[] = [];
+
+      const errorThunk = thunk(
+        'TEST/RESILIENT_EXCL_ERROR',
+        () => async () => {
+          throw new Error('thunk error');
+        },
+        ['PING']
+      );
+
+      const okThunk = thunk(
+        'TEST/RESILIENT_EXCL_OK',
+        () => async () => {
+          ran.push('ok');
+        },
+        ['PING']
+      );
+
+      registerTestModule({ errorThunk, okThunk });
+
+      const { dispatch } = createHarness('exclusive');
+      await dispatch({ type: 'PING' });
+
+      expect(warn).toHaveBeenCalled();
+      expect(ran).toEqual(['ok']);
+    });
+  });
+
   describe('concurrent utilities', () => {
     it('exposes pendingCount and waitForAll', async () => {
       const { dispatch: dispatchFn } = createHarness('concurrent');
@@ -320,6 +386,64 @@ describe('Starter middleware', () => {
       const p2 = dispatch({ type: 'PING' });
       const waitAll = dispatch.waitForAll();
       expect(await waitAll).toHaveSize(1);  // Settled array
+    });
+
+    it('waitForAll waits for multiple in-flight dispatches', async () => {
+      const allowFinish = deferred<void>();
+
+      registerTestModule({
+        t1: thunk(
+          'TEST/WAIT_ALL_MULTI',
+          () => async () => {
+            await allowFinish.promise;
+          },
+          ['PING']
+        )
+      });
+
+      const { dispatch: dispatchFn } = createHarness('concurrent');
+      const dispatch = dispatchFn as any;
+
+      const p1 = dispatch({ type: 'PING' });
+      const p2 = dispatch({ type: 'PING' });
+      expect(dispatch.pendingCount()).toBe(2);
+
+      const waitAll = dispatch.waitForAll();
+      expect(dispatch.pendingCount()).toBe(2);
+
+      allowFinish.resolve();
+      const results = await waitAll;
+      expect(results).toHaveSize(2);
+
+      await Promise.all([p1, p2]);
+      expect(dispatch.pendingCount()).toBe(0);
+    });
+
+    it('pendingCount tracks a burst of concurrent dispatches', async () => {
+      const allowFinish = deferred<void>();
+      registerTestModule({
+        t1: thunk(
+          'TEST/PENDING_BURST',
+          () => async () => {
+            await allowFinish.promise;
+          },
+          ['PING']
+        )
+      });
+
+      const { dispatch: dispatchFn } = createHarness('concurrent');
+      const dispatch = dispatchFn as any;
+
+      const burst = 5;
+      const promises = Array.from({ length: burst }, () => dispatch({ type: 'PING' }));
+      expect(dispatch.pendingCount()).toBe(burst);
+
+      const waitAll = dispatch.waitForAll();
+      allowFinish.resolve();
+      await waitAll;
+      await Promise.all(promises);
+
+      expect(dispatch.pendingCount()).toBe(0);
     });
   });
 
@@ -531,6 +655,79 @@ describe('Starter middleware', () => {
         expect(received.map(a => a.type)).toContain(`FROM_${i}`);
       }
       expect(overlaps).toEqual([]);
+    });
+
+    it('concurrent mode: logs and skips thunks that fail during instantiation', async () => {
+      const warn = spyOn(console, 'warn');
+
+      const badThunkCreator: any = () => {
+        throw new Error('instantiate error');
+      };
+      badThunkCreator.isThunk = true;
+      badThunkCreator.type = 'TEST/BAD_INSTANTIATE';
+      badThunkCreator.triggers = ['PING'];
+
+      registerTestModule({ badThunkCreator });
+
+      const { dispatch } = createHarness('concurrent');
+      await dispatch({ type: 'PING' });
+
+      expect(warn).toHaveBeenCalled();
+      const messages = warn.calls.all().map(c => String(c.args[0]));
+      expect(messages.some(m => m.includes('[starter] Failed to instantiate thunk "TEST/BAD_INSTANTIATE"'))).toBeTrue();
+    });
+
+    it('exclusive mode: nested thunk dispatch runs within the active thunk (other thunks wait)', async () => {
+      const events: string[] = [];
+      const outerStarted = deferred<void>();
+      const allowInnerFinish = deferred<void>();
+
+      const outerThunk = thunk(
+        'TEST/NEST_OUTER',
+        () => async (dispatch) => {
+          events.push('outer-start');
+          outerStarted.resolve();
+
+          await dispatch(async () => {
+            events.push('inner-start');
+            await allowInnerFinish.promise;
+            events.push('inner-end');
+          });
+
+          events.push('outer-end');
+        },
+        ['PING']
+      );
+
+      const otherThunk = thunk(
+        'TEST/NEST_OTHER',
+        () => async () => {
+          events.push('other-start');
+          events.push('other-end');
+        },
+        ['PING']
+      );
+
+      registerTestModule({ outerThunk, otherThunk });
+
+      const { dispatch } = createHarness('exclusive');
+      const p = dispatch({ type: 'PING' });
+
+      await outerStarted.promise;
+      expect(events).toEqual(['outer-start', 'inner-start']);
+      expect(events).not.toContain('other-start');
+
+      allowInnerFinish.resolve();
+      await p;
+
+      expect(events).toEqual([
+        'outer-start',
+        'inner-start',
+        'inner-end',
+        'outer-end',
+        'other-start',
+        'other-end',
+      ]);
     });
   });
 });
