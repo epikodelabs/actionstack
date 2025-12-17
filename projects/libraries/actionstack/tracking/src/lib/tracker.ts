@@ -135,17 +135,22 @@ export const createTracker = (): Tracker => {
         return;
       }
 
-      const timeoutId: ReturnType<typeof setTimeout> = setTimeout(() => {
-        reject(buildTimeoutError(tracer!));
-      }, timeout);
+      // FIX: Declare variables before using them in finish()
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      let pollId: ReturnType<typeof setInterval> | null = null;
+      let unsubscribe: (() => void) | null = null;
 
       const finish = () => {
-        clearTimeout(timeoutId);
-        clearInterval(pollId);
-        unsubscribe();
+        if (timeoutId !== null) clearTimeout(timeoutId);
+        if (pollId !== null) clearInterval(pollId);
+        if (unsubscribe) unsubscribe();
         reset();
         resolve();
       };
+
+      timeoutId = setTimeout(() => {
+        reject(buildTimeoutError(tracer!));
+      }, timeout);
 
       // Quick exit if already settled.
       if (allTracesTerminal()) {
@@ -154,7 +159,7 @@ export const createTracker = (): Tracker => {
       }
 
       // Event-driven fast path.
-      const unsubscribe = tracer.subscribe({
+      unsubscribe = tracer.subscribe({
         delivered: () => {
           if (allTracesTerminal()) finish();
         },
@@ -170,7 +175,7 @@ export const createTracker = (): Tracker => {
       });
 
       // Safety net polling.
-      const pollId: ReturnType<typeof setInterval> = setInterval(() => {
+      pollId = setInterval(() => {
         if (allTracesTerminal()) finish();
       }, 10);
     });
