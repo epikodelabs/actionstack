@@ -6,33 +6,53 @@ import { Action, AsyncReducer, Reducer, StoreCreator, StoreEnhancer, Tree } from
  * @param path - The path to the property (e.g., "key" or ["user", "name"]).
  * @returns The value of the property or `undefined` if the path is invalid.
  */
-export const getProperty = <T>(obj: any, path: keyof T | string[] | '*'): T | undefined => {
+type PropertyPath = readonly (string | number)[];
+export function getProperty<TObj>(obj: TObj, path: '*'): TObj;
+export function getProperty<TObj, K extends keyof NonNullable<TObj>>(
+  obj: TObj,
+  path: K
+): NonNullable<TObj>[K] | undefined;
+export function getProperty<TObj>(obj: TObj, path: '*' | PropertyPath): unknown;
+export function getProperty(obj: any, path: any): any {
   // Handle global state request
   if (path === '*') {
-    return obj as T;
+    return obj;
+  }
+
+  if (obj === undefined || obj === null) {
+    return undefined;
   }
 
   // Handle string path (single key)
   if (typeof path === 'string') {
-    return obj[path] as T;
+    return obj?.[path];
   }
 
   // Handle array path (nested keys)
   if (Array.isArray(path)) {
-    return path.reduce((acc, key) => {
-      if (acc === undefined || acc === null) {
-        return undefined;
-      }
-      // Handle array indices (e.g., "0" -> 0)
-      const index = !isNaN(Number(key)) ? Number(key) : key;
-      return acc[index];
-    }, obj) as T;
+    if (path.length === 0) {
+      return obj;
+    }
+
+    let current: any = obj;
+    for (const rawKey of path as any[]) {
+      if (current === undefined || current === null) return undefined;
+      const key =
+        typeof rawKey === 'number'
+          ? rawKey
+          : typeof rawKey === 'string' && /^[0-9]+$/.test(rawKey)
+            ? Number(rawKey)
+            : rawKey;
+      current = current?.[key];
+    }
+
+    return current;
   }
 
   // Handle unsupported path types
   console.warn('Unsupported type of path parameter');
   return undefined;
-};
+}
 
 /**
  * Sets a property in an object based on a path.
@@ -41,51 +61,115 @@ export const getProperty = <T>(obj: any, path: keyof T | string[] | '*'): T | un
  * @param value - The new value to set at the specified path.
  * @returns The updated object.
  */
-export const setProperty = <T>(obj: any, path: keyof T | string[] | '*', value: any): T => {
+export function setProperty<TObj, TValue>(
+  obj: TObj,
+  path: '*',
+  value: TValue
+): TValue;
+export function setProperty<TObj, TValue>(
+  obj: TObj,
+  path: readonly [],
+  value: TValue
+): TValue;
+export function setProperty<TObj>(
+  obj: TObj,
+  path: string | PropertyPath,
+  value: any
+): TObj;
+export function setProperty(obj: any, path: any, value: any): any {
   // Handle global state update
   if (path === '*') {
-    return { ...value }; // Shallow copy of the value
+    return value;
   }
+
+  const isIndexKey = (key: unknown): boolean =>
+    (typeof key === 'number' && Number.isInteger(key) && key >= 0) ||
+    (typeof key === 'string' && /^[0-9]+$/.test(key));
+
+  const normalizeKey = (key: unknown): string | number => {
+    if (typeof key === 'number') return key;
+    if (typeof key === 'string' && isIndexKey(key)) return Number(key);
+    return String(key);
+  };
+
+  const ensureContainerForNextKey = (nextKey: unknown) =>
+    isIndexKey(nextKey) ? [] : {};
+
+  const readCurrent = (root: any, keys: Array<string | number>): any => {
+    let current = root;
+    for (const key of keys) {
+      if (current === undefined || current === null) return undefined;
+      current = current[key as any];
+    }
+    return current;
+  };
+
+  const writePath = (
+    root: any,
+    keys: Array<string | number>,
+    leafValue: any
+  ): any => {
+    const createClone = (node: any, nextKey: unknown) => {
+      if (Array.isArray(node)) return node.slice();
+      if (node && typeof node === 'object') return { ...node };
+      return ensureContainerForNextKey(nextKey);
+    };
+
+    const newRoot = createClone(root, keys[0]);
+    let cursor = newRoot;
+    let sourceCursor = root;
+
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+
+      if (i === keys.length - 1) {
+        cursor[key as any] = leafValue;
+        break;
+      }
+
+      const nextKey = keys[i + 1];
+      const existingNext = sourceCursor?.[key as any];
+      const nextNode =
+        existingNext && typeof existingNext === 'object'
+          ? createClone(existingNext, nextKey)
+          : ensureContainerForNextKey(nextKey);
+
+      cursor[key as any] = nextNode;
+      cursor = nextNode;
+      sourceCursor = existingNext;
+    }
+
+    return newRoot;
+  };
 
   // Handle string path (single key)
   if (typeof path === 'string') {
-    return {
-      ...obj, // Shallow copy of the object
-      [path]: { ...value }, // Shallow copy of the value for the specified key
-    };
+    const currentValue = obj?.[path];
+    if (currentValue === value) return obj;
+    if (currentValue === undefined && value === undefined) return obj;
+    if (obj === undefined || obj === null || typeof obj !== 'object') {
+      return { [path]: value };
+    }
+    return { ...obj, [path]: value };
   }
 
   // Handle array path (nested keys)
   if (Array.isArray(path)) {
-    const newObj = { ...obj }; // Shallow copy of the object
-    let current = newObj;
+    if (path.length === 0) return value;
 
-    for (let i = 0; i < path.length; i++) {
-      const key = path[i];
+    const keys = (path as any[]).map(normalizeKey);
+    const currentValue = readCurrent(obj, keys);
 
-      // If this is the last key, set the value
-      if (i === path.length - 1) {
-        current[key] = value;
-      }
-      // Otherwise, continue traversing
-      else {
-        // Create a shallow copy of the nested object if it doesn't exist
-        if (current[key] === undefined || current[key] === null) {
-          current[key] = {};
-        } else {
-          current[key] = { ...current[key] }; // Shallow copy to ensure immutability
-        }
-        current = current[key];
-      }
-    }
+    if (currentValue === value) return obj;
+    if (currentValue === undefined && value === undefined) return obj;
 
-    return newObj as T;
+    return writePath(obj, keys, value);
   }
 
   // Handle unsupported path types
   console.warn('Unsupported type of path parameter');
   return obj; // Return the object unchanged
-};
+}
 
 /**
  * Combines multiple store enhancers into a single enhancer function.
@@ -101,11 +185,8 @@ function combineEnhancers(...enhancers: StoreEnhancer[]): StoreEnhancer {
 
   // Create a new combined enhancer that wraps the enhancers
   const combinedEnhancer = (next: StoreCreator) => {
-    // Apply each enhancer in the chain
-    return enhancers.reduceRight(
-      (acc, enhancer) => enhancer(acc),
-      next
-    );
+    // Apply enhancers in order so that the last enhancer wraps the previous ones.
+    return enhancers.reduce((acc, enhancer) => enhancer(acc), next);
   };
 
   // Attach the names of the enhancers to the combined enhancer
@@ -134,6 +215,9 @@ function combineEnhancers(...enhancers: StoreEnhancer[]): StoreEnhancer {
  * // result -> { foo: { bar: 1, qux: 3 }, baz: 2 }
  */
 export function deepMerge(target: any, source: any): any {
+  if (source === undefined || source === null) return target;
+  if (target === undefined || target === null) return source;
+
   const output = { ...target };
   for (const key of Object.keys(source)) {
     if (
@@ -218,11 +302,11 @@ const combineReducers = (reducers: Tree<Reducer | AsyncReducer>): AsyncReducer =
   return async (state: any, action: Action): Promise<any> => {
     if (state === undefined) {
       state = await gatherInitialState();
+      if (action?.type === '@@INIT') return state;
     }
 
     let hasChanged = false;
     const modified: any = {}; // To track the modifications
-    const nextState = { ...state };
 
     // Process each reducer in the flattened reducer map
     for (const { reducer, path } of reducerMap.values()) {
@@ -243,8 +327,8 @@ const combineReducers = (reducers: Tree<Reducer | AsyncReducer>): AsyncReducer =
       }
     }
 
-    // Return the state only if it has changed, otherwise return the previous state.
-    return hasChanged ? state : nextState;
+    // If nothing changed, `state` is still the previous reference.
+    return state;
   };
 };
 
@@ -291,7 +375,7 @@ const applyMiddleware = (...middlewares: Function[]): StoreEnhancer => {
     const chain = [store.starter, ...middlewares].map(middleware => middleware(middlewareAPI));
 
     // Compose the middleware chain into a single dispatch function
-    let dispatch = chain.reduceRight(
+    let dispatch = chain.reduce(
       (next, middleware) => middleware(next),
       store.dispatch
     );

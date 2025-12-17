@@ -23,9 +23,13 @@ export interface MiddlewareConfig<TState = any, TDependencies extends Record<str
  * @param {MiddlewareConfig} config - Configuration object for the middleware.
  * @returns {Function} - A function to handle actions.
  */
-export function createActionHandler(config: MiddlewareConfig) {
+export function createActionHandler(
+  config: MiddlewareConfig,
+  options: { lockThunks?: boolean } = {}
+) {
   const getState = config.getState;
   const dependencies = config.dependencies;
+  const lockThunks = options.lockThunks ?? false;
 
 
   /**
@@ -39,30 +43,44 @@ export function createActionHandler(config: MiddlewareConfig) {
   const handleAction = async (
     action: Action | AsyncAction,
     next: Function,
-    lock: SimpleLock
+    lock: SimpleLock,
+    isNestedDispatch: boolean = false
   ): Promise<void> => {
     if (typeof action === 'function') {
-      // Async thunk: we pass in a locked dispatcher
-      await (action as AsyncAction)(
-        async (dispatchedAction: Action | AsyncAction) => {
-          await lock.acquire();
-          try {
-            await handleAction(dispatchedAction, next, lock);
-          } finally {
-            lock.release();
-          }
-        },
-        getState,
-        dependencies()
-      );
+      const runThunk = async () =>
+        (action as AsyncAction)(
+          async (dispatchedAction: Action | AsyncAction) => {
+            await handleAction(dispatchedAction, next, lock, true);
+          },
+          getState,
+          dependencies()
+        );
+
+      if (lockThunks && !isNestedDispatch) {
+        await lock.acquire();
+        try {
+          await runThunk();
+        } finally {
+          lock.release();
+        }
+        return;
+      }
+
+      await runThunk();
+      return;
     } else {
-      // Plain action: only wrap next(action)
+      if (lockThunks && isNestedDispatch) {
+        await next(action);
+        return;
+      }
+
       await lock.acquire();
       try {
         await next(action);
       } finally {
         lock.release();
       }
+      return;
     }
   };
 
@@ -140,22 +158,27 @@ export const createStarter = () => {
    * @returns Function - The actual middleware function that handles actions.
    */
   const exclusive = (config: MiddlewareConfig) => {
-    const handler = createActionHandler(config);
+    const handler = createActionHandler(config, { lockThunks: true });
     const lockInstance = config.lock;
     const onError = console.warn;
 
     return (next: Function) => async (action: { type: string }) => {
       try {
-        await handler(action, next, lockInstance);
+        await lockInstance.acquire();
+        try {
+          await handler(action as any, next, lockInstance, true);
 
-        // sequentially trigger matching thunks
-        for (const thunk of getRegisteredThunks()) {
-          if (matchesAction(thunk, action)) {
-            const runnableThunk = resolveThunk(thunk);
-            if (runnableThunk) {
-              await handler(runnableThunk, next, lockInstance);
+          // sequentially trigger matching thunks
+          for (const thunk of getRegisteredThunks()) {
+            if (matchesAction(thunk, action as any)) {
+              const runnableThunk = resolveThunk(thunk);
+              if (runnableThunk) {
+                await handler(runnableThunk, next, lockInstance, true);
+              }
             }
           }
+        } finally {
+          lockInstance.release();
         }
       } catch (err: any) {
         onError(`[starter] [exclusive] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${err.message}`);
@@ -173,7 +196,7 @@ export const createStarter = () => {
    * @returns Function - The actual middleware function that handles actions.
    */
   const concurrent = (config: MiddlewareConfig) => {
-    const handler = createActionHandler(config);
+    const handler = createActionHandler(config, { lockThunks: false });
     const lockInstance = config.lock;
     const inflight = new Set<Promise<void>>();
     const onError = console.warn;
@@ -192,18 +215,35 @@ export const createStarter = () => {
             .filter(thunk => matchesAction(thunk, action));
 
           // run thunks concurrently, but handle errors individually
-          await Promise.allSettled(
+          const results = await Promise.allSettled(
             matching
               .map(resolveThunk)
               .filter(Boolean)
               .map(thunk => handler(thunk as AsyncAction, next, lockInstance))
           );
+
+          for (const r of results) {
+            if (r.status === 'rejected') {
+              const msg =
+                r.reason instanceof Error
+                  ? r.reason.message
+                  : String(r.reason ?? 'unknown');
+              onError(
+                `[starter] [concurrent] Thunk error while processing action "${action?.type ?? 'unknown'}": ${msg}`
+              );
+            }
+          }
         })();
 
         inflight.add(p);
 
         // ensure cleanup + error reporting
-        p.catch(err => onError(`[starter] [concurrent] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${err.message}`)).finally(() => {
+        p.catch(err => {
+          const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
+          onError(
+            `[starter] [concurrent] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${msg}`
+          );
+        }).finally(() => {
           inflight.delete(p);
         });
 
@@ -213,20 +253,20 @@ export const createStarter = () => {
 
       Object.defineProperties(fn, {
         pendingCount: {
-          get: () => inflight.size,
+          value: () => inflight.size,
         },
         waitForAll: {
           value: async () => {
-            if (inflight.size === 0) return;
+            if (inflight.size === 0) return [];
             // Snapshot to avoid mutation while awaiting
-            await Promise.allSettled(Array.from(inflight));
+            return Promise.allSettled(Array.from(inflight));
           },
         },
       });
 
       return fn as typeof fn & {
-        readonly pendingCount: number;
-        waitForAll(): Promise<void>;
+        pendingCount(): number;
+        waitForAll(): Promise<PromiseSettledResult<void>[]>;
       };
     };
 
@@ -242,13 +282,21 @@ export const createStarter = () => {
   const defaultStrategy = 'concurrent';
 
   // Create a method to select the strategy
-  const selectStrategy = ({ dispatch, getState, dependencies, strategy, lock, stack }: any) => (next: Function) => async (action: Action) => {
-    let strategyFunc = strategies[strategy()];
+  const selectStrategy = ({ dispatch, getState, dependencies, strategy, lock, stack }: any) => (next: Function) => {
+    let strategyName: string;
+    try {
+      strategyName = String(strategy?.());
+    } catch {
+      strategyName = 'unknown';
+    }
+
+    let strategyFunc = strategies[strategyName];
     if (!strategyFunc) {
-      console.warn(`[starter] Unknown strategy: ${strategy}, default is used: ${defaultStrategy}`);
+      console.warn(`[starter] Unknown strategy: ${strategyName}, default is used: ${defaultStrategy}`);
       strategyFunc = strategies[defaultStrategy];
     }
-    return strategyFunc({ dispatch, getState, dependencies, lock, stack })(next)(action);
+
+    return strategyFunc({ dispatch, getState, dependencies, lock, stack })(next);
   };
 
   selectStrategy.signature = 'i.p.5.j.7.0.2.1.8.b';
