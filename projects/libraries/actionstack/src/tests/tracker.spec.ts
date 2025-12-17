@@ -9,7 +9,7 @@ import {
   scheduler,
 } from "@actioncrew/streamix";
 
-import { createTracker } from "@actioncrew/actionstack";
+import { createTracker } from "@actioncrew/actionstack/tracking";
 import { disableTracing } from "@actioncrew/streamix/tracing";
 
 async function flush(): Promise<void> {

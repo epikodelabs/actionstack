@@ -1,37 +1,37 @@
+import {
+  createBehaviorSubject,
+  distinctUntilChanged,
+  map,
+  Stream
+} from '@actioncrew/streamix';
 import { action, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
+import { createLock } from './lock';
+import { createModule, registerModule } from './module';
+import { createQueue } from './queue';
+import { starter } from './starter';
+import {
+  Action,
+  AsyncAction,
+  AsyncReducer,
+  FeatureModule,
+  Middleware,
+  MiddlewareAPI,
+  Reducer,
+  StoreEnhancer,
+} from './types';
 import {
   applyMiddleware,
   combineEnhancers,
   getProperty,
   setProperty,
 } from './utils';
-import { createLock } from './lock';
-import { starter } from './starter';
-import {
-  Action,
-  AsyncAction,
-  FeatureModule,
-  Middleware,
-  MiddlewareAPI,
-  StoreEnhancer,
-} from './types';
-import {
-  createBehaviorSubject,
-  createSubject,
-  distinctUntilChanged,
-  map,
-  Stream,
-  Subscription,
-} from '@actioncrew/streamix';
-import { createModule, registerModule } from './module';
-import { AsyncReducer, Reducer } from './types';
-import { createQueue } from './queue';
 
 /**
  * Class representing configuration options for a store.
  * This class defines properties that control various behaviors of a store for managing application state.
  */
 export type StoreSettings = {
+  awaitStatePropagation?: boolean;
   dispatchSystemActions?: boolean;
   enableGlobalReducers?: boolean;
   exclusiveActionProcessing?: boolean;
@@ -42,6 +42,7 @@ export type StoreSettings = {
  * and reducer handling.
  */
 const defaultStoreSettings: StoreSettings = {
+  awaitStatePropagation: false,
   dispatchSystemActions: true,
   enableGlobalReducers: true,
   exclusiveActionProcessing: false,
@@ -207,12 +208,18 @@ export function createStore<T = any>(
       }
     }
 
+    (store as any).tracker?.reset();
+
     // Emit only once after all reducers have run
     if (newState !== state) {
       state = newState;
       currentState.next(state as T);
     }
 
+    // Wait for state propagation if required
+    if (settings.awaitStatePropagation) {
+      await (store as any).tracker?.waitAll();
+    }
   };
 
   /**
@@ -493,17 +500,40 @@ export function createStore<T = any>(
   ): Stream<R> => {
     const source$ = currentState.pipe(
       map((state: T) => {
-        if (state == null) {
-          return defaultValue as R;
-        }
-
+        if (state == null) return defaultValue as R;
         const value = selector(state);
         return value === undefined ? (defaultValue as R) : value;
       }),
       distinctUntilChanged()
     );
 
-    return source$;
+    const tracker = (store as any).tracker;
+    if (!tracker) return source$;
+
+    return {
+      ...source$,
+      subscribe(observer: any) {
+        const wrappedObserver = {
+          next: (value: R) => {
+            observer?.next?.(value);
+            // Signal is now called via ValueTracer callbacks, not here!
+          },
+          error: (err: any) => {
+            observer?.error?.(err);
+            tracker.complete(subscription);
+            // Signal is now called via ValueTracer callbacks, not here!
+          },
+          complete: () => {
+            observer?.complete?.();
+            tracker.complete(subscription);
+          },
+        };
+
+        const subscription = source$.subscribe(wrappedObserver);
+        tracker.track(subscription);
+        return subscription;
+      },
+    };
   };
 
   /**

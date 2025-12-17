@@ -25,6 +25,9 @@
       "@actioncrew/actionstack/tools": [
         "./projects/libraries/actionstack/tools/src/public-api.ts"
       ],
+      "@actioncrew/actionstack/tracking": [
+        "./projects/libraries/actionstack/tracking/src/public-api.ts"
+      ],
       "@actioncrew/actionstack": [
         "./projects/libraries/actionstack/src/public-api.ts"
       ]

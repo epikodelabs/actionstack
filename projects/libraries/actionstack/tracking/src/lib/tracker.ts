@@ -1,47 +1,9 @@
+import { Tracker } from "@actioncrew/actionstack";
 import { BehaviorSubject, createBehaviorSubject, Subscription } from "@actioncrew/streamix";
 import {
-    enableTracing as enableStreamixTracing,
-    ValueTracer
+  enableTracing as enableStreamixTracing,
+  ValueTracer
 } from "@actioncrew/streamix/tracing";
-
-/**
- * Tracker used in tests to wait until all in-flight stream emissions have reached
- * a terminal tracing state.
- *
- * Why tracing?
- * - Some values never reach subscriber callbacks (filtered/collapsed/errored).
- * - Using tracing lets us wait for the *pipeline* to settle, not just callbacks.
- *
- * Notes:
- * - This implementation intentionally does NOT rely on internal/private tracer fields.
- * - It treats the world as "test-scoped": when you call `waitAll()`, it waits until
- *   *all traces currently known by the tracer* are terminal.
- */
-export type Tracker = {
-  /** Maximum time to wait for the stream graph to settle (ms). */
-  timeout: number;
-
-  /** Returns current boolean state for the subscription (if tracked). */
-  state: (subscription: Subscription) => boolean;
-
-  /** Signals that a tracked subscription executed some callback work. */
-  signal: (subscription: Subscription) => void;
-
-  /** Marks subscription as complete and removes it from the tracker. */
-  complete: (subscription: Subscription) => void;
-
-  /** Adds a subscription to tracking (no-op if already tracked). */
-  track: (subscription: Subscription) => void;
-
-  /** Resets internal statuses and clears collected traces. */
-  reset: () => void;
-
-  /**
-   * Waits until tracing shows no in-flight values (no "emitted"/"processing").
-   * Calls are queued: each new call waits for the previous waitAll to finish.
-   */
-  waitAll: () => Promise<void>;
-};
 
 type SubscriptionEntry = {
   status$: BehaviorSubject<boolean>;
@@ -53,6 +15,7 @@ type SubscriptionEntry = {
  *
  * Behavior:
  * - Auto-enables Streamix tracing on first `track()`.
+ * - Subscribes to ValueTracer events to signal subscriptions.
  * - `waitAll()` is serialized using an internal promise queue.
  * - `waitAll()` resolves when all known traces are terminal:
  *   delivered / filtered / collapsed / errored.
@@ -67,6 +30,7 @@ export const createTracker = (): Tracker => {
   // Tracing integration (test-scoped).
   let tracer: ValueTracer | null = null;
   let tracingEnabled = false;
+  let tracerUnsubscribe: (() => void) | null = null;
 
   const state: Tracker["state"] = (subscription) =>
     subscriptions.get(subscription)?.status ?? false;
@@ -100,6 +64,35 @@ export const createTracker = (): Tracker => {
       tracer = new ValueTracer({ maxTraces: 10_000 });
       enableStreamixTracing(tracer);
       tracingEnabled = true;
+
+      // Subscribe to ValueTracer events to signal subscriptions
+      // when values reach terminal states
+      tracerUnsubscribe = tracer.subscribe({
+        delivered: (trace) => {
+          // Signal all subscriptions when a value is delivered
+          for (const sub of subscriptions.keys()) {
+            signal(sub);
+          }
+        },
+        filtered: (trace) => {
+          // Signal all subscriptions when a value is filtered
+          for (const sub of subscriptions.keys()) {
+            signal(sub);
+          }
+        },
+        collapsed: (trace) => {
+          // Signal all subscriptions when a value is collapsed
+          for (const sub of subscriptions.keys()) {
+            signal(sub);
+          }
+        },
+        dropped: (trace) => {
+          // Signal all subscriptions when a value is dropped
+          for (const sub of subscriptions.keys()) {
+            signal(sub);
+          }
+        }
+      });
     }
   };
 
