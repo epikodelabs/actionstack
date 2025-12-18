@@ -1,4 +1,4 @@
-import { logger } from "@actioncrew/actionstack/tools";
+import { createLogger, logger } from "@actioncrew/actionstack/tools";
 
 describe("logger", () => {
   beforeEach(() => {
@@ -35,5 +35,134 @@ describe("logger", () => {
     await expectAsync((logger as any)(api)(next)({ type: "TEST/ERR" })).toBeRejectedWithError("boom");
     expect(console.group).toHaveBeenCalled();
     expect(console.groupEnd).toHaveBeenCalled();
+  });
+});
+
+describe("createLogger", () => {
+  const makeLogger = () => ({
+    group: jasmine.createSpy("group"),
+    groupCollapsed: jasmine.createSpy("groupCollapsed"),
+    groupEnd: jasmine.createSpy("groupEnd"),
+    log: jasmine.createSpy("log"),
+    warn: jasmine.createSpy("warn"),
+    info: jasmine.createSpy("info"),
+    error: jasmine.createSpy("error"),
+  });
+
+  it("skips logging when logger option is 'undefined'", async () => {
+    const mw = createLogger({ logger: "undefined" } as any);
+    const next = jasmine.createSpy("next").and.resolveTo("OK");
+
+    const out = await (mw as any)({ getState: () => ({}) })(next)({ type: "X" });
+
+    expect(out).toBe("OK");
+    expect(next).toHaveBeenCalledWith({ type: "X" });
+  });
+
+  it("returns early when predicate returns false", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      predicate: () => false,
+    } as any);
+
+    const next = jasmine.createSpy("next").and.resolveTo("OK");
+
+    const out = await (mw as any)({ getState: () => ({}) })(next)({ type: "X" });
+
+    expect(out).toBe("OK");
+    expect(next).toHaveBeenCalled();
+    expect(custom.group).not.toHaveBeenCalled();
+    expect(custom.groupCollapsed).not.toHaveBeenCalled();
+  });
+
+  it("supports collapsed=true and uses groupCollapsed", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({ logger: custom, collapsed: true } as any);
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)({ getState: () => ({}) })(next)({ type: "TEST/COLLAPSE" });
+
+    expect(custom.groupCollapsed).toHaveBeenCalled();
+    expect(custom.groupEnd).toHaveBeenCalled();
+  });
+
+  it("supports collapsed as a function", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      collapsed: () => false,
+    } as any);
+
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+    await (mw as any)({ getState: () => ({}) })(next)({ type: "TEST/COLLAPSE_FN" });
+
+    expect(custom.group).toHaveBeenCalled();
+    expect(custom.groupCollapsed).not.toHaveBeenCalled();
+  });
+
+  it("uses level as an object of functions/strings", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      level: {
+        prevState: () => "log",
+        action: "warn",
+        nextState: "info",
+        error: "error",
+      },
+    } as any);
+
+    const api = { getState: () => ({ count: 0 }) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/LEVEL" });
+
+    expect(custom.log).toHaveBeenCalled();
+    expect(custom.warn).toHaveBeenCalled();
+    expect(custom.info).toHaveBeenCalled();
+  });
+
+  it("uses level as a function", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      level: () => "warn",
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/FN_LEVEL" });
+    expect(custom.warn).toHaveBeenCalled();
+  });
+
+  it("rethrows when logErrors=false and next throws", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({ logger: custom, logErrors: false } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = async () => {
+      throw new Error("boom");
+    };
+
+    await expectAsync((mw as any)(api)(next)({ type: "TEST/NO_LOG_ERRORS" })).toBeRejectedWithError("boom");
+  });
+
+  it("falls back to logger.log when group() throws, and tolerates groupEnd() throwing", async () => {
+    const custom = makeLogger();
+    (custom.group as any).and.callFake(() => {
+      throw new Error("group boom");
+    });
+    (custom.groupEnd as any).and.callFake(() => {
+      throw new Error("groupEnd boom");
+    });
+
+    const mw = createLogger({ logger: custom, collapsed: false } as any);
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)({ getState: () => ({}) })(next)({ type: "TEST/GROUP_THROW" });
+
+    expect(custom.log).toHaveBeenCalled();
   });
 });

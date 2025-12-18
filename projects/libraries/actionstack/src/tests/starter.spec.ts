@@ -1,6 +1,7 @@
 import type { Action } from '@actioncrew/actionstack';
 import {
   createLock,
+  createActionHandler,
   createStarter,
   registerThunks,
   thunk,
@@ -182,7 +183,119 @@ describe('starter', () => {
     });
   });
 
+  describe('handler', () => {
+    it('locks thunk execution when lockThunks=true and dispatch is not nested', async () => {
+      const lock = createLock();
+      spyOn(lock, 'acquire').and.callThrough();
+      spyOn(lock, 'release').and.callThrough();
+
+      const handler = createActionHandler(
+        {
+          getState: () => ({}),
+          dependencies: () => ({}),
+          lock,
+          dispatch: async () => {},
+        } as any,
+        { lockThunks: true }
+      );
+
+      const next = jasmine.createSpy('next').and.resolveTo();
+
+      const thunkAction: any = async (dispatch: any) => {
+        await dispatch({ type: 'NESTED' });
+      };
+
+      await handler(thunkAction, next, lock, false);
+
+      expect(lock.acquire).toHaveBeenCalled();
+      expect(lock.release).toHaveBeenCalled();
+      expect(next).toHaveBeenCalledWith({ type: 'NESTED' });
+    });
+
+    it('does not lock nested sync dispatch when lockThunks=true', async () => {
+      const lock = createLock();
+      spyOn(lock, 'acquire').and.callThrough();
+
+      const handler = createActionHandler(
+        {
+          getState: () => ({}),
+          dependencies: () => ({}),
+          lock,
+          dispatch: async () => {},
+        } as any,
+        { lockThunks: true }
+      );
+
+      const next = jasmine.createSpy('next').and.resolveTo();
+      await handler({ type: 'NESTED' } as any, next, lock, true);
+
+      expect(lock.acquire).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledWith({ type: 'NESTED' });
+    });
+  });
+
   describe('execution', () => {
+    it('warns and skips a thunk when instantiation throws', async () => {
+      const warn = spyOn(console, 'warn');
+
+      const bad: any = () => {
+        throw new Error('instantiate boom');
+      };
+      Object.assign(bad, {
+        isThunk: true,
+        type: 'TEST/BAD_THUNK',
+        triggers: ['PING'],
+      });
+
+      registerTestModule({ bad });
+
+      const { dispatch, received } = createHarness('exclusive');
+      await dispatch({ type: 'PING' });
+
+      expect(received.map((a) => a.type)).toEqual(['PING']);
+      expect(warn).toHaveBeenCalled();
+      expect(String(warn.calls.allArgs().flat().join(' '))).toContain(
+        'Failed to instantiate thunk'
+      );
+    });
+
+    it('logs exclusive thunk errors and continues', async () => {
+      const warn = spyOn(console, 'warn');
+
+      const bad = thunk(
+        'TEST/EXCL_THROW',
+        () => async () => {
+          throw new Error('boom');
+        },
+        ['PING']
+      );
+
+      registerTestModule({ bad });
+
+      const { dispatch, received } = createHarness('exclusive');
+      await dispatch({ type: 'PING' });
+
+      expect(received.map((a) => a.type)).toEqual(['PING']);
+      expect(String(warn.calls.allArgs().flat().join(' '))).toContain(
+        '[starter] [exclusive] Thunk error'
+      );
+    });
+
+    it('logs exclusive unhandled errors when next() throws', async () => {
+      const warn = spyOn(console, 'warn');
+
+      const { dispatch } = createHarness('exclusive', {
+        nextHook: () => {
+          throw new Error('next boom');
+        },
+      });
+
+      await dispatch({ type: 'PING' });
+      expect(String(warn.calls.allArgs().flat().join(' '))).toContain(
+        '[starter] [exclusive] Unhandled error'
+      );
+    });
+
     it('runs matching thunks sequentially in exclusive mode', async () => {
       const events: string[] = [];
       const t1Started = deferred<void>();

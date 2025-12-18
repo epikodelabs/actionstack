@@ -16,11 +16,144 @@ async function flush(): Promise<void> {
   await scheduler.flush();
 }
 
+type Deferred<T> = {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+};
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("tracker", () => {
   afterEach(async () => {
     // Avoid test leakage
     disableTracing();
     await flush();
+  });
+
+  it("resolves immediately when nothing is tracked", async () => {
+    const tracker = createTracker();
+    await tracker.waitAll();
+    await flush();
+  });
+
+  it("updates state via signal(), reset(), and complete()", async () => {
+    const tracker = createTracker();
+
+    const stream = createStream("one", async function* () {
+      yield 1;
+    });
+
+    const sub = stream.subscribe({ next: () => {} });
+
+    tracker.track(sub);
+    expect(tracker.state(sub)).toBeFalse();
+
+    tracker.signal(sub);
+    expect(tracker.state(sub)).toBeTrue();
+
+    tracker.reset();
+    expect(tracker.state(sub)).toBeFalse();
+
+    tracker.complete(sub);
+    expect(tracker.state(sub)).toBeFalse();
+
+    sub.unsubscribe();
+    await flush();
+  });
+
+  it("allows tracking the same subscription multiple times", async () => {
+    const tracker = createTracker();
+
+    const stream = createStream("one", async function* () {
+      yield 1;
+    });
+
+    const sub = stream.subscribe({ next: () => {} });
+
+    tracker.track(sub);
+    tracker.track(sub);
+
+    await tracker.waitAll();
+    await flush();
+
+    tracker.complete(sub);
+    sub.unsubscribe();
+  });
+
+  it("waits while a trace is processing, then resolves on delivery", async () => {
+    const tracker = createTracker();
+    const allowDeliver = deferred<void>();
+    const started = deferred<void>();
+
+    // Enable tracing before creating real subscriptions.
+    const bootstrap = {} as any;
+    tracker.track(bootstrap);
+
+    const hold = createOperator<number, number>("hold", (source) => ({
+      async next() {
+        const r = await source.next();
+        if (r.done) return r;
+        started.resolve();
+        await allowDeliver.promise;
+        return r;
+      },
+      return: source.return?.bind(source),
+      throw: source.throw?.bind(source),
+    }));
+
+    const stream = createStream("one", async function* () {
+      yield 1;
+    });
+
+    const received: number[] = [];
+    const sub = stream.pipe(hold).subscribe({ next: (v) => received.push(v) });
+    tracker.track(sub);
+
+    await started.promise;
+
+    let resolved = false;
+    const p = tracker.waitAll().then(() => {
+      resolved = true;
+    });
+
+    await new Promise<void>((r) => setTimeout(r, 0));
+    expect(resolved).toBeFalse();
+
+    allowDeliver.resolve();
+    await p;
+    await flush();
+
+    expect(received).toEqual([1]);
+
+    tracker.complete(sub);
+    tracker.complete(bootstrap);
+    sub.unsubscribe();
+  });
+
+  it("resolves quickly when traces are already terminal", async () => {
+    const tracker = createTracker();
+
+    const stream = createStream("one", async function* () {
+      yield 1;
+    });
+
+    const sub = stream.subscribe({ next: () => {} });
+    tracker.track(sub);
+
+    await flush();
+    await tracker.waitAll();
+
+    tracker.complete(sub);
+    sub.unsubscribe();
   });
 
   it("resolves when values are delivered", async () => {

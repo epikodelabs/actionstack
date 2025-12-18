@@ -1,10 +1,12 @@
 import type { Store } from '@actioncrew/actionstack';
 import {
   action,
+  applyMiddleware,
   createModule,
   createStore,
   thunk,
 } from '@actioncrew/actionstack';
+import { withTracker } from '@actioncrew/actionstack/tracking';
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -78,6 +80,39 @@ describe('store', () => {
     expect(resolved).toBeTrue();
   });
 
+  it('getState releases lock when callback throws', async () => {
+    const store = createStore();
+    await flush(store);
+
+    await expectAsync(
+      store.getState('system', () => {
+        throw new Error('boom');
+      })
+    ).toBeRejectedWithError('boom');
+
+    let ran = false;
+    await store.getState('system', () => {
+      ran = true;
+    });
+    expect(ran).toBeTrue();
+  });
+
+  it('select returns defaultValue and warns when selector throws', async () => {
+    const store = createStore();
+    await flush(store);
+    (console.warn as any).calls.reset();
+
+    const stream = store.select(() => {
+      throw new Error('selector boom');
+    }, 'DEFAULT');
+
+    expect(await stream.query()).toBe('DEFAULT');
+    expect((console.warn as any).calls.any()).toBeTrue();
+    expect(String((console.warn as any).calls.mostRecent().args[0])).toContain(
+      'Error in selector:'
+    );
+  });
+
   it('loads module initial state and updates system modules list', async () => {
     const store = createStore();
     const counterModule = createModule({
@@ -93,6 +128,23 @@ describe('store', () => {
 
     expect(await readState(store, 'counter')).toBe(0);
     expect((await readState<any>(store, 'system'))._modules).toContain('counter');
+  });
+
+  it('loadModule is idempotent for an already loaded slice', async () => {
+    const store = createStore();
+    const mod = createModule({
+      slice: 'dup',
+      initialState: { value: 1 },
+      actions: {},
+    });
+
+    await store.loadModule(mod);
+    await store.loadModule(mod);
+    await flush(store);
+
+    const system = await readState<any>(store, 'system');
+    const count = (system._modules as string[]).filter((s) => s === 'dup').length;
+    expect(count).toBe(1);
   });
 
   it('dispatch applies action handlers and is serialized via internal queue', async () => {
@@ -131,6 +183,21 @@ describe('store', () => {
 
     expect(handlerCalls).toBe(2);
     expect(await readState(store, 'queue')).toBe(2);
+  });
+
+  it('unloadModule warns when module is not loaded', async () => {
+    const store = createStore();
+    await flush(store);
+    (console.warn as any).calls.reset();
+
+    const mod = createModule({
+      slice: 'missing',
+      initialState: {},
+      actions: {},
+    });
+
+    await store.unloadModule(mod, true);
+    expect((console.warn as any).calls.any()).toBeTrue();
   });
 
   it('unloadModule(clearState=true) clears slice state and updates system modules list', async () => {
@@ -234,6 +301,18 @@ describe('store', () => {
     expect(store.getMiddlewareAPI().dependencies().token).toBeUndefined();
   });
 
+  it('getMiddlewareAPI.getState supports undefined, *, string paths, and array paths', async () => {
+    const store = createStore();
+    await flush(store);
+
+    const api = store.getMiddlewareAPI();
+
+    expect(api.getState()).toEqual(jasmine.any(Object));
+    expect(api.getState('*')).toEqual(jasmine.any(Object));
+    expect(api.getState('system/_ready')).toBeTrue();
+    expect(api.getState(['system', '_ready'])).toBeTrue();
+  });
+
   it('runs global reducers when enabled', async () => {
     const store = createStore({ enableGlobalReducers: true });
     await flush(store);
@@ -246,6 +325,23 @@ describe('store', () => {
     await store.dispatch({ type: 'TEST/GLOBAL' });
     const root = await readState<any>(store, '*');
     expect(root.lastAction).toBe('TEST/GLOBAL');
+  });
+
+  it('warns but does not fail when a global reducer throws', async () => {
+    const store = createStore({ enableGlobalReducers: true });
+    await flush(store);
+    (console.warn as any).calls.reset();
+
+    await store.addReducer(() => {
+      throw new Error('reducer boom');
+    });
+
+    await store.dispatch({ type: 'TEST/REDUCER_THROW' });
+
+    expect((console.warn as any).calls.any()).toBeTrue();
+    expect(String((console.warn as any).calls.mostRecent().args[0])).toContain(
+      'Error in meta-reducer'
+    );
   });
 
   it('does not register global reducers when disabled', async () => {
@@ -262,6 +358,152 @@ describe('store', () => {
     const root = await readState<any>(store, '*');
     expect(root.lastAction).toBeUndefined();
     expect((console.warn as any).calls.any()).toBeTrue();
+  });
+
+  it('warns on overlapping dependency keys and preserves the first value', async () => {
+    const store = createStore();
+    await flush(store);
+    (console.warn as any).calls.reset();
+
+    class Service {}
+
+    const a = createModule({
+      slice: 'depsA',
+      initialState: {},
+      dependencies: {
+        shared: 1,
+        array: [1, 2, 3],
+        inst: new Service(),
+      },
+      actions: {},
+    });
+
+    const b = createModule({
+      slice: 'depsB',
+      initialState: {},
+      dependencies: {
+        shared: 2,
+      },
+      actions: {},
+    });
+
+    await store.loadModule(a);
+    await store.loadModule(b);
+    await flush(store);
+
+    expect(store.getMiddlewareAPI().dependencies().shared).toBe(1);
+    expect((console.warn as any).calls.any()).toBeTrue();
+    expect(String((console.warn as any).calls.mostRecent().args[0])).toContain(
+      'Overlapping property'
+    );
+  });
+
+  it('awaitStatePropagation waits on tracker when enabled', async () => {
+    const enhancer = withTracker();
+    spyOn(enhancer.tracker, 'waitAll').and.resolveTo();
+
+    const store: any = createStore({ awaitStatePropagation: true }, enhancer as any);
+    await flush(store);
+
+    await store.dispatch({ type: 'TEST/AWAIT' });
+    expect(enhancer.tracker.waitAll).toHaveBeenCalled();
+  });
+
+  it('populate skips already loaded modules and warns', async () => {
+    const store = createStore();
+    await flush(store);
+    (console.warn as any).calls.reset();
+
+    const mod = createModule({ slice: 'pop', initialState: {}, actions: {} });
+
+    await store.populate(mod as any, mod as any);
+    expect((console.warn as any).calls.any()).toBeTrue();
+    expect(String((console.warn as any).calls.mostRecent().args[0])).toContain(
+      'already loaded, skipping'
+    );
+  });
+
+  it('populate cleans up and reports errors when a module fails to load', async () => {
+    const store = createStore();
+    await flush(store);
+
+    const onError = jasmine.createSpy('loaded$.error');
+    const badModule: any = {
+      slice: 'badmod',
+      initialState: {},
+      actions: {},
+      dependencies: {},
+      loaded$: {
+        next: () => {
+          throw new Error('boom');
+        },
+        error: onError,
+      },
+      destroyed$: { next: () => {}, complete: () => {} },
+    };
+
+    await expectAsync(store.populate(badModule)).toBeRejectedWithError('boom');
+    expect(onError).toHaveBeenCalled();
+  });
+
+  it('select emits defaultValue when root state becomes null', async () => {
+    const store = createStore({ enableGlobalReducers: true });
+    await flush(store);
+
+    await store.addReducer((_state: any, actionObj: any) => {
+      return actionObj.type === 'TEST/NULL_STATE' ? null : undefined;
+    });
+
+    const stream = store.select((s: any) => s?.anything, 'DEFAULT');
+
+    await store.dispatch({ type: 'TEST/NULL_STATE' });
+    expect(await stream.query()).toBe('DEFAULT');
+  });
+
+  it('unloadModule(clearState=false) preserves slice state and allows reloading without resetting', async () => {
+    const store = createStore();
+
+    const mod = createModule({
+      slice: 'keep',
+      initialState: { value: 1 },
+      actions: {
+        set: action('SET', (_s: any, v: number) => ({ value: v })),
+      },
+    });
+
+    await store.loadModule(mod);
+    await flush(store);
+
+    await store.dispatch({ type: 'keep/SET', payload: 7 });
+    expect(await readState<any>(store, 'keep')).toEqual({ value: 7 });
+
+    await store.unloadModule(mod, false);
+    await flush(store);
+
+    expect(await readState<any>(store, 'keep')).toEqual({ value: 7 });
+
+    await store.loadModule(mod);
+    await flush(store);
+
+    expect(await readState<any>(store, 'keep')).toEqual({ value: 7 });
+  });
+
+  it('accepts applyMiddleware() as enhancer without re-wrapping', async () => {
+    const store = createStore(applyMiddleware());
+    await flush(store);
+
+    const system = await readState<any>(store, 'system');
+    expect(system._ready).toBeTrue();
+  });
+
+  it('auto-adds applyMiddleware() when enhancer does not include it', async () => {
+    const enhancer = (next: any) => (settings: any) => next(settings);
+
+    const store = createStore(enhancer);
+    await flush(store);
+
+    const system = await readState<any>(store, 'system');
+    expect(system._ready).toBeTrue();
   });
 
   it('exclusiveActionProcessing runs matching thunks sequentially (store integration)', async () => {

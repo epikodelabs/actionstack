@@ -45,6 +45,24 @@ describe("queue", () => {
     expect(q.isEmpty).toBeTrue();
   });
 
+  it("handles synchronous operations", async () => {
+    const q = createQueue();
+    const events: string[] = [];
+
+    const p1 = q.enqueue(() => {
+      events.push("a");
+    });
+    const p2 = q.enqueue(() => {
+      events.push("b");
+    });
+
+    expect(q.pending).toBe(2);
+    await Promise.all([p1, p2]);
+    expect(events).toEqual(["a", "b"]);
+    expect(q.pending).toBe(0);
+    expect(q.isEmpty).toBeTrue();
+  });
+
   it("does not lock the queue after a failure", async () => {
     const q = createQueue();
     const events: string[] = [];
@@ -60,4 +78,3 @@ describe("queue", () => {
     expect(events).toEqual(["after"]);
   });
 });
-

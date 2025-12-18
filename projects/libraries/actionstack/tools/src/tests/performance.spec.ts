@@ -22,4 +22,23 @@ describe("perfmon", () => {
     expect(msg).toContain("TEST/PERF");
     expect(console.groupEnd).toHaveBeenCalled();
   });
+
+  it("marks system actions differently from non-system actions", async () => {
+    const next = jasmine.createSpy("next").and.callFake(async () => {});
+    const mw = (perfmon as any)()(next);
+
+    await mw({ type: "system/INIT" });
+    const systemMsg = String(
+      (console.groupCollapsed as any).calls.mostRecent().args[0]
+    );
+
+    await mw({ type: "APP/INIT" });
+    const appMsg = String(
+      (console.groupCollapsed as any).calls.mostRecent().args[0]
+    );
+
+    expect(systemMsg).toContain("system/INIT");
+    expect(appMsg).toContain("APP/INIT");
+    expect(systemMsg).not.toEqual(appMsg);
+  });
 });

@@ -204,7 +204,7 @@ const defaults: LoggerOptions = {
  * @param {CreateLoggerOptions} [options={}] - Options for creating the logger.
  * @returns {Function} A function that acts as a logger middleware.
  */
-const createLogger = (options: CreateLoggerOptions = {}) => {
+export const createLogger = (options: CreateLoggerOptions = {}) => {
   const loggerOptions = Object.assign({}, defaults, options);
   let loggerCreator: any = () => (next: any)  => async (action: any) => await next(action);
 

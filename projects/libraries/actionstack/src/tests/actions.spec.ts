@@ -98,6 +98,18 @@ describe("actions", () => {
       expect(dispatch).toHaveBeenCalledWith({ type: "TEST/BOUND", payload: 7 });
     });
 
+    it("bindActionCreators supports a function input", () => {
+      const dispatch = jasmine.createSpy("dispatch");
+      const ac = createAction(
+        "TEST/FN_BOUND",
+        (_state: any, payload: number) => payload
+      );
+
+      const bound = bindActionCreators(ac as any, dispatch);
+      bound(9);
+      expect(dispatch).toHaveBeenCalledWith({ type: "TEST/FN_BOUND", payload: 9 });
+    });
+
     it("binds an object of action creators and warns on invalid input", () => {
       const dispatch = jasmine.createSpy("dispatch");
       const creators = {
