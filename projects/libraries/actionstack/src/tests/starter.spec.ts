@@ -56,7 +56,7 @@ function createHarness(strategyName: string, opts: HarnessOptions = {}) {
   return { dispatch, received, overlaps };
 }
 
-describe('Starter middleware', () => {
+describe('starter', () => {
   const cleanupModules: any[] = [];
 
   const registerTestModule = (actions: Record<string, any>) => {
@@ -156,7 +156,7 @@ describe('Starter middleware', () => {
     });
   });
 
-  describe('strategy selection', () => {
+  describe('strategy', () => {
     it('falls back to default strategy and warns on unknown strategy', async () => {
       const warn = spyOn(console, 'warn');
 
@@ -182,7 +182,7 @@ describe('Starter middleware', () => {
     });
   });
 
-  describe('execution strategy', () => {
+  describe('execution', () => {
     it('runs matching thunks sequentially in exclusive mode', async () => {
       const events: string[] = [];
       const t1Started = deferred<void>();
@@ -298,7 +298,7 @@ describe('Starter middleware', () => {
     });
   });
 
-  describe('error resilience', () => {
+  describe('resilience', () => {
     it('concurrent mode: continues processing subsequent actions after a thunk throws', async () => {
       const warn = spyOn(console, 'warn');
       const ran: string[] = [];
@@ -364,7 +364,7 @@ describe('Starter middleware', () => {
     });
   });
 
-  describe('concurrent utilities', () => {
+  describe('concurrent', () => {
     it('exposes pendingCount and waitForAll', async () => {
       const { dispatch: dispatchFn } = createHarness('concurrent');
       const dispatch = dispatchFn as any;  // Access properties

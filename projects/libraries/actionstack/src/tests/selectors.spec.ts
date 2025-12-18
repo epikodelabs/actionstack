@@ -6,7 +6,7 @@ import {
 } from '@actioncrew/actionstack';
 import { createBehaviorSubject } from '@actioncrew/streamix';
 
-describe('Selectors', () => {
+describe('selectors', () => {
   interface TestState {
     user: {
       name: string;
@@ -279,7 +279,7 @@ describe('Selectors', () => {
     });
   });
 
-  describe('Integration: processSelectors-like behavior', () => {
+  describe('integration', () => {
     it('should work with nested slice selectors', () => {
       interface RootState {
         feature: TestState;

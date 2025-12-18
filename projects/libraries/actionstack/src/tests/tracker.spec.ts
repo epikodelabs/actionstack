@@ -16,7 +16,7 @@ async function flush(): Promise<void> {
   await scheduler.flush();
 }
 
-describe("Tracker (tracing-based waitAll)", () => {
+describe("tracker", () => {
   afterEach(async () => {
     // Avoid test leakage
     disableTracing();

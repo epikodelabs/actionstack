@@ -34,7 +34,7 @@ async function readState<T = any>(store: Store<any>, slice: any): Promise<T> {
   return value;
 }
 
-describe('Store', () => {
+describe('store', () => {
   beforeEach(() => {
     spyOn(console, 'log').and.stub();
     spyOn(console, 'warn').and.stub();
