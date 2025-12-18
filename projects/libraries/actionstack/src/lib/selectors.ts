@@ -37,39 +37,6 @@ export type ValueAtPath<T, P extends readonly any[]> =
       : unknown;
 
 /**
- * Creates a selector that extracts a property from state.
- * Supports both simple keys and nested paths.
- */
-export function createFeatureSelector<
-  T,
-  P extends keyof T | readonly any[]
->(
-  keyOrPath: P
-): Selector<
-  T,
-  P extends keyof T
-    ? T[P]
-    : P extends readonly any[]
-      ? ValueAtPath<T, P>
-      : unknown
-> {
-  return (state: T) => {
-    if (state == null) {
-      return undefined as any;
-    }
-
-    if (Array.isArray(keyOrPath)) {
-      return keyOrPath.reduce<any>(
-        (acc, key) => (acc == null ? undefined : acc[key]),
-        state
-      );
-    }
-
-    return (state as any)[keyOrPath];
-  };
-}
-
-/**
  * Variadic selector creator.
  *
  * Rules:

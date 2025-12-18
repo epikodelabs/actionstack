@@ -1,9 +1,8 @@
 import {
-  createFeatureSelector,
   selector,
   selectorAsync,
   selectStream,
-  selectStreamAsync,
+  selectStreamAsync
 } from '@actioncrew/actionstack';
 import { createBehaviorSubject } from '@actioncrew/streamix';
 
@@ -36,38 +35,6 @@ describe('Selectors', () => {
     ],
     count: 5,
   };
-
-  describe('createFeatureSelector', () => {
-    it('should select a top-level property by key', () => {
-      const selectCount = createFeatureSelector<TestState, 'count'>('count');
-      const result = selectCount(mockState);
-      expect(result).toBe(5);
-    });
-
-    it('should select a nested property by key', () => {
-      const selectUser = createFeatureSelector<TestState, 'user'>('user');
-      const result = selectUser(mockState);
-      expect(result).toEqual(mockState.user);
-    });
-
-    it('should select a nested property by path array', () => {
-      const selectUser = createFeatureSelector<TestState, ['user']>(['user']);
-      const result = selectUser(mockState);
-      expect(result).toEqual(mockState.user);
-    });
-
-    it('should return undefined for non-existent key', () => {
-      const selectMissing = createFeatureSelector<any, 'missing'>('missing');
-      const result = selectMissing(mockState);
-      expect(result).toBeUndefined();
-    });
-
-    it('should handle null/undefined state gracefully', () => {
-      const selectCount = createFeatureSelector<TestState, 'count'>('count');
-      const result = selectCount(null as any);
-      expect(result).toBeUndefined();
-    });
-  });
 
   describe('selector', () => {
     it('should work as identity selector with single function', () => {
