@@ -158,6 +158,12 @@ function processActions<Actions extends Record<string, any>>(
 
       (processed as any)[name] = namespacedAction;
     } else {
+      const originalType =
+        typeof action?.type === 'string' ? action.type : name;
+      const namespacedType = originalType.includes('/')
+        ? originalType
+        : `${slice}/${originalType}`;
+
       const thunkWithType = (...args: any[]) => {
         const thunk = action(...args);
         return Object.assign(
@@ -168,19 +174,19 @@ function processActions<Actions extends Record<string, any>>(
             });
           },
           {
-            type: `${slice}/${name}`,
+            type: namespacedType,
             isThunk: true,
-            toString: () => `${slice}/${name}`,
-            match: (act: any) => isAction(act) && act.type === `${slice}/${name}`
+            toString: () => namespacedType,
+            match: (act: any) => isAction(act) && act.type === namespacedType
           }
         );
       };
 
       Object.assign(thunkWithType, {
-        type: `${slice}/${name}`,
+        type: namespacedType,
         isThunk: true,
-        toString: () => `${slice}/${name}`,
-        match: (act: any) => isAction(act) && act.type === `${slice}/${name}`,
+        toString: () => namespacedType,
+        match: (act: any) => isAction(act) && act.type === namespacedType,
         triggers: action.triggers?.map((t: any) =>
           typeof t === 'string' ? (t.includes('/') ? t : `${slice}/${t}`) : t
         )

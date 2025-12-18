@@ -65,7 +65,7 @@ describe("module", () => {
     ]);
 
     const dispatchedThunk = (mod.actions as any).run();
-    expect(dispatchedThunk.type).toBe("feature/run");
+    expect(dispatchedThunk.type).toBe("feature/IGNORED_ORIGINAL_TYPE");
     expect(dispatch).toHaveBeenCalledWith(dispatchedThunk);
   });
 

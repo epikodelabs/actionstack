@@ -2,7 +2,6 @@ import {
   createBehaviorSubject,
   distinctUntilChanged,
   map,
-  switchMap,
   Stream
 } from '@actioncrew/streamix';
 import { action, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
@@ -499,7 +498,7 @@ export function createStore<T = any>(
     defaultValue?: R
   ): Stream<R> => {
     const source$ = currentState.pipe(
-      switchMap(async (state: T) => {
+      map(async (state: T) => {
         if (state == null) return defaultValue as R;
         try {
           const value = await selector(state);
