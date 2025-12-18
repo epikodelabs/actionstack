@@ -402,6 +402,33 @@ export type Tracker = {
 };
 
 /**
+ * Hooks that allow observing ActionStack execution without coupling
+ * ActionStack core to tracing, testing utilities, or diagnostics.
+ *
+ * These hooks are intentionally minimal and synchronous.
+ */
+export interface ActionStackTrackingHooks {
+  /**
+   * Called when a subscription is created and should be tracked.
+   */
+  track?(subscription: Subscription): void;
+
+  /**
+   * Called when user code (subscriber callback, reducer, effect)
+   * was actually executed.
+   */
+  signal?(subscription: Subscription): void;
+
+  /**
+   * Called when a subscription has completed and will no longer emit.
+   */
+  complete?(subscription: Subscription): void;
+}
+
+export const __ACTIONSTACK_TRACKING_HOOKS__ = 0;
+
+
+/**
  * Determines the type of a given value.
  *
  * This function attempts to identify the underlying type of a JavaScript value
@@ -583,3 +610,4 @@ function isStream(obj: any): obj is Stream<unknown> {
 }
 
 export { isAction, isAsync, isBoxed, isPlainObject, isPromise, isStream, kindOf };
+
