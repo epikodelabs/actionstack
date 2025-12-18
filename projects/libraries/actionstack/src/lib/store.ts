@@ -2,6 +2,7 @@ import {
   createBehaviorSubject,
   distinctUntilChanged,
   map,
+  switchMap,
   Stream
 } from '@actioncrew/streamix';
 import { action, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
@@ -76,63 +77,62 @@ interface SystemState {
   _modules: string[];
 }
 
-const systemModule = createModule({
-  slice: 'system',
-  initialState: {
-    _initialized: false,
-    _ready: false,
-    _modules: [],
-  } as SystemState,
-  actions: {
-    initializeState: action('INITIALIZE_STATE', (state: SystemState) => ({
-      _modules: [],
+export function isSystemActionType(type: string): boolean {
+  return typeof type === 'string' && type.startsWith('system/');
+}
+
+function createSystemModule() {
+  return createModule({
+    slice: 'system',
+    initialState: {
       _initialized: false,
       _ready: false,
-    })),
+      _modules: [],
+    } as SystemState,
+    actions: {
+      initializeState: action('INITIALIZE_STATE', (_state: SystemState) => ({
+        _modules: [],
+        _initialized: false,
+        _ready: false,
+      })),
 
-    updateState: action(
-      'UPDATE_STATE',
-      (state: SystemState, payload: Partial<SystemState>) => ({
-        ...state,
-        ...payload,
-      })
-    ),
+      updateState: action(
+        'UPDATE_STATE',
+        (state: SystemState, payload: Partial<SystemState>) => ({
+          ...(state ?? ({} as any)),
+          ...payload,
+        })
+      ),
 
-    storeInitialized: action('STORE_INITIALIZED', (state: SystemState) => ({
-      ...state,
-      _initialized: true,
-      _ready: true,
-    })),
+      storeInitialized: action('STORE_INITIALIZED', (state: SystemState) => ({
+        ...(state ?? ({} as any)),
+        _initialized: true,
+        _ready: true,
+      })),
 
-    moduleLoaded: action(
-      'MODULE_LOADED',
-      (state: SystemState, payload: { slice: string }) => ({
-        ...state,
-        _modules: [...state._modules, payload.slice],
-      })
-    ),
+      moduleLoaded: action(
+        'MODULE_LOADED',
+        (state: SystemState, payload: { slice: string }) => ({
+          ...(state ?? ({ _modules: [] } as any)),
+          _modules: [...(state?._modules ?? []), payload.slice],
+        })
+      ),
 
-    moduleUnloaded: action(
-      'MODULE_UNLOADED',
-      (state: SystemState, payload: { slice: string }) => ({
-        ...state,
-        _modules: state._modules.filter((m) => m !== payload.slice),
-      })
-    ),
-  },
-  selectors: {
-    isInitialized: () => (state: SystemState) => state._initialized,
-    isReady: () => (state: SystemState) => state._ready,
-    loadedModules: () => (state: SystemState) => state._modules,
-  },
-  dependencies: {},
-});
-
-export function isSystemActionType(type: string): boolean {
-  const actions = Object.values(systemModule.actions) as Array<{
-    type: string;
-  }>;
-  return actions.some((a) => a.type === type);
+      moduleUnloaded: action(
+        'MODULE_UNLOADED',
+        (state: SystemState, payload: { slice: string }) => ({
+          ...(state ?? ({ _modules: [] } as any)),
+          _modules: (state?._modules ?? []).filter((m) => m !== payload.slice),
+        })
+      ),
+    },
+    selectors: {
+      isInitialized: () => (state: SystemState) => state._initialized,
+      isReady: () => (state: SystemState) => state._ready,
+      loadedModules: () => (state: SystemState) => state._modules,
+    },
+    dependencies: {},
+  });
 }
 
 /**
@@ -146,6 +146,7 @@ export function createStore<T = any>(
   storeSettingsOrEnhancer?: StoreSettings | StoreEnhancer,
   enhancer?: StoreEnhancer
 ): Store<T> {
+  const systemModule = createSystemModule();
   let modules: FeatureModule[] = [];
   let sysActions = systemModule.actions;
   let reducers: (Reducer | AsyncReducer)[] = [];
@@ -467,17 +468,16 @@ export function createStore<T = any>(
    * The function ensures that state is accessed in a thread-safe manner by acquiring a lock.
    */
   const getState = (
-    slice: string | string[],
+    slice: string | string[] | '*',
     callback: (state: Readonly<T | undefined>) => void | Promise<void>
   ): Promise<void> => {
     const promise = (async () => {
       try {
         await lock.acquire(); //Potentially we can check here for an idle of the pipeline
-        const stateRead = (await getProperty(
-          state,
-          normalizePath(slice)
-        )) as any; // Get state after acquiring lock
-        callback(stateRead);
+
+        const path = slice === '*' ? '*' : normalizePath(slice);
+        const stateRead = (await getProperty(state, path as any)) as any;
+        await callback(stateRead);
       } finally {
         lock.release(); // Release lock regardless of success or failure
       }
@@ -495,14 +495,19 @@ export function createStore<T = any>(
    * @returns {Stream<R>} A stream emitting selected values.
    */
   const select = <R>(
-    selector: (state: T) => R,
+    selector: (state: T) => R | Promise<R>,
     defaultValue?: R
   ): Stream<R> => {
     const source$ = currentState.pipe(
-      map((state: T) => {
+      switchMap(async (state: T) => {
         if (state == null) return defaultValue as R;
-        const value = selector(state);
-        return value === undefined ? (defaultValue as R) : value;
+        try {
+          const value = await selector(state);
+          return value === undefined ? (defaultValue as R) : value;
+        } catch (err: any) {
+          console.warn(`Error in selector: ${err?.message ?? err}`);
+          return defaultValue as R;
+        }
       }),
       distinctUntilChanged()
     );
@@ -557,8 +562,8 @@ export function createStore<T = any>(
    * Creates the middleware API object for use in the middleware pipeline.
    */
   const getMiddlewareAPI = () => ({
-    getState: (slice?: string | string[]) =>
-      getProperty(state, slice ? normalizePath(slice) : '*'),
+    getState: (slice?: string | string[] | '*') =>
+      getProperty(state, slice === undefined ? '*' : slice === '*' ? '*' : normalizePath(slice)),
     dispatch: (action: Action | AsyncAction) => dispatch(action),
     dependencies: () => pipeline.dependencies,
     strategy: () => pipeline.strategy,

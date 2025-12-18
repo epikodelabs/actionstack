@@ -1,5 +1,5 @@
 import { Stream, Subject, Subscription } from '@actioncrew/streamix';
-import { SimpleLock, Store, StoreSettings } from '../lib';
+import type { SimpleLock, Store, StoreSettings } from '../lib';
 
 /**
  * Describes a standard action object used to signal state changes.
@@ -16,6 +16,12 @@ export interface Action<T = any> {
   source?: any;
 }
 
+export type Dispatch<TState = any, TDependencies = any> = (
+  action: Action | AsyncAction<TState, TDependencies>
+) => Promise<void>;
+
+export type GetState<TState = any> = () => TState;
+
 /**
  * Represents an asynchronous action (thunk) that can dispatch other actions and access state.
  *
@@ -30,10 +36,13 @@ export interface Action<T = any> {
  * @param dependencies - Application dependencies injected into async logic.
  * @returns A Promise that resolves when the async operation finishes.
  */
-export interface AsyncAction<TState = any, TDependencies extends Record<string, any> = Record<string, any>> {
+export interface AsyncAction<
+  TState = any,
+  TDependencies = any
+> {
   (
-    dispatch: (action: Action | AsyncAction<TState, TDependencies>) => Promise<void>,
-    getState: () => TState,
+    dispatch: Dispatch<TState, TDependencies>,
+    getState: GetState<TState>,
     dependencies: TDependencies
   ): Promise<void>;
 }
@@ -52,10 +61,34 @@ export type ActionCreator<
   TType extends string = string,
   TArgs extends readonly any[] = any[]
 > = ((...args: TArgs) => Action<TPayload>) & {
-  handler: ActionHandler;
+  handler: ActionHandler<any, TPayload>;
   toString(): string;
   type: TType;
-  match(action: Action<TPayload>): boolean;
+  match(action: unknown): action is Action<TPayload>;
+};
+
+/**
+ * Defines the trigger types supported by thunks.
+ *
+ * - `string`: matches an action by its `type`
+ * - `(action) => boolean`: custom predicate matcher
+ */
+export type ThunkTrigger<TAction extends Action<any> = Action<any>> =
+  | string
+  | ((action: TAction) => boolean);
+
+/**
+ * An async thunk action (function) with attached metadata used by the starter middleware.
+ */
+export type ThunkAction<TState = any, TDependencies = any> = AsyncAction<
+  TState,
+  TDependencies
+> & {
+  type: string;
+  toString: () => string;
+  match: (action: unknown) => action is Action<any>;
+  isThunk: true;
+  triggers?: ReadonlyArray<ThunkTrigger>;
 };
 
 /**
@@ -72,13 +105,17 @@ export type ActionCreator<
  *
  * @returns A callable that produces an {@link AsyncAction} when invoked with `Args`.
  */
-export type ThunkCreator<T extends string = string, Thunk extends AsyncAction = AsyncAction, Args extends any[] = any[]> = {
-  (...args: Args): Thunk;
-  type: T;
-  toString: () => T;
-  match: (action: Action<any> | AsyncAction) => boolean;
-  isThunk: boolean;
-  triggers?: string[]
+export type ThunkCreator<
+  TType extends string = string,
+  TState = any,
+  TDependencies = any,
+  TArgs extends readonly any[] = any[]
+> = ((...args: TArgs) => ThunkAction<TState, TDependencies>) & {
+  type: TType;
+  toString: () => TType;
+  match: (action: unknown) => action is Action<any>;
+  isThunk: true;
+  triggers?: ReadonlyArray<ThunkTrigger>;
 };
 
 /**
@@ -97,7 +134,7 @@ export type ThunkCreator<T extends string = string, Thunk extends AsyncAction = 
  * @returns {T | Promise<T>} The new state of the slice, or a Promise resolving to the new state.
  */
 export type ActionHandler<State = any, Payload = any> =
-  (state: State, payload: Payload) => State;
+  (state: State, payload: Payload) => State | Promise<State>;
 
 /**
  * A function that takes the current state and an action, and returns
@@ -128,10 +165,10 @@ export type AsyncReducer<T = any> = (state: T, action: Action) => Promise<T>;
  * @property {function(): ProcessingStrategy} strategy - Retrieves the current processing strategy.
  * @property {SimpleLock} lock - A lock to synchronize or prevent concurrent access to resources.
  */
-export type MiddlewareAPI = {
-  getState: (slice?: string[]) => any;
-  dispatch: (action: Action | AsyncAction) => Promise<void>;
-  dependencies: () => any;
+export type MiddlewareAPI<TState = any, TDependencies = any> = {
+  getState: (slice?: string | string[] | '*') => any;
+  dispatch: Dispatch<TState, TDependencies>;
+  dependencies: () => TDependencies;
   strategy: () => ProcessingStrategy;
   lock: SimpleLock;
 }
@@ -155,7 +192,7 @@ export type MiddlewareAPI = {
  *      aiding in type checking and documentation.
  */
 export interface Middleware {
-  (api: any): (next: Function) => (action: Action) => Promise<any> | any;
+  (api: MiddlewareAPI): (next: Function) => (action: Action | AsyncAction) => Promise<any> | any;
   signature?: string;
 }
 
@@ -497,7 +534,7 @@ function isPromise(value: any) {
  * @param action - The value to check if it's a ActionStack action.
  * @returns boolean - True if the value is a plain object with a string property named "type", false otherwise.
  */
-function isAction(action: any): boolean {
+function isAction(action: any): action is Action<any> {
   return isPlainObject(action) && "type" in action && typeof action.type === "string";
 }
 
@@ -546,4 +583,3 @@ function isStream(obj: any): obj is Stream<unknown> {
 }
 
 export { isAction, isAsync, isBoxed, isPlainObject, isPromise, isStream, kindOf };
-

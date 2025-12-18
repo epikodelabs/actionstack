@@ -1,4 +1,14 @@
-import { Action, ActionCreator, ActionHandler, AsyncAction, FeatureModule, isAction, ThunkCreator } from './types';
+import {
+  Action,
+  ActionCreator,
+  ActionHandler,
+  AsyncAction,
+  FeatureModule,
+  isAction,
+  ThunkCreator,
+  ThunkAction,
+  ThunkTrigger,
+} from './types';
 
 export { createAction as action, createThunk as thunk };
 
@@ -20,7 +30,7 @@ const actionHandlers = new Map<string, ActionHandler>();
  *
  * @type {Map<string, ThunkCreator<any, any, any>>}
  */
-const registeredThunks = new Map<string, ThunkCreator<any, any, any>>();
+const registeredThunks = new Map<string, ThunkCreator<any, any, any, any[]>>();
 
 /**
  * Returns an array of all registered thunk creators.
@@ -209,44 +219,59 @@ export function createAction<TType extends string, TArgs extends readonly any[] 
  *   - `isThunk`: `true` for identification in middleware
  *   - `triggers`: (optional) the list of trigger definitions
  */
+export function createThunk<TType extends string, TArgs extends readonly any[] = []>(
+  type: TType,
+  thunkBodyCreator: (...args: TArgs) => AsyncAction<any, any>,
+  triggers?: ReadonlyArray<ThunkTrigger>
+): ThunkCreator<TType, any, any, TArgs>;
 export function createThunk<
-  T extends string = string,
-  ThunkBody extends AsyncAction = AsyncAction,
-  Args extends any[] = any[]
+  TType extends string,
+  TState = any,
+  TDependencies = any,
+  TArgs extends readonly any[] = []
 >(
-  type: T,
-  thunkBodyCreator: (...args: Args) => ThunkBody,
-  triggers?: Array<string | ((action: any) => boolean)>
-): ThunkCreator<T, ThunkBody, Args> {
-  const thunkCreator: ThunkCreator<T, ThunkBody, Args> = ((...args: Args) => {
-    const actualThunk: ThunkBody = ((dispatch, getState, dependencies) => {
+  type: TType,
+  thunkBodyCreator: (...args: TArgs) => AsyncAction<TState, TDependencies>,
+  triggers?: ReadonlyArray<ThunkTrigger>
+): ThunkCreator<TType, TState, TDependencies, TArgs> {
+  const match = (action: unknown): action is Action<any> =>
+    isAction(action) && action.type === type;
+
+  const thunkCreator = ((...args: TArgs) => {
+    const thunk = thunkBodyCreator(...args);
+
+    const wrappedThunk: AsyncAction<TState, TDependencies> = async (
+      dispatch,
+      getState,
+      dependencies
+    ) => {
       try {
-        return thunkBodyCreator(...args)(dispatch, getState, dependencies);
+        await thunk(dispatch, getState, dependencies);
       } catch (error: any) {
-        console.warn(`Error in thunk action "${type}": ${error.message}.`);
+        const message = error?.message ?? String(error);
+        console.warn(`Error in thunk action "${type}": ${message}.`);
         throw error;
       }
-    }) as ThunkBody;
+    };
 
-    const thunkWithProps = actualThunk as any;
-    thunkWithProps.type = type;
-    thunkWithProps.toString = () => type;
-    thunkWithProps.match = (action: any) => isAction(action) && action.type === type;
-    thunkWithProps.isThunk = true;
+    const thunkWithProps = Object.assign(wrappedThunk, {
+      type,
+      toString: () => type,
+      match,
+      isThunk: true as const,
+      ...(triggers?.length ? { triggers } : {}),
+    });
 
-    return thunkWithProps;
-  }) as ThunkCreator<T, ThunkBody, Args>;
+    return thunkWithProps as ThunkAction<TState, TDependencies>;
+  }) as ThunkCreator<TType, TState, TDependencies, TArgs>;
 
-  thunkCreator.type = type;
-  thunkCreator.toString = () => type;
-  thunkCreator.match = (action: any) => isAction(action) && action.type === type;
-  thunkCreator.isThunk = true;
-
-  if (triggers && triggers.length) {
-    (thunkCreator as any).triggers = triggers;
-  }
-
-  return thunkCreator as any;
+  return Object.assign(thunkCreator, {
+    type,
+    toString: () => type,
+    match,
+    isThunk: true as const,
+    ...(triggers?.length ? { triggers } : {}),
+  });
 }
 
 /**

@@ -181,8 +181,8 @@ function processActions<Actions extends Record<string, any>>(
         isThunk: true,
         toString: () => `${slice}/${name}`,
         match: (act: any) => isAction(act) && act.type === `${slice}/${name}`,
-        triggers: action.triggers?.map((t: string) =>
-          t.includes('/') ? t : `${slice}/${t}`
+        triggers: action.triggers?.map((t: any) =>
+          typeof t === 'string' ? (t.includes('/') ? t : `${slice}/${t}`) : t
         )
       });
 
