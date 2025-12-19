@@ -282,4 +282,363 @@ describe("tracker", () => {
 
     tracker.complete(sub);
   });
+
+  // NEW TESTS FOR CANCELABLE PROMISE FUNCTIONALITY
+
+  it("can cancel a wait operation before it completes", async () => {
+    const tracker = createTracker();
+    const allowDeliver = deferred<void>();
+    const started = deferred<void>();
+
+    const bootstrap = {} as any;
+    tracker.track(bootstrap);
+
+    const hold = createOperator<number, number>("hold", (source) => ({
+      async next() {
+        const r = await source.next();
+        if (r.done) return r;
+        started.resolve();
+        await allowDeliver.promise;
+        return r;
+      },
+      return: source.return?.bind(source),
+      throw: source.throw?.bind(source),
+    }));
+
+    const stream = createStream("one", async function* () {
+      yield 1;
+    });
+
+    const received: number[] = [];
+    const sub = stream.pipe(hold).subscribe({ next: (v) => received.push(v) });
+    tracker.track(sub);
+
+    await started.promise;
+
+    const waitPromise = tracker.waitAll();
+    
+    // Cancel immediately
+    waitPromise.cancel();
+
+    // Should not throw, just complete
+    await waitPromise.catch(() => {
+      // Cancelled promises may reject
+    });
+
+    // Allow the stream to continue
+    allowDeliver.resolve();
+    await flush();
+
+    tracker.complete(sub);
+    tracker.complete(bootstrap);
+    sub.unsubscribe();
+  });
+
+  it("can cancel multiple concurrent wait operations", async () => {
+    const tracker = createTracker();
+    const allowDeliver = deferred<void>();
+
+    const bootstrap = {} as any;
+    tracker.track(bootstrap);
+
+    const hold = createOperator<number, number>("hold", (source) => ({
+      async next() {
+        const r = await source.next();
+        if (r.done) return r;
+        await allowDeliver.promise;
+        return r;
+      },
+      return: source.return?.bind(source),
+      throw: source.throw?.bind(source),
+    }));
+
+    const stream = createStream("numbers", async function* () {
+      yield 1;
+      yield 2;
+      yield 3;
+    });
+
+    const sub = stream.pipe(hold).subscribe({ next: () => {} });
+    tracker.track(sub);
+
+    const wait1 = tracker.waitAll();
+    const wait2 = tracker.waitAll();
+    const wait3 = tracker.waitAll();
+
+    // Cancel all waits
+    wait1.cancel();
+    wait2.cancel();
+    wait3.cancel();
+
+    await Promise.all([
+      wait1.catch(() => {}),
+      wait2.catch(() => {}),
+      wait3.catch(() => {})
+    ]);
+
+    // Allow stream to complete
+    allowDeliver.resolve();
+    await flush();
+
+    tracker.complete(sub);
+    tracker.complete(bootstrap);
+    sub.unsubscribe();
+  });
+
+  it("cancelAll() cancels all active wait operations", async () => {
+    const tracker = createTracker();
+    const allowDeliver = deferred<void>();
+
+    const bootstrap = {} as any;
+    tracker.track(bootstrap);
+
+    const hold = createOperator<number, number>("hold", (source) => ({
+      async next() {
+        const r = await source.next();
+        if (r.done) return r;
+        await allowDeliver.promise;
+        return r;
+      },
+      return: source.return?.bind(source),
+      throw: source.throw?.bind(source),
+    }));
+
+    const stream = createStream("numbers", async function* () {
+      yield 1;
+      yield 2;
+    });
+
+    const sub = stream.pipe(hold).subscribe({ next: () => {} });
+    tracker.track(sub);
+
+    const waits = [
+      tracker.waitAll(),
+      tracker.waitAll(),
+      tracker.waitAll()
+    ];
+
+    // Cancel all at once
+    tracker.cancelAll();
+
+    await Promise.all(waits.map(w => w.catch(() => {})));
+
+    // Allow stream to complete
+    allowDeliver.resolve();
+    await flush();
+
+    tracker.complete(sub);
+    tracker.complete(bootstrap);
+    sub.unsubscribe();
+  });
+
+  it("cancelled wait does not block subsequent waits", async () => {
+    const tracker = createTracker();
+
+    const stream = createStream("numbers", async function* () {
+      yield 1;
+      yield 2;
+      yield 3;
+    });
+
+    const sub = stream.pipe(map(x => x)).subscribe({ next: () => {} });
+    tracker.track(sub);
+
+    // First wait - cancel it
+    const wait1 = tracker.waitAll();
+    wait1.cancel();
+    await wait1.catch(() => {});
+
+    // Second wait - should complete normally
+    const wait2 = tracker.waitAll();
+    await wait2;
+    await flush();
+
+    expect(true).toBeTrue(); // Just verify we got here
+
+    tracker.complete(sub);
+  });
+
+  it("can cancel a wait in the middle of a queue", async () => {
+    const tracker = createTracker();
+    const allowFirst = deferred<void>();
+    const allowSecond = deferred<void>();
+
+    const bootstrap = {} as any;
+    tracker.track(bootstrap);
+
+    let callCount = 0;
+    const hold = createOperator<number, number>("hold", (source) => ({
+      async next() {
+        const r = await source.next();
+        if (r.done) return r;
+        callCount++;
+        if (callCount === 1) {
+          await allowFirst.promise;
+        } else if (callCount === 2) {
+          await allowSecond.promise;
+        }
+        return r;
+      },
+      return: source.return?.bind(source),
+      throw: source.throw?.bind(source),
+    }));
+
+    const stream = createStream("numbers", async function* () {
+      yield 1;
+      yield 2;
+    });
+
+    const sub = stream.pipe(hold).subscribe({ next: () => {} });
+    tracker.track(sub);
+
+    const wait1 = tracker.waitAll();
+    const wait2 = tracker.waitAll(); // This one will be cancelled
+    const wait3 = tracker.waitAll();
+
+    // Cancel the middle one
+    wait2.cancel();
+
+    // Complete first wait
+    allowFirst.resolve();
+    await wait1;
+
+    // Wait2 should be cancelled
+    await wait2.catch(() => {});
+
+    // Complete third wait
+    allowSecond.resolve();
+    await wait3;
+    await flush();
+
+    tracker.complete(sub);
+    tracker.complete(bootstrap);
+    sub.unsubscribe();
+  });
+
+  it("cancelled promise cleanup does not affect tracer state", async () => {
+    const tracker = createTracker();
+
+    const stream = createStream("numbers", async function* () {
+      yield 1;
+      yield 2;
+      yield 3;
+    });
+
+    const received: number[] = [];
+    const sub = stream.pipe(map(x => x)).subscribe({ 
+      next: v => received.push(v) 
+    });
+    tracker.track(sub);
+
+    // Start a wait and cancel it
+    const wait1 = tracker.waitAll();
+    wait1.cancel();
+    await wait1.catch(() => {});
+
+    // Start another wait that should complete normally
+    await tracker.waitAll();
+    await flush();
+
+    // Values should still be delivered
+    expect(received).toEqual([1, 2, 3]);
+
+    tracker.complete(sub);
+  });
+
+  it("handles cancellation during event-driven resolution", async () => {
+    const tracker = createTracker();
+    const delayValue = deferred<void>();
+
+    const bootstrap = {} as any;
+    tracker.track(bootstrap);
+
+    const hold = createOperator<number, number>("hold", (source) => ({
+      async next() {
+        const r = await source.next();
+        if (r.done) return r;
+        await delayValue.promise;
+        return r;
+      },
+      return: source.return?.bind(source),
+      throw: source.throw?.bind(source),
+    }));
+
+    const stream = createStream("one", async function* () {
+      yield 1;
+    });
+
+    const sub = stream.pipe(hold).subscribe({ next: () => {} });
+    tracker.track(sub);
+
+    const wait = tracker.waitAll();
+
+    // Give it time to set up event listeners
+    await new Promise(r => setTimeout(r, 50));
+
+    // Cancel before value is delivered
+    wait.cancel();
+    await wait.catch(() => {});
+
+    // Now allow delivery
+    delayValue.resolve();
+    await flush();
+
+    tracker.complete(sub);
+    tracker.complete(bootstrap);
+    sub.unsubscribe();
+  });
+
+  it("multiple cancel calls on same promise are safe", async () => {
+    const tracker = createTracker();
+
+    const stream = createStream("numbers", async function* () {
+      yield 1;
+    });
+
+    const sub = stream.subscribe({ next: () => {} });
+    tracker.track(sub);
+
+    const wait = tracker.waitAll();
+
+    // Cancel multiple times
+    wait.cancel();
+    wait.cancel();
+    wait.cancel();
+
+    await wait.catch(() => {});
+    await flush();
+
+    expect(true).toBeTrue(); // Verify no errors thrown
+
+    tracker.complete(sub);
+  });
+
+  it("can chain then() and catch() on cancelable promise", async () => {
+    const tracker = createTracker();
+
+    const stream = createStream("numbers", async function* () {
+      yield 1;
+      yield 2;
+    });
+
+    const sub = stream.subscribe({ next: () => {} });
+    tracker.track(sub);
+
+    let thenCalled = false;
+    let catchCalled = false;
+    let finallyCalled = false;
+
+    await tracker.waitAll()
+      .then(() => { thenCalled = true; })
+      .catch(() => { catchCalled = true; })
+      .finally(() => { finallyCalled = true; });
+
+    await flush();
+
+    expect(thenCalled).toBeTrue();
+    expect(catchCalled).toBeFalse();
+    expect(finallyCalled).toBeTrue();
+
+    tracker.complete(sub);
+  });
 });

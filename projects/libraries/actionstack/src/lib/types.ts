@@ -1,4 +1,5 @@
 import { Stream, Subject, Subscription } from '@actioncrew/streamix';
+import { CancelablePromise } from '../../tracking/src/lib/promise';
 import type { SimpleLock, Store, StoreSettings } from '../lib';
 
 /**
@@ -398,7 +399,7 @@ export type Tracker = {
    * Waits until tracing shows no in-flight values (no "emitted"/"processing").
    * Calls are queued: each new call waits for the previous waitAll to finish.
    */
-  waitAll: () => Promise<void>;
+  waitAll: () => CancelablePromise<void>;
 };
 
 /**

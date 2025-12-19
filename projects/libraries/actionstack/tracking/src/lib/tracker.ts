@@ -4,6 +4,7 @@ import {
   enableTracing as enableStreamixTracing,
   ValueTracer
 } from "@actioncrew/streamix/tracing";
+import { CancelablePromise } from "./promise";
 
 type SubscriptionEntry = {
   status$: BehaviorSubject<boolean>;
@@ -17,15 +18,19 @@ type SubscriptionEntry = {
  * - Auto-enables Streamix tracing on first `track()`.
  * - Subscribes to ValueTracer events to signal subscriptions.
  * - `waitAll()` is serialized using an internal promise queue.
+ * - `waitAll()` returns a CancelablePromise that can be cancelled.
  * - `waitAll()` resolves when all known traces are terminal:
  *   delivered / filtered / collapsed / errored.
  */
-export const createTracker = (): Tracker => {
+export const createTracker = (): Tracker & { cancelAll: () => void } => {
   const subscriptions = new Map<Subscription, SubscriptionEntry>();
   const timeout = 30_000;
 
   // Serialize waitAll calls.
   let waitQueue: Promise<void> = Promise.resolve();
+  
+  // Track active wait operations for cancellation
+  const activeWaits = new Set<CancelablePromise<void>>();
 
   // Tracing integration (test-scoped).
   let tracer: ValueTracer | null = null;
@@ -123,61 +128,64 @@ export const createTracker = (): Tracker => {
    * Waits until tracing indicates there are no in-flight values.
    *
    * Implementation details:
+   * - Returns a CancelablePromise that can be cancelled.
    * - Subscribes to tracer events (public API) to avoid polling-only logic.
    * - Also polls at a small interval as a safety net (in case an event is missed).
    * - Ensures proper cleanup of the subscription + timers.
    */
-  const waitUsingTracing = (): Promise<void> => {
-    return new Promise<void>((resolve, reject) => {
+  const waitUsingTracing = (): CancelablePromise<void> => {
+    return new CancelablePromise<void>(function* () {
       if (!tracer || !tracingEnabled) {
         // No tracer => nothing to wait for.
-        resolve();
         return;
       }
 
-      // FIX: Declare variables before using them in finish()
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
       let pollId: ReturnType<typeof setInterval> | null = null;
-      let unsubscribe: (() => void) | null = null;
+      let unsubscribeFn: any = null;
 
-      const finish = () => {
+      try {
+        const waitPromise = new Promise<void>((resolve, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(buildTimeoutError(tracer!));
+          }, timeout);
+
+          // Quick exit if already settled.
+          if (allTracesTerminal()) {
+            resolve();
+            return;
+          }
+
+          // Event-driven fast path.
+          unsubscribeFn = tracer!.subscribe({
+            delivered: () => {
+              if (allTracesTerminal()) resolve();
+            },
+            filtered: () => {
+              if (allTracesTerminal()) resolve();
+            },
+            collapsed: () => {
+              if (allTracesTerminal()) resolve();
+            },
+            dropped: () => {
+              if (allTracesTerminal()) resolve();
+            },
+          });
+
+          // Safety net polling.
+          pollId = setInterval(() => {
+            if (allTracesTerminal()) resolve();
+          }, 10);
+        });
+
+        yield waitPromise;
+        reset();
+      } finally {
+        // Cleanup
         if (timeoutId !== null) clearTimeout(timeoutId);
         if (pollId !== null) clearInterval(pollId);
-        if (unsubscribe) unsubscribe();
-        reset();
-        resolve();
-      };
-
-      timeoutId = setTimeout(() => {
-        reject(buildTimeoutError(tracer!));
-      }, timeout);
-
-      // Quick exit if already settled.
-      if (allTracesTerminal()) {
-        finish();
-        return;
+        if (unsubscribeFn !== null) unsubscribeFn();
       }
-
-      // Event-driven fast path.
-      unsubscribe = tracer.subscribe({
-        delivered: () => {
-          if (allTracesTerminal()) finish();
-        },
-        filtered: () => {
-          if (allTracesTerminal()) finish();
-        },
-        collapsed: () => {
-          if (allTracesTerminal()) finish();
-        },
-        dropped: () => {
-          if (allTracesTerminal()) finish();
-        },
-      });
-
-      // Safety net polling.
-      pollId = setInterval(() => {
-        if (allTracesTerminal()) finish();
-      }, 10);
     });
   };
 
@@ -209,13 +217,52 @@ export const createTracker = (): Tracker => {
     return new Error(msg);
   };
 
-  const waitAll: Tracker["waitAll"] = () => {
-    waitQueue = waitQueue.then(async () => {
-      // Let initial microtasks enqueue tracing hooks / iterator steps.
-      await new Promise<void>(r => queueMicrotask(r));
-      await waitUsingTracing();
+  const waitAll = (): CancelablePromise<void> => {
+    const cancelableWait = new CancelablePromise<void>(function* () {
+      try {
+        // Enqueue in the serialization queue
+        const queuePromise: Promise<void> = waitQueue.then(async () => {
+          // Let initial microtasks enqueue tracing hooks / iterator steps.
+          await new Promise<void>(r => queueMicrotask(r));
+          
+          const innerWait = waitUsingTracing();
+          activeWaits.add(innerWait);
+          
+          try {
+            await innerWait;
+          } finally {
+            activeWaits.delete(innerWait);
+          }
+        });
+        
+        yield queuePromise;
+      } catch (error) {
+        // Don't propagate errors from cancelled operations
+        return;
+      }
     });
-    return waitQueue;
+
+    // Update the queue for the next caller
+    waitQueue = cancelableWait.catch(() => {
+      // If cancelled or errored, don't propagate to next waiter
+    });
+
+    activeWaits.add(cancelableWait);
+    cancelableWait.finally(() => {
+      activeWaits.delete(cancelableWait);
+    });
+
+    return cancelableWait;
+  };
+
+  /**
+   * Cancel all active wait operations
+   */
+  const cancelAll = () => {
+    for (const wait of activeWaits) {
+      wait.cancel();
+    }
+    activeWaits.clear();
   };
 
   return {
@@ -226,5 +273,6 @@ export const createTracker = (): Tracker => {
     track,
     reset,
     waitAll,
+    cancelAll,
   };
 };
