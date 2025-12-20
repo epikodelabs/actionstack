@@ -641,4 +641,34 @@ describe("tracker", () => {
 
     tracker.complete(sub);
   });
+
+  it("resolves when a subscription callback throws an error", async () => {
+    const tracker = createTracker();
+
+    const stream = createStream("numbers", async function* () {
+      yield 1;
+      yield 2;
+      yield 3;
+    });
+
+    let errorCaught = false;
+    const sub = stream.subscribe({
+      next: (v) => {
+        if (v === 2) {
+          throw new Error("Callback explosion!");
+        }
+      },
+      error: () => {
+        errorCaught = true;
+      },
+    });
+
+    tracker.track(sub);
+
+    await tracker.waitAll();
+    await flush();
+
+    expect(errorCaught).toBeTrue();
+    tracker.complete(sub);
+  });
 });
