@@ -27,7 +27,7 @@ export function withTracker(): StoreEnhancer & { tracker: Tracker } {
      * Attach tracker to the store instance.
      *
      * IMPORTANT: This must happen early so that select() can use it.
-     * The select() method in createStore checks for (store as any).tracker
+     * The select() method in createStore checks for `store.tracker`
      * and integrates with it.
      *
      * Integration points:

@@ -334,11 +334,10 @@ describe('applyMiddleware', () => {
     const store = {
       getState: () => ({ counter: 0 }),
       dispatch: jasmine.createSpy('dispatch').and.callFake((action) => action),
-      getMiddlewareAPI: () => ({
+      middlewareAPI: {
         getState: () => ({ counter: 0 }),
         dispatch: (action: any) => store.dispatch(action)
-      }),
-      starter: (api: any) => (next: any) => next
+      }
     } as any;
 
     const middleware1 = (api: any) => (next: any) => (action: any) => {
@@ -367,18 +366,9 @@ describe('applyMiddleware', () => {
         calls.push('store.dispatch');
         return action;
       },
-      getMiddlewareAPI: () => ({
+      middlewareAPI: {
         getState: () => ({}),
         dispatch: (action: any) => store.dispatch(action)
-      }),
-      starter: (api: any) => (next: any) => {
-        calls.push('starter');
-        return (action: any) => {
-          calls.push('before starter');
-          const result = next(action);
-          calls.push('after starter');
-          return result;
-        };
       }
     } as any;
 
@@ -408,17 +398,16 @@ describe('applyMiddleware', () => {
     enhancedStore.dispatch({ type: 'TEST' });
 
     // Check middleware setup order
-    expect(calls.slice(0, 3)).toEqual(['starter', 'middleware1 setup', 'middleware2 setup']);
+    // Setup happens during composition (wrapping), so it's reverse of execution order.
+    expect(calls.slice(0, 2)).toEqual(['middleware2 setup', 'middleware1 setup']);
     
-    // Check execution order (reverse of setup due to reduceRight)
-    expect(calls.slice(3)).toEqual([
-      'before middleware2',
+    // Check execution order: middleware1 -> middleware2 -> store.dispatch
+    expect(calls.slice(2)).toEqual([
       'before middleware1',
-      'before starter',
+      'before middleware2',
       'store.dispatch',
-      'after starter',
-      'after middleware1',
-      'after middleware2'
+      'after middleware2',
+      'after middleware1'
     ]);
   });
 });
@@ -460,6 +449,14 @@ describe('combineEnhancers', () => {
         release: () => {},
       };
 
+      const middlewareAPI = {
+        getState: (_slice?: string | string[]) => ({}),
+        dispatch: async () => {},
+        dependencies: () => ({}),
+        strategy: () => ({} as any),
+        lock,
+      };
+
       return {
         dispatch: async () => {},
         getState: async (_slice, callback) => {
@@ -471,13 +468,7 @@ describe('combineEnhancers', () => {
         loadModule: async () => {},
         unloadModule: async () => {},
         addReducer: () => {},
-        getMiddlewareAPI: () => ({
-          getState: (_slice?: string | string[]) => ({}),
-          dispatch: async () => {},
-          dependencies: () => ({}),
-          strategy: () => ({} as any),
-          lock,
-        }),
+        middlewareAPI: middlewareAPI as any,
         starter: (_api: any) => (next: any) => (action: any) => next(action),
       };
     };
@@ -494,15 +485,12 @@ describe('combineEnhancers', () => {
     ]);
   });
 
-  it('should preserve enhancer names', () => {
+  it('combines enhancers without metadata', () => {
     const enhancer1: StoreEnhancer = (next) => next;
-    Object.defineProperty(enhancer1, 'name', { value: 'testEnhancer1' });
-    
     const enhancer2: StoreEnhancer = (next) => next;
-    Object.defineProperty(enhancer2, 'name', { value: 'testEnhancer2' });
-    
+
     const combined = combineEnhancers(enhancer1, enhancer2);
-    expect((combined as any).names).toEqual(['testEnhancer1', 'testEnhancer2']);
+    expect(typeof combined).toBe('function');
   });
 });
 

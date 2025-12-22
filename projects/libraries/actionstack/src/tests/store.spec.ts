@@ -277,7 +277,7 @@ describe('store', () => {
     await store.loadModule(depModule);
     await flush(store);
 
-    expect(store.getMiddlewareAPI().dependencies().answer).toBe(42);
+    expect(store.middlewareAPI.dependencies().answer).toBe(42);
 
     await store.dispatch({ type: 'dep/PING' });
     expect((await readState<any>(store, 'dep')).value).toBe(42);
@@ -294,18 +294,18 @@ describe('store', () => {
 
     await store.loadModule(depModule);
     await flush(store);
-    expect(store.getMiddlewareAPI().dependencies().token).toBe('x');
+    expect(store.middlewareAPI.dependencies().token).toBe('x');
 
     await store.unloadModule(depModule, true);
     await flush(store);
-    expect(store.getMiddlewareAPI().dependencies().token).toBeUndefined();
+    expect(store.middlewareAPI.dependencies().token).toBeUndefined();
   });
 
-  it('getMiddlewareAPI.getState supports undefined, *, string paths, and array paths', async () => {
+  it('middlewareAPI.getState supports undefined, *, string paths, and array paths', async () => {
     const store = createStore();
     await flush(store);
 
-    const api = store.getMiddlewareAPI();
+    const api = store.middlewareAPI;
 
     expect(api.getState()).toEqual(jasmine.any(Object));
     expect(api.getState('*')).toEqual(jasmine.any(Object));
@@ -391,7 +391,7 @@ describe('store', () => {
     await store.loadModule(b);
     await flush(store);
 
-    expect(store.getMiddlewareAPI().dependencies().shared).toBe(1);
+    expect(store.middlewareAPI.dependencies().shared).toBe(1);
     expect((console.warn as any).calls.any()).toBeTrue();
     expect(String((console.warn as any).calls.mostRecent().args[0])).toContain(
       'Overlapping property'

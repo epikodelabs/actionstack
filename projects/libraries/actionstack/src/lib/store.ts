@@ -15,9 +15,9 @@ import type {
   MiddlewareAPI,
   Reducer,
   StoreEnhancer,
+  Tracker,
 } from './types';
 import {
-  applyMiddleware,
   combineEnhancers,
   getProperty,
   setProperty,
@@ -68,8 +68,10 @@ export type Store<TState = any, TDependencies = any> = {
     unloadModule: (module: FeatureModule, clearState?: boolean) => Promise<void>;
 
     addReducer: (reducer: (state: TState, action: Action<any> | AsyncAction<TState, TDependencies>) => TState | Promise<TState>) => void;
-    getMiddlewareAPI: () => MiddlewareAPI;
+
+    middlewareAPI: MiddlewareAPI;
     starter: Middleware;
+    tracker?: Tracker;
 };
 
 interface SystemState {
@@ -194,7 +196,7 @@ export function createStore<T = any>(
 
     let newState = state; // start with current state
 
-    (store as any).tracker?.reset();
+    store.tracker?.reset();
     const handler = getActionHandlers(action.type);
 
     if (handler) {
@@ -229,7 +231,7 @@ export function createStore<T = any>(
 
     // Wait for state propagation if required
     if (settings.awaitStatePropagation) {
-      await (store as any).tracker?.waitAll();
+      await store.tracker?.waitAll();
     }
   };
 
@@ -473,6 +475,18 @@ export function createStore<T = any>(
     return typeof path === 'string' ? path.split('/') : [...path];
   };
 
+  const middlewareAPI = {
+    getState: (slice?: string | string[] | '*') =>
+      getProperty(
+        state,
+        slice === undefined ? '*' : slice === '*' ? '*' : normalizePath(slice)
+      ),
+    dispatch: (action: Action | AsyncAction) => store.dispatch(action as any),
+    dependencies: () => pipeline.dependencies,
+    strategy: () => pipeline.strategy,
+    lock,
+  } as MiddlewareAPI;
+
   /**
    * Reads the state slice and executes the provided callback with the current state.
    * The function ensures that state is accessed in a thread-safe manner by acquiring a lock.
@@ -522,30 +536,39 @@ export function createStore<T = any>(
       distinctUntilChanged()
     );
 
-    const tracker = (store as any).tracker;
+    const tracker = store.tracker;
     if (!tracker) return source$;
 
     return {
       ...source$,
       subscribe(observer: any) {
+        let subscription: any;
         const wrappedObserver = {
           next: (value: R) => {
             observer?.next?.(value);
-            // Signal is now called via ValueTracer callbacks, not here!
+            if (subscription) tracker.signal(subscription);
           },
           error: (err: any) => {
             observer?.error?.(err);
-            tracker.complete(subscription);
-            // Signal is now called via ValueTracer callbacks, not here!
+            if (subscription) tracker.complete(subscription);
           },
           complete: () => {
             observer?.complete?.();
-            tracker.complete(subscription);
+            if (subscription) tracker.complete(subscription);
           },
         };
 
-        const subscription = source$.subscribe(wrappedObserver);
+        subscription = source$.subscribe(wrappedObserver);
         tracker.track(subscription);
+
+        const originalUnsubscribe = subscription?.unsubscribe?.bind(subscription);
+        if (typeof originalUnsubscribe === 'function') {
+          subscription.unsubscribe = () => {
+            tracker.complete(subscription);
+            return originalUnsubscribe();
+          };
+        }
+
         return subscription;
       },
     };
@@ -568,28 +591,17 @@ export function createStore<T = any>(
     });
   };
 
-  /**
-   * Creates the middleware API object for use in the middleware pipeline.
-   */
-  const getMiddlewareAPI = () => ({
-    getState: (slice?: string | string[] | '*') =>
-      getProperty(state, slice === undefined ? '*' : slice === '*' ? '*' : normalizePath(slice)),
-    dispatch: (action: Action | AsyncAction) => dispatch(action),
-    dependencies: () => pipeline.dependencies,
-    strategy: () => pipeline.strategy,
-    lock: lock
-  }) as MiddlewareAPI;
-
-  let store: Store<T> = {
-    starter,
+  let store!: Store<T>;
+  store = {
+    addReducer,
     dispatch,
     getState,
-    select,
-    populate,
     loadModule,
+    populate,
+    select,
     unloadModule,
-    getMiddlewareAPI,
-    addReducer,
+    starter,
+    middlewareAPI,
   };
 
   /**
@@ -612,24 +624,20 @@ export function createStore<T = any>(
     sysActions.storeInitialized();
   };
 
-  // Apply enhancer if provided
-  if (typeof enhancer === 'function') {
-    // Check if the enhancer contains applyMiddleware
-    const hasMiddlewareEnhancer =
-      enhancer.name === 'applyMiddleware' ||
-      (enhancer as any).names?.includes('applyMiddleware');
+  // Always run the starter middleware as the outermost middleware layer,
+  // so it executes before any user-applied middlewares.
+  const applyStarterMiddleware: StoreEnhancer = (next) => (settings, enhancer) => {
+    const store = next(settings, enhancer);
+    const starterDispatch = store.starter(store.middlewareAPI)(store.dispatch);
+    return { ...store, dispatch: starterDispatch };
+  };
 
-    // If no middleware enhancer is present, apply applyMiddleware explicitly with an empty array
-    if (!hasMiddlewareEnhancer) {
-      enhancer = combineEnhancers(enhancer, applyMiddleware());
-    }
-  } else {
-    enhancer = combineEnhancers(applyMiddleware());
-  }
+  enhancer = combineEnhancers(enhancer, applyStarterMiddleware);
 
   store = enhancer(() => store)(settings);
   let originalDispatch = store.dispatch;
   store.dispatch = (action) => queue.enqueue(() => originalDispatch(action));
+  
   initializeStore(store);
   return store;
 }

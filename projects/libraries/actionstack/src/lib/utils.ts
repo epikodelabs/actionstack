@@ -179,18 +179,16 @@ export function setProperty(obj: any, path: any, value: any): any {
  * @param enhancers - An array of store enhancers to be combined.
  * @returns A single store enhancer that applies all provided enhancers.
  */
-function combineEnhancers(...enhancers: StoreEnhancer[]): StoreEnhancer {
-  // Collect the names of the enhancers for later access
-  const methodNames = enhancers.map(enhancer => enhancer.name);
+function combineEnhancers(...enhancers: Array<StoreEnhancer | null | undefined | false>): StoreEnhancer {
+  const active = enhancers.filter(Boolean) as StoreEnhancer[];
 
-  // Create a new combined enhancer that wraps the enhancers
-  const combinedEnhancer = (next: StoreCreator) => {
-    // Apply enhancers in order so that the last enhancer wraps the previous ones.
-    return enhancers.reduce((acc, enhancer) => enhancer(acc), next);
-  };
+  // Identity enhancer for convenience.
+  if (active.length === 0) {
+    return (next) => next;
+  }
 
-  // Attach the names of the enhancers to the combined enhancer
-  combinedEnhancer.names = methodNames;
+  const combinedEnhancer: StoreEnhancer = (next: StoreCreator) =>
+    active.reduce((acc, enhancer) => enhancer(acc), next);
 
   return combinedEnhancer;
 }
@@ -368,19 +366,20 @@ const applyMiddleware = (...middlewares: Function[]): StoreEnhancer => {
     // Create the store with the original reducer and enhancer
     const store = next(settings, enhancer);
 
-    // Define starter and middleware APIs
-    const middlewareAPI = store.getMiddlewareAPI();
+    // Define middleware API
+    const middlewareAPI = store.middlewareAPI;
 
     // Build middleware chain
-    const chain = [store.starter, ...middlewares].map(middleware => middleware(middlewareAPI));
+    const chain: Array<(next: any) => any> = [];
+    for (let i = 0; i < middlewares.length; i++) {
+      chain.push(middlewares[i](middlewareAPI));
+    }
 
     // Compose the middleware chain into a single dispatch function
-    let dispatch = chain.reduce(
+    const dispatch = chain.reduceRight(
       (next, middleware) => middleware(next),
       store.dispatch
-    );
-
-    middlewareAPI.dispatch = dispatch;
+    ) as typeof store.dispatch;
 
     // Return the enhanced store
     return {
@@ -398,5 +397,6 @@ export {
   applyChange,
   applyMiddleware,
   combineEnhancers,
-  combineReducers,
-}
+  combineReducers
+};
+
