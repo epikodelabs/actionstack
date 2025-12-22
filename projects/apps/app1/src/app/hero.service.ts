@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 import type { Hero } from './hero';
 import { HEROES } from './mock-heroes';
 import { fromPromise } from '@actioncrew/streamix';
-import type { from, Stream } from '@actioncrew/streamix';
+import type { Stream } from '@actioncrew/streamix';
 
 @Injectable({ providedIn: 'root' })
 export class HeroService {
