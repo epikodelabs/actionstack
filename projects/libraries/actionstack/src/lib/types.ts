@@ -1,6 +1,15 @@
 import { Stream, Subject, Subscription } from '@actioncrew/streamix';
-import { CancelablePromise } from '../../tracking/src/lib/promise';
 import type { SimpleLock, Store, StoreSettings } from '../lib';
+
+/**
+ * A cancelable promise.
+ *
+ * Note: Implementations should be Promise-compatible (including `[Symbol.toStringTag]`)
+ * so they are assignable to `Promise<T>`.
+ */
+export type CancelablePromise<T = any> = Promise<T> & {
+  cancel(): void;
+};
 
 /**
  * Describes a standard action object used to signal state changes.

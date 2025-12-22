@@ -9,6 +9,7 @@ export class CancelablePromise<T> {
   private promise: Promise<T>;
   private onCancelCallbacks: Array<() => void> = [];
   private wasCancelled = false;
+  public readonly [Symbol.toStringTag] = 'Promise';
 
   constructor(generatorFn: () => Generator<unknown, T, unknown>) {
     this.generator = generatorFn();
