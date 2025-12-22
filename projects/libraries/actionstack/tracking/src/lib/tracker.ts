@@ -1,14 +1,25 @@
 import type { Tracker } from "@actioncrew/actionstack";
-import { createBehaviorSubject } from "@actioncrew/streamix";
-import type { BehaviorSubject, Subscription } from "@actioncrew/streamix";
+import type { Subscription } from "@actioncrew/streamix";
 import {
   enableTracing as enableStreamixTracing,
   ValueTracer
 } from "@actioncrew/streamix/tracing";
 import { CancelablePromise } from "./promise";
 
+const MAX_TRACES = 10_000;
+
+/**
+ * Streamix tracing is effectively global (one active tracer at a time),
+ * so this package uses a single shared ValueTracer instance.
+ */
+let sharedTracer: ValueTracer | null = null;
+
+function getSharedTracer(): ValueTracer {
+  sharedTracer ??= new ValueTracer({ maxTraces: MAX_TRACES });
+  return sharedTracer;
+}
+
 type SubscriptionEntry = {
-  status$: BehaviorSubject<boolean>;
   status: boolean;
 };
 
@@ -16,8 +27,7 @@ type SubscriptionEntry = {
  * Creates a new Tracker.
  *
  * Behavior:
- * - Auto-enables Streamix tracing on first `track()`.
- * - Subscribes to ValueTracer events to signal subscriptions.
+ * - Enables Streamix tracing during `createTracker()` (single global tracer).
  * - `waitAll()` is serialized using an internal promise queue.
  * - `waitAll()` returns a CancelablePromise that can be cancelled.
  * - `waitAll()` resolves when all known traces are terminal:
@@ -34,9 +44,9 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
   const activeWaits = new Set<CancelablePromise<void>>();
 
   // Tracing integration (test-scoped).
-  let tracer: ValueTracer | null = null;
-  let tracingEnabled = false;
-  let tracerUnsubscribe: (() => void) | null = null;
+  const tracer = getSharedTracer();
+  enableStreamixTracing(tracer);
+  const tracingEnabled = true;
 
   const state: Tracker["state"] = (subscription) =>
     subscriptions.get(subscription)?.status ?? false;
@@ -45,7 +55,6 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
     const entry = subscriptions.get(subscription);
     if (!entry) return;
     entry.status = true;
-    entry.status$.next(true);
   };
 
   const complete: Tracker["complete"] = (subscription) => {
@@ -53,51 +62,13 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
     if (!entry) return;
 
     entry.status = false;
-    entry.status$.complete();
     subscriptions.delete(subscription);
   };
 
   const track: Tracker["track"] = (subscription) => {
     if (!subscriptions.has(subscription)) {
       subscriptions.set(subscription, {
-        status$: createBehaviorSubject<boolean>(false),
         status: false,
-      });
-    }
-
-    // Enable tracing once we start tracking anything.
-    if (!tracingEnabled) {
-      tracer = new ValueTracer({ maxTraces: 10_000 });
-      enableStreamixTracing(tracer);
-      tracingEnabled = true;
-
-      // Subscribe to ValueTracer events to signal subscriptions
-      // when values reach terminal states
-      tracerUnsubscribe = tracer.subscribe({
-        delivered: (trace) => {
-          // Signal all subscriptions when a value is delivered
-          for (const sub of subscriptions.keys()) {
-            signal(sub);
-          }
-        },
-        filtered: (trace) => {
-          // Signal all subscriptions when a value is filtered
-          for (const sub of subscriptions.keys()) {
-            signal(sub);
-          }
-        },
-        collapsed: (trace) => {
-          // Signal all subscriptions when a value is collapsed
-          for (const sub of subscriptions.keys()) {
-            signal(sub);
-          }
-        },
-        dropped: (trace) => {
-          // Signal all subscriptions when a value is dropped
-          for (const sub of subscriptions.keys()) {
-            signal(sub);
-          }
-        }
       });
     }
   };
@@ -105,17 +76,14 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
   const reset: Tracker["reset"] = () => {
     for (const entry of subscriptions.values()) {
       entry.status = false;
-      entry.status$.next(false);
     }
-    tracer?.clear();
+    tracer.clear();
   };
 
   /**
    * Returns true if all known traces are in a terminal state.
    */
   const allTracesTerminal = (): boolean => {
-    if (!tracer) return true;
-
     // IMPORTANT:
     // - We consider "emitted" and "processing" as in-flight.
     // - Everything else is terminal for waiting purposes.
@@ -136,8 +104,8 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
    */
   const waitUsingTracing = (): CancelablePromise<void> => {
     return new CancelablePromise<void>(function* () {
-      if (!tracer || !tracingEnabled) {
-        // No tracer => nothing to wait for.
+      if (!tracingEnabled) {
+        // Tracing disabled => nothing to wait for.
         return;
       }
 
@@ -148,7 +116,7 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
       try {
         const waitPromise = new Promise<void>((resolve, reject) => {
           timeoutId = setTimeout(() => {
-            reject(buildTimeoutError(tracer!));
+            reject(buildTimeoutError(tracer));
           }, timeout);
 
           // Quick exit if already settled.
@@ -158,7 +126,7 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
           }
 
           // Event-driven fast path.
-          unsubscribeFn = tracer!.subscribe({
+          unsubscribeFn = tracer.subscribe({
             delivered: () => {
               if (allTracesTerminal()) resolve();
             },
