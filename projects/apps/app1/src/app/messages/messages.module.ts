@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
 import { MessagesComponent } from './messages.component';
-import { store } from '../app.module';
+import type { store } from '../app.module';
 
 @NgModule({
   imports: [CommonModule, FormsModule, RouterModule],

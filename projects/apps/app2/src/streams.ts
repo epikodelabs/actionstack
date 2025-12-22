@@ -1,13 +1,6 @@
 // Demonstrates hooking Streamix into UI intent -> ActionStack store updates
-import {
-  createSubject,
-  map,
-  tap,
-  filter,
-  buffer,
-  type Subscription,
-  withLatestFrom
-} from '@actioncrew/streamix';
+import { createSubject, map, tap, filter, buffer, withLatestFrom } from '@actioncrew/streamix';
+import type { Subscription } from '@actioncrew/streamix';
 import { counter } from './store';
 
 // UI intents

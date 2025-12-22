@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
 
-import { Hero } from './hero';
+import type { Hero } from './hero';
 import { HEROES } from './mock-heroes';
-import { from, fromPromise, Stream } from '@actioncrew/streamix';
+import { fromPromise } from '@actioncrew/streamix';
+import type { from, Stream } from '@actioncrew/streamix';
 
 @Injectable({ providedIn: 'root' })
 export class HeroService {

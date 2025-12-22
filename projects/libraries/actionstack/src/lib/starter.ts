@@ -1,6 +1,6 @@
 import { getRegisteredThunks } from './actions';
-import { SimpleLock } from './lock';
-import { Action, AsyncAction } from './types';
+import type { SimpleLock } from './lock';
+import type { Action, AsyncAction } from './types';
 
 /**
  * @template TState - The overall type of your application's state.

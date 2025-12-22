@@ -1,15 +1,11 @@
-import {
-  createBehaviorSubject,
-  distinctUntilChanged,
-  map,
-  Stream
-} from '@actioncrew/streamix';
+import { createBehaviorSubject, distinctUntilChanged, map } from '@actioncrew/streamix';
+import type { Stream } from '@actioncrew/streamix';
 import { action, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
 import { createLock } from './lock';
 import { createModule, registerModule } from './module';
 import { createQueue } from './queue';
 import { starter } from './starter';
-import {
+import type {
   Action,
   AsyncAction,
   AsyncReducer,

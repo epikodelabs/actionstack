@@ -1,5 +1,6 @@
-import { Tracker } from "@actioncrew/actionstack";
-import { BehaviorSubject, createBehaviorSubject, Subscription } from "@actioncrew/streamix";
+import type { Tracker } from "@actioncrew/actionstack";
+import { createBehaviorSubject } from "@actioncrew/streamix";
+import type { BehaviorSubject, Subscription } from "@actioncrew/streamix";
 import {
   enableTracing as enableStreamixTracing,
   ValueTracer

@@ -1,4 +1,4 @@
-import { Action, AsyncReducer, Reducer, StoreCreator, StoreEnhancer, Tree } from "./types";
+import type { Action, AsyncReducer, Reducer, StoreCreator, StoreEnhancer, Tree } from "./types";
 
 /**
  * Retrieves a property from an object based on a path.

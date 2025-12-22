@@ -4,15 +4,8 @@ import {
   switchMap,
   takeUntil
 } from '@actioncrew/streamix';
-import {
-  ActionCreator,
-  FeatureModule,
-  isAction,
-  Store,
-  Streams,
-  AsyncAction,
-  Selector
-} from '../lib';
+import { isAction } from '../lib';
+import type { ActionCreator, FeatureModule, Store, Streams, AsyncAction, Selector } from '../lib';
 
 /**
  * Creates a feature module that encapsulates a slice of state, its actions, selectors,

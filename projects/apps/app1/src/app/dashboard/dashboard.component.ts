@@ -1,11 +1,12 @@
 
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component } from '@angular/core';
+import type { OnInit } from '@angular/core';
 import { RouterModule } from '@angular/router';
-import { Hero } from '../hero';
+import type { Hero } from '../hero';
 import { dashboardModule} from './dashboard.slice';
 import { store } from '../app.module';
-import { Stream } from '@actioncrew/streamix';
+import type { Stream } from '@actioncrew/streamix';
 import { registerModule } from 'projects/libraries/actionstack/src/lib/module';
 
 @Component({

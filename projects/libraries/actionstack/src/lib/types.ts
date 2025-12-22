@@ -1,4 +1,4 @@
-import { Stream, Subject, Subscription } from '@actioncrew/streamix';
+import type { Stream, Subject, Subscription } from '@actioncrew/streamix';
 import type { SimpleLock, Store, StoreSettings } from '../lib';
 
 /**

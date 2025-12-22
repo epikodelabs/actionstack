@@ -1,5 +1,6 @@
 import { createStore } from '@actioncrew/actionstack';
-import { logger, perfmon } from '@actioncrew/actionstack/tools';
+import { logger } from '@actioncrew/actionstack/tools';
+import type { perfmon } from '@actioncrew/actionstack/tools';
 import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BrowserModule } from '@angular/platform-browser';

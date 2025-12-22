@@ -2,8 +2,8 @@ import { messagesModule } from './../messages/messages.slice';
 import { action, createModule, createThunk, selector } from '@actioncrew/actionstack';
 import { firstValueFrom } from '@actioncrew/streamix';
 
-import { Hero } from '../hero';
-import { Action } from '@actioncrew/actionstack';
+import type { Hero } from '../hero';
+import type { Action } from '@actioncrew/actionstack';
 import { HeroService } from '../hero.service';
 
 // --- Slice name

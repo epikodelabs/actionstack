@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { messagesModule } from './messages.slice';
 import { store } from '../app.module';
-import { Stream } from '@actioncrew/streamix';
+import type { Stream } from '@actioncrew/streamix';
 import { registerModule } from '@actioncrew/actionstack';
 
 @Component({

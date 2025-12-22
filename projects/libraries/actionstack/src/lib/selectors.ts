@@ -1,8 +1,5 @@
-import {
-  Stream,
-  map,
-  mergeMap
-} from '@actioncrew/streamix';
+import { map, mergeMap } from '@actioncrew/streamix';
+import type { Stream } from '@actioncrew/streamix';
 
 /**
  * A selector extracts a value from state.

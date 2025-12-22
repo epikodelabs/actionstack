@@ -1,11 +1,12 @@
 
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component } from '@angular/core';
+import type { OnDestroy, OnInit } from '@angular/core';
 
-import { Hero } from '../hero';
-import { HeroService } from './../hero.service';
+import type { Hero } from '../hero';
+import type { HeroService } from './../hero.service';
 import { heroesModule } from './heroes.slice';
 import { store } from '../app.module';
-import { Subscription } from '@actioncrew/streamix';
+import type { Subscription } from '@actioncrew/streamix';
 import { registerModule, unregisterModule } from '@actioncrew/actionstack';
 
 @Component({

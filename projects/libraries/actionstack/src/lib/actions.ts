@@ -1,14 +1,5 @@
-import {
-  Action,
-  ActionCreator,
-  ActionHandler,
-  AsyncAction,
-  FeatureModule,
-  isAction,
-  ThunkCreator,
-  ThunkAction,
-  ThunkTrigger,
-} from './types';
+import { isAction } from './types';
+import type { Action, ActionCreator, ActionHandler, AsyncAction, FeatureModule, ThunkCreator, ThunkAction, ThunkTrigger } from './types';
 
 export { createAction as action, createThunk as thunk };
 
