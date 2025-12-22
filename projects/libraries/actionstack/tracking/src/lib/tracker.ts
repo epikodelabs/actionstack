@@ -1,5 +1,5 @@
 import type { Tracker } from "@actioncrew/actionstack";
-import type { Subscription } from "@actioncrew/streamix";
+import { scheduler, type Subscription } from "@actioncrew/streamix";
 import {
   enableTracing,
   ValueTracer
@@ -78,7 +78,8 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
     // - We consider "emitted" and "processing" as in-flight.
     // - Everything else is terminal for waiting purposes.
     for (const t of tracer.getAllTraces()) {
-      if (t.state === "emitted" || t.state === "processing") return false;
+      // "transformed" is still in-flight: it hasn't reached a terminal outcome yet.
+      if (t.state === "emitted" || t.state === "processing" || t.state === "transformed") return false;
     }
     return true;
   };
@@ -93,60 +94,62 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
    * - Ensures proper cleanup of the subscription + timers.
    */
   const waitUsingTracing = (): CancelablePromise<void> => {
-    return new CancelablePromise<void>(function* () {
-      if (!tracingEnabled) {
-        // Tracing disabled => nothing to wait for.
-        return;
-      }
+  return new CancelablePromise<void>(function* () {
+    if (!tracingEnabled) {
+      return;
+    }
 
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
-      let pollId: ReturnType<typeof setInterval> | null = null;
-      let unsubscribeFn: any = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let pollId: ReturnType<typeof setInterval> | null = null;
+    let unsubscribeFn: any = null;
 
-      try {
-        const waitPromise = new Promise<void>((resolve, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(buildTimeoutError(tracer));
-          }, timeout);
+    try {
+      // Drive initial work
+      yield scheduler.flush();
 
-          // Quick exit if already settled.
+      const waitPromise = new Promise<void>((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(buildTimeoutError(tracer));
+        }, timeout);
+
+        const checkSettled = async () => {
+          if (!allTracesTerminal()) return;
+          
+          // Before resolving, flush once more to see if new work appears
+          await scheduler.flush();
+          
+          // Check again after the flush
           if (allTracesTerminal()) {
             resolve();
-            return;
           }
+        };
 
-          // Event-driven fast path.
-          unsubscribeFn = tracer.subscribe({
-            delivered: () => {
-              if (allTracesTerminal()) resolve();
-            },
-            filtered: () => {
-              if (allTracesTerminal()) resolve();
-            },
-            collapsed: () => {
-              if (allTracesTerminal()) resolve();
-            },
-            dropped: () => {
-              if (allTracesTerminal()) resolve();
-            },
-          });
+        // Quick exit if already settled
+        checkSettled();
 
-          // Safety net polling.
-          pollId = setInterval(() => {
-            if (allTracesTerminal()) resolve();
-          }, 10);
+        // Event-driven fast path
+        unsubscribeFn = tracer.subscribe({
+          delivered: checkSettled,
+          filtered: checkSettled,
+          collapsed: checkSettled,
+          dropped: checkSettled,
         });
 
-        yield waitPromise;
-        reset();
-      } finally {
-        // Cleanup
-        if (timeoutId !== null) clearTimeout(timeoutId);
-        if (pollId !== null) clearInterval(pollId);
-        if (unsubscribeFn !== null) unsubscribeFn();
-      }
-    });
-  };
+        // Safety net polling
+        pollId = setInterval(checkSettled, 10);
+      });
+
+      yield waitPromise;
+      // Give any queued scheduler work a chance to run
+      yield scheduler.flush();
+    } finally {
+      // Cleanup
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      if (pollId !== null) clearInterval(pollId);
+      if (unsubscribeFn !== null) unsubscribeFn();
+    }
+  });
+};
 
   /**
    * Builds a detailed timeout error showing what is still in-flight.
@@ -177,33 +180,31 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
   };
 
   const waitAll = (): CancelablePromise<void> => {
-    const cancelableWait = new CancelablePromise<void>(function* () {
+    // Create the actual work as a regular promise
+    const work = waitQueue.then(async () => {
+      // Let initial microtasks enqueue tracing hooks / iterator steps.
+      await new Promise<void>(r => queueMicrotask(r));
+      
+      // Do the actual waiting (but convert to regular promise for the queue)
+      const innerWait = waitUsingTracing();
+      activeWaits.add(innerWait);
+      
       try {
-        // Enqueue in the serialization queue
-        const queuePromise: Promise<void> = waitQueue.then(async () => {
-          // Let initial microtasks enqueue tracing hooks / iterator steps.
-          await new Promise<void>(r => queueMicrotask(r));
-          
-          const innerWait = waitUsingTracing();
-          activeWaits.add(innerWait);
-          
-          try {
-            await innerWait;
-          } finally {
-            activeWaits.delete(innerWait);
-          }
-        });
-        
-        yield queuePromise;
-      } catch (error) {
-        // Don't propagate errors from cancelled operations
-        return;
+        // Convert to regular promise to avoid cancellation affecting the queue
+        await Promise.resolve(innerWait);
+      } finally {
+        activeWaits.delete(innerWait);
       }
     });
 
-    // Update the queue for the next caller
-    waitQueue = cancelableWait.catch(() => {
-      // If cancelled or errored, don't propagate to next waiter
+    // Update the queue with the regular promise (not cancelable)
+    waitQueue = work.catch(() => {
+      // Swallow errors so they don't propagate to next waiter
+    });
+
+    // Now wrap it in a CancelablePromise for the caller
+    const cancelableWait = new CancelablePromise<void>(function* () {
+      yield work;
     });
 
     activeWaits.add(cancelableWait);

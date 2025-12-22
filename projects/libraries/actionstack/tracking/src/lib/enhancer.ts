@@ -60,5 +60,8 @@ export function withTracker(): StoreEnhancer {
     return storeWithTracker;
   };
 
+  // Expose tracker on the enhancer itself (tests + diagnostics).
+  (enhancer as StoreEnhancer & { tracker: Tracker }).tracker = tracker;
+
   return enhancer;
 }
