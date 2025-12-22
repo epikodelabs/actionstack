@@ -17,7 +17,7 @@ import { createTracker } from "./tracker";
  * - integrated with select() method for subscription tracking
  * - signals subscriptions via ValueTracer event callbacks
  */
-export function withTracker(): StoreEnhancer & { tracker: Tracker } {
+export function withTracker(): StoreEnhancer {
   const tracker = createTracker();
 
   const enhancer: StoreEnhancer = (createStore) => (settings) => {
@@ -61,22 +61,5 @@ export function withTracker(): StoreEnhancer & { tracker: Tracker } {
     return storeWithTracker;
   };
 
-  /**
-   * Expose tracker on the enhancer itself.
-   *
-   * Useful for:
-   * - black-box tests that don't have store reference yet
-   * - utilities that don't want to reach into store internals
-   *
-   * Example:
-   *   const enhancer = withTracker();
-   *   const store = createStore(enhancer);
-   *   
-   *   // Option 1: Via store
-   *   await store.flush();
-   *   
-   *   // Option 2: Via enhancer
-   *   await enhancer.tracker.waitAll();
-   */
-  return Object.assign(enhancer, { tracker });
+  return enhancer;
 }
