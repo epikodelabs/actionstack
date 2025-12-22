@@ -1,7 +1,7 @@
 import type { Tracker } from "@actioncrew/actionstack";
 import type { Subscription } from "@actioncrew/streamix";
 import {
-  enableTracing as enableStreamixTracing,
+  enableTracing,
   ValueTracer
 } from "@actioncrew/streamix/tracing";
 import { CancelablePromise } from "./promise";
@@ -19,10 +19,6 @@ function getSharedTracer(): ValueTracer {
   return sharedTracer;
 }
 
-type SubscriptionEntry = {
-  status: boolean;
-};
-
 /**
  * Creates a new Tracker.
  *
@@ -34,7 +30,7 @@ type SubscriptionEntry = {
  *   delivered / filtered / collapsed / errored.
  */
 export const createTracker = (): Tracker & { cancelAll: () => void } => {
-  const subscriptions = new Map<Subscription, SubscriptionEntry>();
+  const subscriptions = new Map<Subscription, boolean>();
   const timeout = 30_000;
 
   // Serialize waitAll calls.
@@ -45,37 +41,31 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
 
   // Tracing integration (test-scoped).
   const tracer = getSharedTracer();
-  enableStreamixTracing(tracer);
+  enableTracing(tracer);
   const tracingEnabled = true;
 
   const state: Tracker["state"] = (subscription) =>
-    subscriptions.get(subscription)?.status ?? false;
+    subscriptions.get(subscription) ?? false;
 
   const signal: Tracker["signal"] = (subscription) => {
-    const entry = subscriptions.get(subscription);
-    if (!entry) return;
-    entry.status = true;
+    if (!subscriptions.has(subscription)) return;
+    subscriptions.set(subscription, true);
   };
 
   const complete: Tracker["complete"] = (subscription) => {
-    const entry = subscriptions.get(subscription);
-    if (!entry) return;
-
-    entry.status = false;
+    if (!subscriptions.has(subscription)) return;
     subscriptions.delete(subscription);
   };
 
   const track: Tracker["track"] = (subscription) => {
     if (!subscriptions.has(subscription)) {
-      subscriptions.set(subscription, {
-        status: false,
-      });
+      subscriptions.set(subscription, false);
     }
   };
 
   const reset: Tracker["reset"] = () => {
-    for (const entry of subscriptions.values()) {
-      entry.status = false;
+    for (const sub of subscriptions.keys()) {
+      subscriptions.set(sub, false);
     }
     tracer.clear();
   };

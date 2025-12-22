@@ -15,7 +15,7 @@ import { createTracker } from "./tracker";
  * - exposed on the enhancer itself
  * - fully optional at runtime
  * - integrated with select() method for subscription tracking
- * - signals subscriptions via ValueTracer event callbacks
+ * - uses Streamix tracing for `waitAll()` synchronization
  */
 export function withTracker(): StoreEnhancer {
   const tracker = createTracker();
@@ -33,8 +33,7 @@ export function withTracker(): StoreEnhancer {
      * Integration points:
      * 1. select() calls tracker.track(subscription) when created
      * 2. select() calls tracker.complete(subscription) on completion/error
-     * 3. ValueTracer callbacks signal ALL subscriptions when values settle
-     * 4. Tests call tracker.waitAll() to wait for all values to settle
+     * 3. Tests call tracker.waitAll() to wait for all values to settle
      */
     const storeWithTracker = store as Store & {
       tracker?: Tracker;
