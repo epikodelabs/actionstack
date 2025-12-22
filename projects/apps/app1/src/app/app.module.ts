@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { BrowserModule } from '@angular/platform-browser';
 
 import { applyMiddleware } from '@actioncrew/actionstack';
-import { withTracker } from 'dist/actionstack/tracking';
+import { withTracker } from '@actioncrew/actionstack/tracking';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { MessagesModule } from './messages/messages.module';
