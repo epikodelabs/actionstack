@@ -44,5 +44,8 @@
     "strictInjectionParameters": true,
     "strictInputAccessModifiers": true,
     "strictTemplates": true
-  }
+  },
+  "exclude": [
+    "projects/apps/app2/**"
+  ]
 }

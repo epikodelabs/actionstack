@@ -10,24 +10,26 @@
  * @property {boolean} isEmpty A boolean indicating whether the queue is empty.
  */
 export function createQueue() {
-  let last = Promise.resolve();
+  let last: Promise<void> = Promise.resolve();
   let pendingCount = 0;
 
-  const enqueue = (operation: () => Promise<any> | void): Promise<any> => {
+  const enqueue = <T = any>(operation: () => Promise<T> | T): Promise<T> => {
     pendingCount++;
 
     // Create the chained promise that will execute the operation
-    const result = last
-      .then(() => operation())
-      .finally(() => {
-        pendingCount--;
-      });
+    const result = last.then(() => operation());
+    const finalized = result.finally(() => {
+      pendingCount--;
+    });
 
     // Chain the next operation (with error handling to prevent queue lock)
     // This maintains the sequential order regardless of operation success/failure
-    last = result.catch(() => {});
+    last = finalized.then(
+      () => undefined,
+      () => undefined
+    );
 
-    return result;
+    return finalized;
   };
 
   return {

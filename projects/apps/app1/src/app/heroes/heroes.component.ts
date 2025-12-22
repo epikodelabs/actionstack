@@ -3,7 +3,7 @@ import { Component } from '@angular/core';
 import type { OnDestroy, OnInit } from '@angular/core';
 
 import type { Hero } from '../hero';
-import type { HeroService } from './../hero.service';
+import { HeroService } from './../hero.service';
 import { heroesModule } from './heroes.slice';
 import { store } from '../app.module';
 import type { Subscription } from '@actioncrew/streamix';

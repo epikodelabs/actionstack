@@ -1,5 +1,5 @@
-import { createBehaviorSubject, distinctUntilChanged, map } from '@actioncrew/streamix';
 import type { Stream } from '@actioncrew/streamix';
+import { createBehaviorSubject, distinctUntilChanged, map } from '@actioncrew/streamix';
 import { action, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
 import { createLock } from './lock';
 import { createModule, registerModule } from './module';
@@ -9,6 +9,7 @@ import type {
   Action,
   AsyncAction,
   AsyncReducer,
+  Dispatch,
   FeatureModule,
   Middleware,
   MiddlewareAPI,
@@ -48,22 +49,27 @@ const defaultStoreSettings: StoreSettings = {
  * The `Store` type represents the core store object that manages state, actions, and modules.
  * It provides methods to interact with the store's state, dispatch actions, load/unload modules, and more.
  */
-export type Store<T = any> = {
-  dispatch: (action: Action | any) => Promise<void>;
-  getState: (
-    slice: keyof T | string[] | '*',
-    callback: (state: Readonly<T>) => void | Promise<void>
-  ) => Promise<void>;
-  select<R = any>(
-    selector: (state: T) => R | Promise<R>,
-    defaultValue?: R
-  ): Stream<R>;
-  populate: (...modules: FeatureModule[]) => Promise<void>;
-  loadModule: (module: FeatureModule) => Promise<void>;
-  unloadModule: (module: FeatureModule, clearState?: boolean) => Promise<void>;
-  addReducer: (reducer: (state: T, action: Action) => T | Promise<T>) => void;
-  getMiddlewareAPI: () => MiddlewareAPI;
-  starter: Middleware;
+export type Store<TState = any, TDependencies = any> = {
+    dispatch: Dispatch<TState, TDependencies>;
+
+    getState: {
+        <R = any>(slice: '*', callback: (state: Readonly<TState>) => void): Promise<void>;
+        <R = any>(slice: string, callback: (state: Readonly<R>) => void): Promise<void>;
+        <R = any>(slice: readonly string[], callback: (state: Readonly<R>) => void): Promise<void>;
+    };
+
+    select: {
+        <R = any>(selector: (state: Readonly<TState>) => R, defaultValue?: R): Stream<R>;
+        <R = any>(selector: (state: Readonly<TState>) => Promise<R>, defaultValue?: R): Stream<R>;
+    };
+
+    populate: (...modules: FeatureModule[]) => Promise<void>;
+    loadModule: (module: FeatureModule) => Promise<void>;
+    unloadModule: (module: FeatureModule, clearState?: boolean) => Promise<void>;
+
+    addReducer: (reducer: (state: TState, action: Action<any> | AsyncAction<TState, TDependencies>) => TState | Promise<TState>) => void;
+    getMiddlewareAPI: () => MiddlewareAPI;
+    starter: Middleware;
 };
 
 interface SystemState {
@@ -175,9 +181,20 @@ export function createStore<T = any>(
    * If any validation fails, a warning is logged to the console and the action is not dispatched.
    * After validation, the action is processed by the reducer, and the global state is updated accordingly.
    */
-  let dispatch = async (action: Action | any): Promise<void> => {
+  let dispatch: Dispatch<T, any> = async (action) => {
+    if (typeof action === 'function') {
+      await (action as AsyncAction<T, any>)(dispatch, () => state, pipeline.dependencies);
+      return;
+    }
+
+    if (!action || typeof action !== 'object' || typeof (action as any).type !== 'string') {
+      console.warn('Invalid action dispatched:', action);
+      return;
+    }
+
     let newState = state; // start with current state
 
+    (store as any).tracker?.reset();
     const handler = getActionHandlers(action.type);
 
     if (handler) {
@@ -203,8 +220,6 @@ export function createStore<T = any>(
         }
       }
     }
-
-    (store as any).tracker?.reset();
 
     // Emit only once after all reducers have run
     if (newState !== state) {
@@ -454,17 +469,17 @@ export function createStore<T = any>(
    * normalizePath("foo/bar/baz"); // => ["foo", "bar", "baz"]
    * normalizePath(["foo", "bar"]); // => ["foo", "bar"]
    */
-  const normalizePath = (path: string | string[]): string[] => {
-    return Array.isArray(path) ? path : path.split('/');
+  const normalizePath = (path: string | readonly string[]): string[] => {
+    return typeof path === 'string' ? path.split('/') : [...path];
   };
 
   /**
    * Reads the state slice and executes the provided callback with the current state.
    * The function ensures that state is accessed in a thread-safe manner by acquiring a lock.
    */
-  const getState = (
-    slice: string | string[] | '*',
-    callback: (state: Readonly<T | undefined>) => void | Promise<void>
+  const getState = <R = any>(
+    slice: '*' | string | readonly string[],
+    callback: (state: Readonly<R | T>) => void
   ): Promise<void> => {
     const promise = (async () => {
       try {
@@ -489,8 +504,8 @@ export function createStore<T = any>(
    * @param {R} [defaultValue] - A fallback value to emit when the selected value is `undefined`.
    * @returns {Stream<R>} A stream emitting selected values.
    */
-  const select = <R>(
-    selector: (state: T) => R | Promise<R>,
+  const select = <R = any>(
+    selector: (state: Readonly<T>) => R | Promise<R>,
     defaultValue?: R
   ): Stream<R> => {
     const source$ = currentState.pipe(
@@ -540,9 +555,9 @@ export function createStore<T = any>(
    * Registers a global reducer that runs on every dispatched action.
    */
   const addReducer = (
-    reducer: (state: T, action: Action) => T | Promise<T>
-  ) => {
-    return queue.enqueue(async () => {
+    reducer: (state: T, action: Action<any> | AsyncAction<T, any>) => T | Promise<T>
+  ): void => {
+    void queue.enqueue(async () => {
       if (!settings.enableGlobalReducers) {
         console.warn(
           'Global reducers are disabled; this reducer will not be used unless "enableGlobalReducers" is true.'
@@ -565,7 +580,7 @@ export function createStore<T = any>(
     lock: lock
   }) as MiddlewareAPI;
 
-  let store = {
+  let store: Store<T> = {
     starter,
     dispatch,
     getState,
@@ -575,7 +590,7 @@ export function createStore<T = any>(
     unloadModule,
     getMiddlewareAPI,
     addReducer,
-  } as Store<any>;
+  };
 
   /**
    * Initializes the store with system actions and state setup

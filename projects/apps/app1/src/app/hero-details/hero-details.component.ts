@@ -1,7 +1,7 @@
-import type { Location } from '@angular/common';
+import { Location } from '@angular/common';
 import { Component } from '@angular/core';
 import type { OnInit } from '@angular/core';
-import type { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 
 import type { Hero } from '../hero';
 import { loadHero, heroDetailsModule } from './hero-details.slice';
