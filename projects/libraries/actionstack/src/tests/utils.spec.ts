@@ -336,7 +336,10 @@ describe('applyMiddleware', () => {
       dispatch: jasmine.createSpy('dispatch').and.callFake((action) => action),
       middlewareAPI: {
         getState: () => ({ counter: 0 }),
-        dispatch: (action: any) => store.dispatch(action)
+        dispatch: (action: any) => store.dispatch(action),
+        queue: {
+          enqueue: async (operation: () => Promise<void> | void) => operation(),
+        },
       }
     } as any;
 
@@ -368,7 +371,10 @@ describe('applyMiddleware', () => {
       },
       middlewareAPI: {
         getState: () => ({}),
-        dispatch: (action: any) => store.dispatch(action)
+        dispatch: (action: any) => store.dispatch(action),
+        queue: {
+          enqueue: async (operation: () => Promise<void> | void) => operation(),
+        },
       }
     } as any;
 
@@ -444,17 +450,14 @@ describe('combineEnhancers', () => {
     
     // Create a mock store creator
     const mockStoreCreator: StoreCreator = (_settings, _enhancer) => {
-      const lock = {
-        acquire: async () => {},
-        release: () => {},
-      };
-
       const middlewareAPI = {
         getState: (_slice?: string | string[]) => ({}),
         dispatch: async () => {},
         dependencies: () => ({}),
         strategy: () => ({} as any),
-        lock,
+        queue: {
+          enqueue: async (operation: () => Promise<void> | void) => operation(),
+        },
       };
 
       return {

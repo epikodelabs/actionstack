@@ -62,6 +62,7 @@ function createModule<
     slice,
     initialState: config.initialState,
     dependencies: config.dependencies,
+    __rawActions: processedActions,
     loaded$,
     destroyed$,
     data$: {} as Streams<Selectors>,

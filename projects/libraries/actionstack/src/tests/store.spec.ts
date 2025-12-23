@@ -80,7 +80,7 @@ describe('store', () => {
     expect(resolved).toBeTrue();
   });
 
-  it('getState releases lock when callback throws', async () => {
+  it('getState releases queue when callback throws', async () => {
     const store = createStore();
     await flush(store);
 

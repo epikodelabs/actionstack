@@ -1,5 +1,5 @@
 import { getRegisteredThunks } from './actions';
-import type { SimpleLock } from './lock';
+import type { ActionQueue } from './queue';
 import type { Action, AsyncAction } from './types';
 
 /**
@@ -14,7 +14,7 @@ export interface MiddlewareConfig<TState = any, TDependencies extends Record<str
   dispatch: (action: Action | AsyncAction) => Promise<void>;
   getState: () => TState;
   dependencies: () => TDependencies;
-  lock: SimpleLock;
+  queue: ActionQueue;
 }
 
 /**
@@ -29,6 +29,7 @@ export function createActionHandler(
 ) {
   const getState = config.getState;
   const dependencies = config.dependencies;
+  const queue = config.queue ?? { enqueue: async (operation: () => Promise<void> | void) => operation() };
   const lockThunks = options.lockThunks ?? false;
 
 
@@ -37,49 +38,39 @@ export function createActionHandler(
    *
    * @param {Action | AsyncAction} action - The action to be processed.
    * @param {Function} next - The next middleware function in the chain.
-   * @param {SimpleLock} lock - The lock instance to manage concurrency for this action.
+   * @param {boolean} isNestedDispatch - Indicates whether the action is dispatched from within another action.
    * @returns {Promise<void> | void} - A promise if the action is asynchronous, otherwise void.
    */
   const handleAction = async (
     action: Action | AsyncAction,
     next: Function,
-    lock: SimpleLock,
-    isNestedDispatch: boolean = false
+    lockOrNested: any = false,
+    maybeNestedDispatch: boolean = false
   ): Promise<void> => {
+    const isNestedDispatch =
+      typeof lockOrNested === 'boolean' ? lockOrNested : Boolean(maybeNestedDispatch);
+
     if (typeof action === 'function') {
       const runThunk = async () =>
         (action as AsyncAction)(
           async (dispatchedAction: Action | AsyncAction) => {
-            await handleAction(dispatchedAction, next, lock, true);
+            await handleAction(dispatchedAction, next, true);
           },
           getState,
           dependencies()
         );
 
       if (lockThunks && !isNestedDispatch) {
-        await lock.acquire();
-        try {
-          await runThunk();
-        } finally {
-          lock.release();
-        }
+        await runThunk();
         return;
       }
 
       await runThunk();
       return;
     } else {
-      if (lockThunks && isNestedDispatch) {
-        await next(action);
-        return;
-      }
-
-      await lock.acquire();
-      try {
-        await next(action);
-      } finally {
-        lock.release();
-      }
+      await queue.enqueue(() => next(action), {
+        inlineIfRunning: isNestedDispatch,
+      });
       return;
     }
   };
@@ -159,14 +150,13 @@ export const createStarter = () => {
    */
   const exclusive = (config: MiddlewareConfig) => {
     const handler = createActionHandler(config, { lockThunks: true });
-    const lockInstance = config.lock;
+    const queue = config.queue ?? { enqueue: async (operation: () => Promise<void> | void) => operation() };
     const onError = console.warn;
 
     return (next: Function) => async (action: { type: string }) => {
-      try {
-        await lockInstance.acquire();
+      return queue.enqueue(async () => {
         try {
-          await handler(action as any, next, lockInstance, true);
+          await handler(action as any, next, true);
 
           // sequentially trigger matching thunks
           for (const thunk of getRegisteredThunks()) {
@@ -174,7 +164,7 @@ export const createStarter = () => {
               const runnableThunk = resolveThunk(thunk);
               if (runnableThunk) {
                 try {
-                  await handler(runnableThunk, next, lockInstance, true);
+                  await handler(runnableThunk, next, true);
                 } catch (err: any) {
                   const msg =
                     err instanceof Error ? err.message : String(err ?? 'unknown');
@@ -185,12 +175,10 @@ export const createStarter = () => {
               }
             }
           }
-        } finally {
-          lockInstance.release();
+        } catch (err: any) {
+          onError(`[starter] [exclusive] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${err.message}`);
         }
-      } catch (err: any) {
-        onError(`[starter] [exclusive] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${err.message}`);
-      }
+      });
     };
   };
 
@@ -205,7 +193,6 @@ export const createStarter = () => {
    */
   const concurrent = (config: MiddlewareConfig) => {
     const handler = createActionHandler(config, { lockThunks: false });
-    const lockInstance = config.lock;
     const inflight = new Set<Promise<void>>();
     const onError = console.warn;
 
@@ -216,7 +203,7 @@ export const createStarter = () => {
         // DO NOT await; return quickly for true concurrency
         const p = (async () => {
           // handle main action
-          await handler(action, next, lockInstance);
+          await handler(action, next);
 
           // find matching thunks
           const matching = getRegisteredThunks()
@@ -227,7 +214,7 @@ export const createStarter = () => {
             matching
               .map(resolveThunk)
               .filter(Boolean)
-              .map(thunk => handler(thunk as AsyncAction, next, lockInstance))
+              .map(thunk => handler(thunk as AsyncAction, next))
           );
 
           for (const r of results) {
@@ -290,7 +277,7 @@ export const createStarter = () => {
   const defaultStrategy = 'concurrent';
 
   // Create a method to select the strategy
-  const selectStrategy = ({ dispatch, getState, dependencies, strategy, lock, stack }: any) => (next: Function) => {
+  const selectStrategy = ({ dispatch, getState, dependencies, strategy, queue, stack }: any) => (next: Function) => {
     let strategyName: string;
     try {
       strategyName = String(strategy?.());
@@ -304,7 +291,7 @@ export const createStarter = () => {
       strategyFunc = strategies[defaultStrategy];
     }
 
-    return strategyFunc({ dispatch, getState, dependencies, lock, stack })(next);
+    return strategyFunc({ dispatch, getState, dependencies, queue, stack })(next);
   };
 
   selectStrategy.signature = 'i.p.5.j.7.0.2.1.8.b';

@@ -12,22 +12,47 @@
 export function createQueue() {
   let last: Promise<void> = Promise.resolve();
   let pendingCount = 0;
+  let runningCount = 0;
 
-  const enqueue = <T = any>(operation: () => Promise<T> | T): Promise<T> => {
+  const enqueue = <T = any>(
+    operation: () => Promise<T> | T,
+    options?: { inlineIfRunning?: boolean }
+  ): Promise<T> => {
     pendingCount++;
+    const runOperation = async () => {
+      runningCount++;
+      try {
+        return await operation();
+      } finally {
+        runningCount--;
+      }
+    };
 
-    // Create the chained promise that will execute the operation
-    const result = last.then(() => operation());
+    let result: Promise<T>;
+    if (options?.inlineIfRunning && runningCount > 0) {
+      // Re-entrant enqueue: run inline but still extend the queue chain
+      result = Promise.resolve().then(runOperation);
+    } else {
+      // Create the chained promise that will execute the operation
+      result = last.then(runOperation);
+    }
     const finalized = result.finally(() => {
       pendingCount--;
     });
 
     // Chain the next operation (with error handling to prevent queue lock)
     // This maintains the sequential order regardless of operation success/failure
-    last = finalized.then(
-      () => undefined,
-      () => undefined
-    );
+    if (options?.inlineIfRunning && runningCount > 0) {
+      last = Promise.all([last, finalized]).then(
+        () => undefined,
+        () => undefined
+      );
+    } else {
+      last = finalized.then(
+        () => undefined,
+        () => undefined
+      );
+    }
 
     return finalized;
   };
@@ -39,3 +64,5 @@ export function createQueue() {
     get isEmpty() { return pendingCount === 0; }
   };
 }
+
+export type ActionQueue = ReturnType<typeof createQueue>;

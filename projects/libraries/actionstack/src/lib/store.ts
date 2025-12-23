@@ -1,7 +1,6 @@
 import type { Stream } from '@actioncrew/streamix';
 import { createBehaviorSubject, distinctUntilChanged, map } from '@actioncrew/streamix';
 import { action, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
-import { createLock } from './lock';
 import { createModule, registerModule } from './module';
 import { createQueue } from './queue';
 import { starter } from './starter';
@@ -173,7 +172,6 @@ export function createStore<T = any>(
 
   let state = {} as T;
   let currentState = createBehaviorSubject<T>(state as T);
-  const lock = createLock();
   const queue = createQueue();
 
   /**
@@ -316,9 +314,7 @@ export function createStore<T = any>(
    * This method ensures modules are initialized and loaded into the store.
    */
   const populate = async (...moduleList: FeatureModule[]): Promise<void> => {
-    try {
-      await lock.acquire();
-
+    return queue.enqueue(async () => {
       // Load modules sequentially within the same queue operation
       for (const module of moduleList) {
         if (modules.some((m) => m.slice === module.slice)) {
@@ -366,9 +362,7 @@ export function createStore<T = any>(
           throw error; // Re-throw to let caller handle
         }
       }
-    } finally {
-      lock.release(); // Release lock regardless of success or failure
-    }
+    });
   };
 
   /**
@@ -383,8 +377,7 @@ export function createStore<T = any>(
 
     module.configure(store);
 
-    try {
-      await lock.acquire();
+    return queue.enqueue(async () => {
       // Register the module
       modules = [...modules, module];
 
@@ -402,10 +395,7 @@ export function createStore<T = any>(
       sysActions.moduleLoaded(module);
       module.loaded$.next();
       currentState.next(state);
-
-    } finally {
-      lock.release(); // Release lock regardless of success or failure
-    }
+    });
   };
 
   /**
@@ -417,9 +407,7 @@ export function createStore<T = any>(
     module: FeatureModule,
     clearState: boolean = false
   ): Promise<void> => {
-    try {
-      await lock.acquire();
-
+    return queue.enqueue(async () => {
       // Find the module index in the modules array
       const moduleIndex = modules.findIndex((m) => m.slice === module.slice);
 
@@ -446,10 +434,7 @@ export function createStore<T = any>(
       sysActions.moduleUnloaded(module);
       module.destroyed$.next();
       currentState.next(state);
-
-    } finally {
-      lock.release(); // Release lock regardless of success or failure
-    }
+    });
   };
 
   /**
@@ -479,30 +464,22 @@ export function createStore<T = any>(
     dispatch: (action: Action | AsyncAction) => store.dispatch(action as any),
     dependencies: () => pipeline.dependencies,
     strategy: () => pipeline.strategy,
-    lock,
+    queue,
   } as MiddlewareAPI;
 
   /**
    * Reads the state slice and executes the provided callback with the current state.
-   * The function ensures that state is accessed in a thread-safe manner by acquiring a lock.
+   * The function ensures that state is accessed in a thread-safe manner by using the store queue.
    */
   const getState = <R = any>(
     slice: '*' | string | readonly string[],
     callback: (state: Readonly<R | T>) => void
   ): Promise<void> => {
-    const promise = (async () => {
-      try {
-        await lock.acquire(); //Potentially we can check here for an idle of the pipeline
-
-        const path = slice === '*' ? '*' : normalizePath(slice);
-        const stateRead = (await getProperty(state, path as any)) as any;
-        await callback(stateRead);
-      } finally {
-        lock.release(); // Release lock regardless of success or failure
-      }
-    })();
-
-    return promise;
+    return queue.enqueue(async () => {
+      const path = slice === '*' ? '*' : normalizePath(slice);
+      const stateRead = (await getProperty(state, path as any)) as any;
+      await callback(stateRead);
+    });
   };
 
   /**
@@ -634,25 +611,21 @@ export function createStore<T = any>(
   store.dispatch = (action) => {
     // Fast path: avoid creating closures/promises if no tracking is needed
     if (!settings.awaitStatePropagation || !store.tracker) {
-      return queue.enqueue(() => originalDispatch(action));
+      return originalDispatch(action);
     }
 
     let result: any;
 
-    return queue
-      .enqueue(async () => {
-        store.tracker!.reset();
+    store.tracker!.reset();
 
-        // Preserve dispatch return value
-        result = originalDispatch(action);
+    // Preserve dispatch return value
+    result = originalDispatch(action);
 
-        // Support async dispatch (thunks, effects, etc.)
-        await Promise.resolve(result);
-      })
-      .then(async () => {
-        await store.tracker!.waitAll();
-        return result;
-      });
+    // Support async dispatch (thunks, effects, etc.)
+    return Promise.resolve(result).then(async () => {
+      await store.tracker!.waitAll();
+      return result;
+    });
   };
   
   initializeStore(store);

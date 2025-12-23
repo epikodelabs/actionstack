@@ -90,7 +90,8 @@ export const unregisterActionHandlers = (module: FeatureModule) => {
  * @param module - The feature module containing thunks to be registered.
  */
 export const registerThunks = (module: FeatureModule) => {
-  Object.values(module.actions || {}).forEach((thunk: any) => {
+  const sourceActions = (module as any).__rawActions ?? module.actions;
+  Object.values(sourceActions || {}).forEach((thunk: any) => {
     if (thunk.isThunk && thunk.type) {
       if (registeredThunks.has(thunk.type)) {
         console.warn(
@@ -115,7 +116,8 @@ export const registerThunks = (module: FeatureModule) => {
  * @param module - The feature module whose thunks should be removed.
  */
 export const unregisterThunks = (module: FeatureModule) => {
-  Object.values(module.actions || {}).forEach((thunk: any) => {
+  const sourceActions = (module as any).__rawActions ?? module.actions;
+  Object.values(sourceActions || {}).forEach((thunk: any) => {
     if (thunk.isThunk && thunk.type && registeredThunks.has(thunk.type)) {
       registeredThunks.delete(thunk.type);
     }

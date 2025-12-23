@@ -1,5 +1,5 @@
 import type { Stream, Subject, Subscription } from '@actioncrew/streamix';
-import type { SimpleLock, Store, StoreSettings } from '../lib';
+import type { ActionQueue, Store, StoreSettings } from '../lib';
 
 /**
  * A cancelable promise.
@@ -173,14 +173,14 @@ export type AsyncReducer<T = any> = (state: T, action: Action) => Promise<T>;
  * @property {function(Action|AsyncAction): Promise<void>} dispatch - Dispatches an action (synchronous or asynchronous).
  * @property {function(): any} dependencies - Retrieves the current dependencies in the pipeline.
  * @property {function(): ProcessingStrategy} strategy - Retrieves the current processing strategy.
- * @property {SimpleLock} lock - A lock to synchronize or prevent concurrent access to resources.
+ * @property {ActionQueue} queue - A queue to serialize store operations and middleware dispatches.
  */
 export type MiddlewareAPI<TState = any, TDependencies = any> = {
   getState: (slice?: string | string[] | '*') => any;
   dispatch: Dispatch<TState, TDependencies>;
   dependencies: () => TDependencies;
   strategy: () => ProcessingStrategy;
-  lock: SimpleLock;
+  queue: ActionQueue;
 }
 
 /**

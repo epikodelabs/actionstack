@@ -1,6 +1,6 @@
 import type { Action } from '@actioncrew/actionstack';
 import {
-  createLock,
+  createQueue,
   createActionHandler,
   createStarter,
   registerThunks,
@@ -29,7 +29,7 @@ type HarnessOptions = {
 };
 
 function createHarness(strategyName: string, opts: HarnessOptions = {}) {
-  const lock = createLock();
+  const queue = createQueue();
   const starterMw = createStarter();
 
   const received: Action[] = [];
@@ -50,7 +50,7 @@ function createHarness(strategyName: string, opts: HarnessOptions = {}) {
   const dispatch = starterMw({
     getState: () => ({}),
     dependencies: () => ({}),
-    lock,
+    queue,
     strategy: () => strategyName,
   } as any)(next);
 
@@ -184,16 +184,15 @@ describe('starter', () => {
   });
 
   describe('handler', () => {
-    it('locks thunk execution when lockThunks=true and dispatch is not nested', async () => {
-      const lock = createLock();
-      spyOn(lock, 'acquire').and.callThrough();
-      spyOn(lock, 'release').and.callThrough();
+    it('queues dispatched actions when handling a thunk', async () => {
+      const queue = createQueue();
+      spyOn(queue, 'enqueue').and.callThrough();
 
       const handler = createActionHandler(
         {
           getState: () => ({}),
           dependencies: () => ({}),
-          lock,
+          queue,
           dispatch: async () => {},
         } as any,
         { lockThunks: true }
@@ -205,31 +204,30 @@ describe('starter', () => {
         await dispatch({ type: 'NESTED' });
       };
 
-      await handler(thunkAction, next, lock, false);
+      await handler(thunkAction, next, false);
 
-      expect(lock.acquire).toHaveBeenCalled();
-      expect(lock.release).toHaveBeenCalled();
+      expect(queue.enqueue).toHaveBeenCalled();
       expect(next).toHaveBeenCalledWith({ type: 'NESTED' });
     });
 
-    it('does not lock nested sync dispatch when lockThunks=true', async () => {
-      const lock = createLock();
-      spyOn(lock, 'acquire').and.callThrough();
+    it('queues nested action dispatches', async () => {
+      const queue = createQueue();
+      spyOn(queue, 'enqueue').and.callThrough();
 
       const handler = createActionHandler(
         {
           getState: () => ({}),
           dependencies: () => ({}),
-          lock,
+          queue,
           dispatch: async () => {},
         } as any,
         { lockThunks: true }
       );
 
       const next = jasmine.createSpy('next').and.resolveTo();
-      await handler({ type: 'NESTED' } as any, next, lock, true);
+      await handler({ type: 'NESTED' } as any, next, true);
 
-      expect(lock.acquire).not.toHaveBeenCalled();
+      expect(queue.enqueue).toHaveBeenCalled();
       expect(next).toHaveBeenCalledWith({ type: 'NESTED' });
     });
   });
@@ -560,8 +558,8 @@ describe('starter', () => {
     });
   });
 
-  describe('locking', () => {
-    it('serializes thunk-dispatched actions via the shared lock (no next() overlap)', async () => {
+  describe('queueing', () => {
+    it('serializes thunk-dispatched actions via the shared queue (no next() overlap)', async () => {
       const ready1 = deferred<void>();
       const ready2 = deferred<void>();
       const startDispatch = deferred<void>();
@@ -718,7 +716,7 @@ describe('starter', () => {
       expect(overlaps).toEqual([]);
     });
 
-    it('concurrent mode: serializes many thunk-dispatched actions via the shared lock', async () => {
+    it('concurrent mode: serializes many thunk-dispatched actions via the shared queue', async () => {
       const thunkCount = 20;
       const ready = Array.from({ length: thunkCount }, () => deferred<void>());
       const startDispatch = deferred<void>();
