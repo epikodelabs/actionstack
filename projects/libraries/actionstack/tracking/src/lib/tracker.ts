@@ -43,7 +43,6 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
   const tracer = getSharedTracer();
   tracer.clear();
   enableTracing(tracer);
-  const tracingEnabled = true;
 
   const state: Tracker["state"] = (subscription) =>
     subscriptions.get(subscription) ?? false;
@@ -72,20 +71,6 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
   };
 
   /**
-   * Returns true if all known traces are in a terminal state.
-   */
-  const allTracesTerminal = (): boolean => {
-    // IMPORTANT:
-    // - We consider "emitted" and "processing" as in-flight.
-    // - Everything else is terminal for waiting purposes.
-    for (const t of tracer.getAllTraces()) {
-      // "transformed" is still in-flight: it hasn't reached a terminal outcome yet.
-      if (t.state === "emitted" || t.state === "processing" || t.state === "transformed") return false;
-    }
-    return true;
-  };
-
-  /**
    * Waits until tracing indicates there are no in-flight values.
    *
    * Implementation details:
@@ -94,8 +79,6 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
    */
   const waitUsingTracing = (): CancelablePromise<void> => {
     return new CancelablePromise<void>(function* () {
-      if (!tracingEnabled) return;
-
       // Snapshot traces known at the start of this wait.
       yield scheduler.flush();
       const trackedIds = new Set(tracer.getAllTraces().map((t) => t.valueId));
@@ -174,13 +157,12 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
       
       // Do the actual waiting (but convert to regular promise for the queue)
       innerWait = waitUsingTracing();
-      activeWaits.add(innerWait);
       
       try {
         // Convert to regular promise to avoid cancellation affecting the queue
         await Promise.resolve(innerWait);
       } finally {
-        activeWaits.delete(innerWait);
+        innerWait = null;
       }
     });
 

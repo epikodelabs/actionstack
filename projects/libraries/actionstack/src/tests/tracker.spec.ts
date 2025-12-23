@@ -41,8 +41,11 @@ describe("tracker", () => {
 
   it("resolves immediately when nothing is tracked", async () => {
     const tracker = createTracker();
+    let resolved = false;
     await tracker.waitAll();
+    resolved = true;
     await flush();
+    expect(resolved).toBeTrue();
   });
 
   it("updates state via signal(), reset(), and complete()", async () => {
@@ -82,8 +85,11 @@ describe("tracker", () => {
     tracker.track(sub);
     tracker.track(sub);
 
+    let resolved = false;
     await tracker.waitAll();
+    resolved = true;
     await flush();
+    expect(resolved).toBeTrue();
 
     tracker.complete(sub);
     sub.unsubscribe();
@@ -150,7 +156,10 @@ describe("tracker", () => {
     tracker.track(sub);
 
     await flush();
+    let resolved = false;
     await tracker.waitAll();
+    resolved = true;
+    expect(resolved).toBeTrue();
 
     tracker.complete(sub);
     sub.unsubscribe();
@@ -165,11 +174,16 @@ describe("tracker", () => {
       yield 3;
     });
 
-    const sub = stream.pipe(map(x => x * 2)).subscribe({ next: () => {} });
+    const received: number[] = [];
+    const sub = stream.pipe(map(x => x * 2)).subscribe({
+      next: v => received.push(v),
+    });
     tracker.track(sub);
 
     await tracker.waitAll();
     await flush();
+
+    expect(received).toEqual([2, 4, 6]);
 
     tracker.complete(sub);
   });
@@ -321,13 +335,18 @@ describe("tracker", () => {
     waitPromise.cancel();
 
     // Should not throw, just complete
+    let settled = false;
     await waitPromise.catch(() => {
       // Cancelled promises may reject
+    }).finally(() => {
+      settled = true;
     });
 
     // Allow the stream to continue
     allowDeliver.resolve();
     await flush();
+
+    expect(settled).toBeTrue();
 
     tracker.complete(sub);
     tracker.complete(bootstrap);
@@ -370,15 +389,18 @@ describe("tracker", () => {
     wait2.cancel();
     wait3.cancel();
 
+    let settledCount = 0;
     await Promise.all([
-      wait1.catch(() => {}),
-      wait2.catch(() => {}),
-      wait3.catch(() => {})
+      wait1.catch(() => {}).finally(() => { settledCount++; }),
+      wait2.catch(() => {}).finally(() => { settledCount++; }),
+      wait3.catch(() => {}).finally(() => { settledCount++; })
     ]);
 
     // Allow stream to complete
     allowDeliver.resolve();
     await flush();
+
+    expect(settledCount).toBe(3);
 
     tracker.complete(sub);
     tracker.complete(bootstrap);
@@ -420,11 +442,16 @@ describe("tracker", () => {
     // Cancel all at once
     tracker.cancelAll();
 
-    await Promise.all(waits.map(w => w.catch(() => {})));
+    let settledCount = 0;
+    await Promise.all(
+      waits.map(w => w.catch(() => {}).finally(() => { settledCount++; }))
+    );
 
     // Allow stream to complete
     allowDeliver.resolve();
     await flush();
+
+    expect(settledCount).toBe(3);
 
     tracker.complete(sub);
     tracker.complete(bootstrap);
@@ -499,16 +526,29 @@ describe("tracker", () => {
     wait2.cancel();
 
     // Complete first wait
+    let wait1Resolved = false;
     allowFirst.resolve();
-    await wait1;
+    await wait1.then(() => {
+      wait1Resolved = true;
+    });
 
     // Wait2 should be cancelled
-    await wait2.catch(() => {});
+    let wait2Settled = false;
+    await wait2.catch(() => {}).finally(() => {
+      wait2Settled = true;
+    });
 
     // Complete third wait
+    let wait3Resolved = false;
     allowSecond.resolve();
-    await wait3;
+    await wait3.then(() => {
+      wait3Resolved = true;
+    });
     await flush();
+
+    expect(wait1Resolved).toBeTrue();
+    expect(wait2Settled).toBeTrue();
+    expect(wait3Resolved).toBeTrue();
 
     tracker.complete(sub);
     tracker.complete(bootstrap);
@@ -577,11 +617,16 @@ describe("tracker", () => {
 
     // Cancel before value is delivered
     wait.cancel();
-    await wait.catch(() => {});
+    let settled = false;
+    await wait.catch(() => {}).finally(() => {
+      settled = true;
+    });
 
     // Now allow delivery
     delayValue.resolve();
     await flush();
+
+    expect(settled).toBeTrue();
 
     tracker.complete(sub);
     tracker.complete(bootstrap);
