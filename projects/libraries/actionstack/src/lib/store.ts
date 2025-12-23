@@ -196,7 +196,7 @@ export function createStore<T = any>(
 
     let newState = state; // start with current state
 
-    store.tracker?.reset();
+
     const handler = getActionHandlers(action.type);
 
     if (handler) {
@@ -227,11 +227,6 @@ export function createStore<T = any>(
     if (newState !== state) {
       state = newState;
       currentState.next(state as T);
-    }
-
-    // Wait for state propagation if required
-    if (settings.awaitStatePropagation) {
-      await store.tracker?.waitAll();
     }
   };
 
@@ -636,7 +631,29 @@ export function createStore<T = any>(
 
   store = enhancer(() => store)(settings);
   let originalDispatch = store.dispatch;
-  store.dispatch = (action) => queue.enqueue(() => originalDispatch(action));
+  store.dispatch = (action) => {
+    // Fast path: avoid creating closures/promises if no tracking is needed
+    if (!settings.awaitStatePropagation || !store.tracker) {
+      return queue.enqueue(() => originalDispatch(action));
+    }
+
+    let result: any;
+
+    return queue
+      .enqueue(async () => {
+        store.tracker!.reset();
+
+        // Preserve dispatch return value
+        result = originalDispatch(action);
+
+        // Support async dispatch (thunks, effects, etc.)
+        await Promise.resolve(result);
+      })
+      .then(async () => {
+        await store.tracker!.waitAll();
+        return result;
+      });
+  };
   
   initializeStore(store);
   return store;
