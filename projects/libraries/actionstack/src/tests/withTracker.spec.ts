@@ -10,29 +10,28 @@ describe("withTracker", () => {
 
   it("attaches tracker and flush() to the store", async () => {
     const enhancer = withTracker();
-    spyOn(enhancer.tracker, "waitAll").and.resolveTo();
 
     const store: any = createStore(enhancer);
+    spyOn(store.tracker, "waitAll").and.resolveTo();
 
-    expect(store.tracker).toBe(enhancer.tracker);
     expect(typeof store.flush).toBe("function");
 
     await store.flush();
-    expect(enhancer.tracker.waitAll).toHaveBeenCalled();
+    expect(store.tracker.waitAll).toHaveBeenCalled();
   });
 
   it("wraps select() subscriptions and calls tracker.track()", async () => {
     const enhancer = withTracker();
-    spyOn(enhancer.tracker, "track").and.stub();
-    spyOn(enhancer.tracker, "complete").and.stub();
 
     const store = createStore<any>(enhancer);
+    spyOn(store.tracker, "track").and.stub();
+    spyOn(store.tracker, "complete").and.stub();
     await store.dispatch({ type: "TEST/FLUSH" });
 
     const stream = store.select((s) => (s as any).system?._ready, false);
     const sub = stream.subscribe({ next: () => {} });
 
-    expect(enhancer.tracker.track).toHaveBeenCalled();
+    expect(store.tracker.track).toHaveBeenCalled();
     sub.unsubscribe();
   });
 });

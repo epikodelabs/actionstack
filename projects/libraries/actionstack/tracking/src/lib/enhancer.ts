@@ -12,7 +12,6 @@ import { createTracker } from "./tracker";
  *
  * The tracker is:
  * - attached to the store instance BEFORE initialization
- * - exposed on the enhancer itself
  * - fully optional at runtime
  * - integrated with select() method for subscription tracking
  * - uses Streamix tracing for `waitAll()` synchronization
@@ -59,9 +58,6 @@ export function withTracker(): StoreEnhancer {
 
     return storeWithTracker;
   };
-
-  // Expose tracker on the enhancer itself (tests + diagnostics).
-  (enhancer as StoreEnhancer & { tracker: Tracker }).tracker = tracker;
 
   return enhancer;
 }

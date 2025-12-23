@@ -400,13 +400,13 @@ describe('store', () => {
 
   it('awaitStatePropagation waits on tracker when enabled', async () => {
     const enhancer = withTracker();
-    spyOn(enhancer.tracker, 'waitAll').and.resolveTo();
 
     const store: any = createStore({ awaitStatePropagation: true }, enhancer as any);
+    spyOn(store.tracker, 'waitAll').and.resolveTo();
     await flush(store);
 
     await store.dispatch({ type: 'TEST/AWAIT' });
-    expect(enhancer.tracker.waitAll).toHaveBeenCalled();
+    expect(store.tracker.waitAll).toHaveBeenCalled();
   });
 
   it('populate skips already loaded modules and warns', async () => {

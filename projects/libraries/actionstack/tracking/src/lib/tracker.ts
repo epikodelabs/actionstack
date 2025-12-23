@@ -1,6 +1,10 @@
 import type { Tracker } from "@actioncrew/actionstack";
 import { scheduler, type Subscription } from "@actioncrew/streamix";
-import { enableTracing, ValueTracer } from "@actioncrew/streamix/tracing";
+import {
+  createValueTracer,
+  enableTracing,
+  type ValueTracer,
+} from "@actioncrew/streamix/tracing";
 import { CancelablePromise } from "./promise";
 
 const MAX_TRACES = 10_000;
@@ -13,7 +17,7 @@ const DEFAULT_TIMEOUT = 30_000;
 let sharedTracer: ValueTracer | null = null;
 
 function getSharedTracer(): ValueTracer {
-  sharedTracer ??= new ValueTracer({ maxTraces: MAX_TRACES });
+  sharedTracer ??= createValueTracer({ maxTraces: MAX_TRACES });
   return sharedTracer;
 }
 
