@@ -70,6 +70,9 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
     tracer.clear();
   };
 
+  const isInFlight = (state: string) =>
+    state === "emitted" || state === "processing" || state === "transformed";
+
   /**
    * Waits until tracing indicates there are no in-flight values.
    *
@@ -86,7 +89,7 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
       const allTrackedTerminal = (): boolean => {
         for (const t of tracer.getAllTraces()) {
           if (!trackedIds.has(t.valueId)) continue;
-          if (t.state === "emitted" || t.state === "processing" || t.state === "transformed") {
+          if (isInFlight(t.state)) {
             return false;
           }
         }
@@ -122,9 +125,7 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
    */
   const buildTimeoutError = (t: ValueTracer) => {
     const traces = t.getAllTraces();
-    const inflight = traces.filter(
-      x => x.state === "emitted" || x.state === "processing"
-    );
+    const inflight = traces.filter((x) => isInFlight(x.state));
 
     let msg = `Timeout reached waiting for stream execution (${timeout}ms)\n`;
     msg += `Traces: total=${traces.length}, inflight=${inflight.length}\n`;
@@ -145,11 +146,19 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
     return new Error(msg);
   };
 
+  const enqueueWait = (work: () => Promise<void>) => {
+    const run = waitQueue.then(work);
+    waitQueue = run.catch(() => {
+      // Swallow errors so they don't propagate to next waiter
+    });
+    return run;
+  };
+
   const waitAll = (): CancelablePromise<void> => {
     // Create the actual work as a regular promise
     let innerWait: CancelablePromise<void> | null = null;
     let canceled = false;
-    const work = waitQueue.then(async () => {
+    const work = enqueueWait(async () => {
       if (canceled) return;
       // Let initial microtasks enqueue tracing hooks / iterator steps.
       await new Promise<void>(r => queueMicrotask(r));
@@ -164,11 +173,6 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
       } finally {
         innerWait = null;
       }
-    });
-
-    // Update the queue with the regular promise (not cancelable)
-    waitQueue = work.catch(() => {
-      // Swallow errors so they don't propagate to next waiter
     });
 
     // Now wrap it in a CancelablePromise for the caller

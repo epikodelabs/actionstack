@@ -1,5 +1,3 @@
-import "@actioncrew/streamix/tracing"; // IMPORTANT: registers runtime hooks
-
 import {
   buffer,
   createOperator,
