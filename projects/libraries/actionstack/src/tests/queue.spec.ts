@@ -63,7 +63,7 @@ describe("queue", () => {
     expect(q.isEmpty).toBeTrue();
   });
 
-  it("does not lock the queue after a failure", async () => {
+  it("does not stall the queue after a failure", async () => {
     const q = createQueue();
     const events: string[] = [];
 

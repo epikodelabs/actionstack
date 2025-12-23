@@ -41,6 +41,7 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
 
   // Tracing integration (test-scoped).
   const tracer = getSharedTracer();
+  tracer.clear();
   enableTracing(tracer);
   const tracingEnabled = true;
 
@@ -89,67 +90,49 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
    *
    * Implementation details:
    * - Returns a CancelablePromise that can be cancelled.
-   * - Subscribes to tracer events (public API) to avoid polling-only logic.
-   * - Also polls at a small interval as a safety net (in case an event is missed).
-   * - Ensures proper cleanup of the subscription + timers.
+   * - Uses a simple flush + poll loop to avoid re-entrant tracing deadlocks.
    */
   const waitUsingTracing = (): CancelablePromise<void> => {
-  return new CancelablePromise<void>(function* () {
-    if (!tracingEnabled) {
-      return;
-    }
+    return new CancelablePromise<void>(function* () {
+      if (!tracingEnabled) return;
 
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    let pollId: ReturnType<typeof setInterval> | null = null;
-    let unsubscribeFn: any = null;
-
-    try {
-      // Drive initial work
+      // Snapshot traces known at the start of this wait.
       yield scheduler.flush();
+      const trackedIds = new Set(tracer.getAllTraces().map((t) => t.valueId));
 
-      const waitPromise = new Promise<void>((resolve, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(buildTimeoutError(tracer));
-        }, timeout);
-
-        const checkSettled = async () => {
-          if (!allTracesTerminal()) return;
-          
-          // Before resolving, flush once more to see if new work appears
-          await scheduler.flush();
-          
-          // Check again after the flush
-          if (allTracesTerminal()) {
-            resolve();
+      const allTrackedTerminal = (): boolean => {
+        for (const t of tracer.getAllTraces()) {
+          if (!trackedIds.has(t.valueId)) continue;
+          if (t.state === "emitted" || t.state === "processing" || t.state === "transformed") {
+            return false;
           }
-        };
+        }
+        return true;
+      };
 
-        // Quick exit if already settled
-        checkSettled();
+      const start = Date.now();
+      while (true) {
+        // Drive any pending work
+        yield scheduler.flush();
 
-        // Event-driven fast path
-        unsubscribeFn = tracer.subscribe({
-          delivered: checkSettled,
-          filtered: checkSettled,
-          collapsed: checkSettled,
-          dropped: checkSettled,
-        });
+        if (allTrackedTerminal()) {
+          // One extra flush to deliver callbacks for the tracked traces.
+          yield scheduler.flush();
+          if (allTrackedTerminal()) break;
+        }
 
-        // Safety net polling
-        pollId = setInterval(checkSettled, 10);
-      });
+        if (Date.now() - start > timeout) {
+          throw buildTimeoutError(tracer);
+        }
 
-      yield waitPromise;
-      // Give any queued scheduler work a chance to run
+        // Give the runtime a moment before checking again
+        yield new Promise<void>((resolve) => setTimeout(resolve, 10));
+      }
+
+      // Final flush to deliver any queued callbacks
       yield scheduler.flush();
-    } finally {
-      // Cleanup
-      if (timeoutId !== null) clearTimeout(timeoutId);
-      if (pollId !== null) clearInterval(pollId);
-      if (unsubscribeFn !== null) unsubscribeFn();
-    }
-  });
-};
+    });
+  };
 
   /**
    * Builds a detailed timeout error showing what is still in-flight.
@@ -181,12 +164,16 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
 
   const waitAll = (): CancelablePromise<void> => {
     // Create the actual work as a regular promise
+    let innerWait: CancelablePromise<void> | null = null;
+    let canceled = false;
     const work = waitQueue.then(async () => {
+      if (canceled) return;
       // Let initial microtasks enqueue tracing hooks / iterator steps.
       await new Promise<void>(r => queueMicrotask(r));
+      if (canceled) return;
       
       // Do the actual waiting (but convert to regular promise for the queue)
-      const innerWait = waitUsingTracing();
+      innerWait = waitUsingTracing();
       activeWaits.add(innerWait);
       
       try {
@@ -211,6 +198,15 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
     cancelableWait.finally(() => {
       activeWaits.delete(cancelableWait);
     });
+
+    const originalCancel = cancelableWait.cancel.bind(cancelableWait);
+    cancelableWait.cancel = () => {
+      canceled = true;
+      if (innerWait) {
+        innerWait.cancel();
+      }
+      originalCancel();
+    };
 
     return cancelableWait;
   };
