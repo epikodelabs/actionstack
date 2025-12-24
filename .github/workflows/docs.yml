@@ -41,7 +41,7 @@ jobs:
       - name: Copy additional docs
         run: |
           mkdir -p docs
-          cp docs/articles/*.md docs/ || true
+          cp docs/*.md docs/ || true
 
       # 5️⃣ Generate Typedoc Markdown for API
       - name: Generate API docs
@@ -69,14 +69,14 @@ jobs:
       # 8️⃣ Use main README as homepage and link to API folder
       - name: Create site index.md
         run: |
-          cp README.md docs/index.md
+          cp docs/README.md docs/index.md
           echo "" >> docs/index.md
           echo "## API Reference" >> docs/index.md
           echo "Check the detailed [API Reference here](./api/)." >> docs/index.md
 
       # 9️⃣ Build VitePress site
       - name: Build documentation site
-        run: npx vitepress build docs --ignoreDeadLinks
+        run: npx vitepress build docs --config vitepress.config.ts --ignoreDeadLinks
 
       # 🔟 Setup Pages
       - name: Setup Pages
