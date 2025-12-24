@@ -18,7 +18,7 @@
     <img src="https://img.shields.io/npm/dm/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Downloads">
   </a>
   <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
-    <img src="https://raw.githubusercontent.com/epikodelabs/actionstack/v3/projects/libraries/actionstack/bundle-size.svg" alt="Bundle Size">
+    <img src="https://raw.githubusercontent.com/epikodelabs/actionstack/master/projects/libraries/actionstack/bundle-size.svg" alt="Bundle Size">
   </a>
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
     <img src="https://img.shields.io/badge/AI-Powered-blue" alt="AI-Powered">
@@ -213,7 +213,7 @@ The combination of Streamix's `query()` method and ActionStack's thunks creates 
 
 ## 🆚 ActionStack vs Other Solutions
 
-| Feature | ActionStack V3 | Redux + RTK | Zustand |
+| Feature | ActionStack | Redux + RTK | Zustand |
 |---------|----------------|-------------|---------|
 | Bundle Size | Minimal | Large | Small |
 | Reactivity | Built-in | Manual | Manual |
