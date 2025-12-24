@@ -12,8 +12,8 @@
     "minify": "node terser.mjs && npx dts-bundler",
     "bundle": "dts-bundle-generator --config bundle.config.cjs && npm run minify",
     "docs:generate": "typedoc --plugin typedoc-plugin-markdown --out docs/api --hideBreadcrumbs --hidePageHeader",
-    "docs:dev": "npm run docs:generate && vitepress dev docs",
-    "docs:build": "npm run docs:generate && vitepress build docs"
+    "docs:dev": "npm run docs:generate && vitepress dev docs --config vitepress.config.ts",
+    "docs:build": "npm run docs:generate && vitepress build docs --config vitepress.config.ts"
   },
   "dependencies": {
     "@epikodelabs/streamix": "2.0.27",

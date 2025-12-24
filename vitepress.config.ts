@@ -15,7 +15,7 @@ export default defineConfig({
       { text: 'Home', link: '/README' },
       { text: 'Changelog', link: '/CHANGELOG' },
       { text: 'API Reference', link: '/api/' },
-      { text: 'GitHub', link: 'https://github.com/actioncrew/actionstack' }
+      { text: 'GitHub', link: 'https://github.com/epikodelabs/actionstack' }
     ],
 
     // Sidebar configuration
