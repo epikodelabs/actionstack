@@ -83,7 +83,7 @@ jobs:
 
       # 🔟 Build VitePress site (base is already set in config)
       - name: Build documentation site
-        run: npx vitepress build docs --ignoreDeadLinks
+        run: npx vitepress build docs --config ./vitepress.config.ts --ignoreDeadLinks
 
       # 1️⃣1️⃣ Setup Pages
       - name: Setup Pages
