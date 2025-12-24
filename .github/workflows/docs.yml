@@ -76,7 +76,7 @@ jobs:
 
       # 9️⃣ Build VitePress site
       - name: Build documentation site
-        run: npx vitepress build docs --config vitepress.config.ts --ignoreDeadLinks
+        run: npx vitepress build docs --config vitepress.config.ts --base /actionstack --ignoreDeadLinks
 
       # 🔟 Setup Pages
       - name: Setup Pages
