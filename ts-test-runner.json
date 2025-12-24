@@ -1,0 +1,37 @@
+{
+  "srcDirs": [
+    "./projects/libraries/actionstack/src/lib",
+    "./projects/libraries/actionstack/tools/src/lib"
+  ],
+  "testDirs": [
+    "./projects/libraries/actionstack/src/tests",
+    "./projects/libraries/actionstack/tools/src/tests"
+  ],
+  "exclude": [
+    "**/node_modules/**"
+  ],
+  "preserveOutputs": false,
+  "outDir": "dist/.vite-jasmine-build",
+  "browser": "chrome",
+  "headless": false,
+  "coverage": false,
+  "port": 8888,
+  "viteBuildOptions": {
+    "target": "es2022",
+    "sourcemap": true,
+    "minify": false,
+    "preserveModules": false,
+    "preserveModulesRoot": "."
+  },
+  "jasmineConfig": {
+    "env": {
+      "stopSpecOnExpectationFailure": false,
+      "random": true,
+      "timeout": 120000
+    }
+  },
+  "htmlOptions": {
+    "title": "Jasmine Tests Runner"
+  },
+  "suppressConsoleLogs": false
+}

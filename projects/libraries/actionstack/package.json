@@ -1,0 +1,28 @@
+{
+  "name": "@epikodelabs/actionstack",
+  "version": "3.0.15",
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "peerDependencies": {
+    "@epikodelabs/streamix": "^2.0.26"
+  },
+  "license": "MIT",
+  "homepage": "https://epikodelabs.github.io/actionstack",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/epikodelabs/actionstack.git"
+  },
+  "author": "Oleksii Shepel",
+  "email": "oleksii.shepel@outlook.com",
+  "keywords": [
+    "ActionStack",
+    "Streamix",
+    "Redux",
+    "state management",
+    "asynchronous store",
+    "reactive state"
+  ],
+  "type": "module"
+}
+
