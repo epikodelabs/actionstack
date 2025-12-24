@@ -1,4 +1,4 @@
-import { createLogger, logger } from "@actioncrew/actionstack/tools";
+import { createLogger, logger } from "@epikodelabs/actionstack/tools";
 
 describe("logger", () => {
   beforeEach(() => {
@@ -166,3 +166,4 @@ describe("createLogger", () => {
     expect(custom.log).toHaveBeenCalled();
   });
 });
+

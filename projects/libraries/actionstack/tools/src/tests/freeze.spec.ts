@@ -1,4 +1,4 @@
-import { storeFreeze } from "@actioncrew/actionstack/tools";
+import { storeFreeze } from "@epikodelabs/actionstack/tools";
 
 describe("storeFreeze", () => {
   it("deep-freezes state and payload before reducer, and freezes nextState", async () => {
@@ -44,3 +44,4 @@ describe("storeFreeze", () => {
     expect(Object.isFrozen(nextState.fn.inner)).toBeTrue();
   });
 });
+

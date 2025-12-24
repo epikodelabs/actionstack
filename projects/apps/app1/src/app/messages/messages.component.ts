@@ -1,8 +1,8 @@
 import { Component } from '@angular/core';
 import { messagesModule } from './messages.slice';
 import { store } from '../app.module';
-import type { Stream } from '@actioncrew/streamix';
-import { registerModule } from '@actioncrew/actionstack';
+import type { Stream } from '@epikodelabs/streamix';
+import { registerModule } from '@epikodelabs/actionstack';
 
 @Component({
   selector: 'app-messages',
@@ -28,3 +28,4 @@ export class MessagesComponent {
     messagesModule.actions.clearMessages();
   }
 }
+

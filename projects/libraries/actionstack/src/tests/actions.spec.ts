@@ -9,7 +9,7 @@ import {
   registerThunks,
   unregisterActionHandlers,
   unregisterThunks,
-} from "@actioncrew/actionstack";
+} from "@epikodelabs/actionstack";
 
 describe("actions", () => {
   beforeEach(() => {
@@ -190,3 +190,4 @@ describe("actions", () => {
     });
   });
 });
+

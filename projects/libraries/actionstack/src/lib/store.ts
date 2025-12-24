@@ -1,5 +1,5 @@
-import type { Stream } from '@actioncrew/streamix';
-import { createBehaviorSubject, distinctUntilChanged, map } from '@actioncrew/streamix';
+import type { Stream } from '@epikodelabs/streamix';
+import { createBehaviorSubject, distinctUntilChanged, map } from '@epikodelabs/streamix';
 import { action, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
 import { createModule, registerModule } from './module';
 import { createQueue } from './queue';
@@ -631,3 +631,4 @@ export function createStore<T = any>(
   initializeStore(store);
   return store;
 }
+

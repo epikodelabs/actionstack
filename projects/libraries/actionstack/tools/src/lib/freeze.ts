@@ -1,4 +1,4 @@
-import type { Action, AsyncReducer } from "@actioncrew/actionstack";
+import type { Action, AsyncReducer } from "@epikodelabs/actionstack";
 
 function deepFreeze (o: any) {
   Object.freeze(o);
@@ -35,3 +35,4 @@ export async function storeFreeze(reducer: AsyncReducer): Promise<AsyncReducer> 
     return nextState;
   };
 }
+

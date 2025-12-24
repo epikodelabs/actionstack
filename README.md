@@ -1,26 +1,26 @@
 <p align="center">
-  <img src="https://github.com/actioncrew/actionstack/blob/master/LOGO.png?raw=true" alt="ActionStack Logo" width="800">
+  <img src="https://github.com/epikodelabs/actionstack/blob/master/LOGO.png?raw=true" alt="ActionStack Logo" width="800">
 </p>
 
 <p align="center">
   <strong>Next-generation state management for reactive applications</strong><br>
-  Built on <a href="https://actioncrew.github.io/streamix" target="_blank" rel="external">Streamix</a> for ultimate performance and simplicity
+  Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="external">Streamix</a> for ultimate performance and simplicity
 </p>
 
 <p align="center">
-  <a href="https://github.com/actioncrew/actionstack/workflows/build/badge.svg">
-    <img src="https://github.com/actioncrew/actionstack/workflows/build/badge.svg" alt="Build Status">
+  <a href="https://github.com/epikodelabs/actionstack/workflows/build/badge.svg">
+    <img src="https://github.com/epikodelabs/actionstack/workflows/build/badge.svg" alt="Build Status">
   </a>
-  <a href="https://www.npmjs.com/package/@actioncrew/actionstack">
-    <img src="https://img.shields.io/npm/v/@actioncrew/actionstack.svg?style=flat-square" alt="NPM Version">
+  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
+    <img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Version">
   </a>
-  <a href="https://www.npmjs.com/package/@actioncrew/actionstack">
-    <img src="https://img.shields.io/npm/dm/@actioncrew/actionstack.svg?style=flat-square" alt="NPM Downloads">
+  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
+    <img src="https://img.shields.io/npm/dm/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Downloads">
   </a>
-  <a href="https://bundlephobia.com/package/@actioncrew/actionstack">
-    <img src="https://raw.githubusercontent.com/actioncrew/actionstack/v3/projects/libraries/actionstack/bundle-size.svg" alt="Bundle Size">
+  <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
+    <img src="https://raw.githubusercontent.com/epikodelabs/actionstack/v3/projects/libraries/actionstack/bundle-size.svg" alt="Bundle Size">
   </a>
-  <a href="https://www.npmjs.com/package/@actioncrew/actionstack">
+  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
     <img src="https://img.shields.io/badge/AI-Powered-blue" alt="AI-Powered">
   </a>
 </p>
@@ -42,7 +42,7 @@
 ## 📦 Installation
 
 ```bash
-npm install @actioncrew/actionstack
+npm install @epikodelabs/actionstack
 ```
 
 ---
@@ -50,7 +50,7 @@ npm install @actioncrew/actionstack
 ## 🚀 Quick Start
 
 ```typescript
-import { createStore, createModule, action, thunk, selector } from '@actioncrew/actionstack';
+import { createStore, createModule, action, thunk, selector } from '@epikodelabs/actionstack';
 
 // Actions with built-in state handlers
 const increment = action('increment', 
@@ -168,7 +168,7 @@ unregisterModule(store, featureModule, true);
 
 ### Stream Composition
 ```typescript
-import { combineLatest, map, filter, eachValueFrom } from '@actioncrew/streamix';
+import { combineLatest, map, filter, eachValueFrom } from '@epikodelabs/streamix';
 
 // Combine data from multiple modules
 const dashboardData$ = combineLatest([
@@ -224,15 +224,16 @@ The combination of Streamix's `query()` method and ActionStack's thunks creates 
 ---
 
 ## 📚 Resources
-- **[API Documentation](https://actioncrew.github.io/actionstack/api)**
-- **[GitHub Repository](https://github.com/actioncrew/actionstack)**
-- **[Community support](https://github.com/actioncrew/actionstack/discussions)**
-- **[Streamix: Reactive foundation](https://www.npmjs.com/package/@actioncrew/streamix)**
+- **[API Documentation](https://epikodelabs.github.io/actionstack/api)**
+- **[GitHub Repository](https://github.com/epikodelabs/actionstack)**
+- **[Community support](https://github.com/epikodelabs/actionstack/discussions)**
+- **[Streamix: Reactive foundation](https://www.npmjs.com/package/@epikodelabs/streamix)**
 
 ---
 
 <p align="center">
   <strong>Ready for next-gen state management? 🚀</strong><br>
-  <a href="https://www.npmjs.com/package/@actioncrew/actionstack">Install from NPM</a> • 
-  <a href="https://github.com/actioncrew/actionstack">View on GitHub</a>
+  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">Install from NPM</a> • 
+  <a href="https://github.com/epikodelabs/actionstack">View on GitHub</a>
 </p>
+

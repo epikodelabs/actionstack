@@ -1,4 +1,4 @@
-import { action, selector, createModule } from "@actioncrew/actionstack";
+import { action, selector, createModule } from "@epikodelabs/actionstack";
 
 // --- Slice name
 export const slice = "messages";
@@ -51,3 +51,4 @@ export const messagesModule = createModule({
 
   }
 });
+

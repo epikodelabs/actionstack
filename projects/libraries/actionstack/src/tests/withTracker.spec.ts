@@ -1,5 +1,5 @@
-import { createStore } from "@actioncrew/actionstack";
-import { withTracker } from "@actioncrew/actionstack/tracking";
+import { createStore } from "@epikodelabs/actionstack";
+import { withTracker } from "@epikodelabs/actionstack/tracking";
 
 describe("withTracker", () => {
   beforeEach(() => {
@@ -35,3 +35,4 @@ describe("withTracker", () => {
     sub.unsubscribe();
   });
 });
+

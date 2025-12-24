@@ -33,7 +33,7 @@ Instead of showing off with a complex example, ActionStack starts simple. You de
 ### Phase 1: The Foundation (Where Dreams Begin)
 
 ```typescript
-import { createModule, action, selector } from '@actioncrew/actionstack';
+import { createModule, action, selector } from '@epikodelabs/actionstack';
 
 interface Todo {
   id: string;
@@ -116,7 +116,7 @@ Notice what's missing? **Action type constants**. **Switch statements**. **The c
 Now let's add some async magic, because what's a modern app without at least seventeen API calls?
 
 ```typescript
-import { thunk } from '@actioncrew/actionstack';
+import { thunk } from '@epikodelabs/actionstack';
 
 // AI-powered task analysis (or at least we pretend it is)
 const analyzeTaskWithAI = thunk('analyzeTask', 
@@ -158,7 +158,7 @@ todoModule.actions.analyzeTaskWithAI = analyzeTaskWithAI;
 Here's where ActionStack really shines – reactive updates that feel like pure magic:
 
 ```typescript
-import { createStore } from '@actioncrew/actionstack';
+import { createStore } from '@epikodelabs/actionstack';
 
 // Initialize the store (one line, no ceremony)
 const store = createStore();
@@ -219,8 +219,9 @@ const todoModule = createModule({...});
 
 ActionStack is waiting to restore your faith in state management. Your codebase will be cleaner. Your team will be happier. Your 3 AM debugging sessions will become distant memories.
 
-The revolution starts with one `npm install @actioncrew/actionstack`. Are you ready to join it?
+The revolution starts with one `npm install @epikodelabs/actionstack`. Are you ready to join it?
 
 *Remember: The right programming patterns make all the difference between code that's a joy to work with and code that becomes a maintenance nightmare.*
 
-*[Try ActionStack today](https://www.npmjs.com/package/@actioncrew/actionstack) – because life's too short for bad state management. 🌟🚀*
+*[Try ActionStack today](https://www.npmjs.com/package/@epikodelabs/actionstack) – because life's too short for bad state management. 🌟🚀*
+

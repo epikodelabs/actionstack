@@ -1,4 +1,4 @@
-import type { Store } from '@actioncrew/actionstack';
+import type { Store } from '@epikodelabs/actionstack';
 import { Injectable } from '@angular/core';
 
 @Injectable({ providedIn: 'root' })
@@ -16,3 +16,4 @@ export class MessageService {
     this.messages = [];
   }
 }
+

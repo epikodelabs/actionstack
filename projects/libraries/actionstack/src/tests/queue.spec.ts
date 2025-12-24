@@ -1,4 +1,4 @@
-import { createQueue } from "@actioncrew/actionstack";
+import { createQueue } from "@epikodelabs/actionstack";
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -78,3 +78,4 @@ describe("queue", () => {
     expect(events).toEqual(["after"]);
   });
 });
+

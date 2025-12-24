@@ -6,7 +6,7 @@ import {
   isPromise,
   isStream,
   kindOf,
-} from "@actioncrew/actionstack";
+} from "@epikodelabs/actionstack";
 
 describe("kindOf", () => {
   const stream = { type: "stream", subscribe: () => ({ unsubscribe() {} }) };
@@ -175,3 +175,4 @@ describe("isAsync", () => {
     expect(isAsync(fn)).toBeFalse();
   });
 });
+

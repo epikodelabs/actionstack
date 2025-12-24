@@ -1,10 +1,10 @@
-import type { Tracker } from "@actioncrew/actionstack";
-import { scheduler, type Subscription } from "@actioncrew/streamix";
+import type { Tracker } from "@epikodelabs/actionstack";
+import { scheduler, type Subscription } from "@epikodelabs/streamix";
 import {
   createValueTracer,
   enableTracing,
   type ValueTracer,
-} from "@actioncrew/streamix/tracing";
+} from "@epikodelabs/streamix/tracing";
 import { CancelablePromise } from "./promise";
 
 const MAX_TRACES = 10_000;
@@ -318,3 +318,4 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
     cancelAll,
   };
 };
+

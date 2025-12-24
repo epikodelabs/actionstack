@@ -3,8 +3,8 @@ import {
   selectorAsync,
   selectStream,
   selectStreamAsync
-} from '@actioncrew/actionstack';
-import { createBehaviorSubject } from '@actioncrew/streamix';
+} from '@epikodelabs/actionstack';
+import { createBehaviorSubject } from '@epikodelabs/streamix';
 
 interface TestState {
   user: {
@@ -349,3 +349,4 @@ describe('integration', () => {
     expect(result).toBe(5);
   });
 });
+

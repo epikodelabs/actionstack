@@ -1,4 +1,4 @@
-import type { Store, StoreEnhancer, Tracker } from "@actioncrew/actionstack";
+import type { Store, StoreEnhancer, Tracker } from "@epikodelabs/actionstack";
 import { createTracker } from "./tracker";
 
 /**
@@ -61,3 +61,4 @@ export function withTracker(): StoreEnhancer {
 
   return enhancer;
 }
+

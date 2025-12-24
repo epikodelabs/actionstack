@@ -6,8 +6,8 @@ import type { Hero } from '../hero';
 import { HeroService } from './../hero.service';
 import { heroesModule } from './heroes.slice';
 import { store } from '../app.module';
-import type { Subscription } from '@actioncrew/streamix';
-import { registerModule, unregisterModule } from '@actioncrew/actionstack';
+import type { Subscription } from '@epikodelabs/streamix';
+import { registerModule, unregisterModule } from '@epikodelabs/actionstack';
 
 @Component({
   selector: 'app-heroes',
@@ -40,3 +40,4 @@ export class HeroesComponent implements OnInit, OnDestroy {
     unregisterModule(store, heroesModule, true);
   }
 }
+

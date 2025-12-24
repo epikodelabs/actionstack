@@ -1,4 +1,4 @@
-import type { Stream, Subject, Subscription } from '@actioncrew/streamix';
+import type { Stream, Subject, Subscription } from '@epikodelabs/streamix';
 import type { ActionQueue, Store, StoreSettings } from '../lib';
 
 /**
@@ -620,4 +620,5 @@ function isStream(obj: any): obj is Stream<unknown> {
 }
 
 export { isAction, isAsync, isBoxed, isPlainObject, isPromise, isStream, kindOf };
+
 

@@ -1,5 +1,5 @@
-import { map, mergeMap } from '@actioncrew/streamix';
-import type { Stream } from '@actioncrew/streamix';
+import { map, mergeMap } from '@epikodelabs/streamix';
+import type { Stream } from '@epikodelabs/streamix';
 
 /**
  * A selector extracts a value from state.
@@ -250,3 +250,4 @@ export function selectStreamAsync<T, R>(
 ): Stream<R> {
   return stateStream.pipe(mergeMap((state) => selector(state)));
 }
+

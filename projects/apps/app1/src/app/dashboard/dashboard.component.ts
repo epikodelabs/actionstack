@@ -6,7 +6,7 @@ import { RouterModule } from '@angular/router';
 import type { Hero } from '../hero';
 import { dashboardModule} from './dashboard.slice';
 import { store } from '../app.module';
-import type { Stream } from '@actioncrew/streamix';
+import type { Stream } from '@epikodelabs/streamix';
 import { registerModule } from 'projects/libraries/actionstack/src/lib/module';
 
 @Component({
@@ -31,3 +31,4 @@ export class DashboardComponent implements OnInit {
   ngOnDestroy(): void {
   }
 }
+

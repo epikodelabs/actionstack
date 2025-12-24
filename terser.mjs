@@ -50,13 +50,14 @@ let maps = allFiles.filter(path => path.match(/\.map$/));
 let js = allFiles.filter(path => path.match(/\.[mc]?js$/));
 // await minifyFiles(js);
 
-let definitions = allFiles.filter(path => !path.includes('@actioncrew') && path.match(/\.d\.ts$/));
+let definitions = allFiles.filter(path => !path.includes('@epikodelabs') && path.match(/\.d\.ts$/));
 await deleteFiles(definitions);
 
 fs.rmSync('./dist/actionstack/esm2022', {recursive: true, force: true});
 fs.rmSync('./dist/actionstack/lib', {recursive: true, force: true});
 fs.rmSync('./dist/actionstack/tools/lib', {recursive: true, force: true});
-fs.copyFileSync('./dist/actionstack/@actioncrew/index.d.ts', './dist/actionstack/index.d.ts');
-fs.copyFileSync('./dist/actionstack/tools/@actioncrew/index.d.ts', './dist/actionstack/tools/index.d.ts');
-fs.rmSync('./dist/actionstack/@actioncrew', {recursive: true, force: true});
-fs.rmSync('./dist/actionstack/tools/@actioncrew', {recursive: true, force: true});
+fs.copyFileSync('./dist/actionstack/@epikodelabs/index.d.ts', './dist/actionstack/index.d.ts');
+fs.copyFileSync('./dist/actionstack/tools/@epikodelabs/index.d.ts', './dist/actionstack/tools/index.d.ts');
+fs.rmSync('./dist/actionstack/@epikodelabs', {recursive: true, force: true});
+fs.rmSync('./dist/actionstack/tools/@epikodelabs', {recursive: true, force: true});
+

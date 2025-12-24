@@ -15,8 +15,8 @@ Every **action** gets a quick vibe check before it can slide into the dispatch a
 Middleware hooks into your dispatch to keep things tight. Set it up like this:
 
 ```ts
-import { createStore, applyMiddleware } from '@actioncrew/actionstack';
-import { logger, perfmon, storeFreeze } from '@actioncrew/actionstack/tools';
+import { createStore, applyMiddleware } from '@epikodelabs/actionstack';
+import { logger, perfmon, storeFreeze } from '@epikodelabs/actionstack/tools';
 
 export const store = createStore(applyMiddleware(logger, perfmon, storeFreeze));
 ```
@@ -57,14 +57,14 @@ The state’s bodyguard, keeping it untouchable.
 Snag ActionStack:
 
 ```bash
-npm install @actioncrew/actionstack
+npm install @epikodelabs/actionstack
 ```
 
 Then, plug in the tools:
 
 ```ts
-import { createStore, applyMiddleware } from '@actioncrew/actionstack';
-import { logger, storeFreeze } from '@actioncrew/actionstack/tools';
+import { createStore, applyMiddleware } from '@epikodelabs/actionstack';
+import { logger, storeFreeze } from '@epikodelabs/actionstack/tools';
 
 export const store = createStore(applyMiddleware(logger, storeFreeze));
 ```
@@ -74,3 +74,4 @@ export const store = createStore(applyMiddleware(logger, storeFreeze));
 Logger, Performance Monitor, and State Freezer are your app’s all-star crew, posted up between actions and `store.dispatch`. They track, time, and protect, so your app stays slick and stress-free. 
 
 *“You won’t lose your mind if you use the right tools in the right place. Because, seriously, who needs the chaos of a buggy app when you’ve got this squad?” 🌟🚀*
+

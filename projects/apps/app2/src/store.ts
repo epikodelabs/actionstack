@@ -1,4 +1,4 @@
-import { createModule, action, selector } from '@actioncrew/actionstack';
+import { createModule, action, selector } from '@epikodelabs/actionstack';
 
 export type CounterState = { count: number };
 
@@ -18,3 +18,4 @@ export let counter = createModule({
     count: selector((s: CounterState) => s.count),
   },
 });
+

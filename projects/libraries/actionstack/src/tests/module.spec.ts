@@ -6,7 +6,7 @@ import {
   selector,
   thunk,
   unregisterModule,
-} from "@actioncrew/actionstack";
+} from "@epikodelabs/actionstack";
 
 describe("module", () => {
   it("namespaces action creator types and dispatches via module.actions", () => {
@@ -344,3 +344,4 @@ describe("module", () => {
     expect((mod.selectors as any).v(undefined)).toBeUndefined();
   });
 });
+

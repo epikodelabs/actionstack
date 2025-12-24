@@ -2,8 +2,8 @@ import { Injectable } from '@angular/core';
 
 import type { Hero } from './hero';
 import { HEROES } from './mock-heroes';
-import { fromPromise } from '@actioncrew/streamix';
-import type { Stream } from '@actioncrew/streamix';
+import { fromPromise } from '@epikodelabs/streamix';
+import type { Stream } from '@epikodelabs/streamix';
 
 @Injectable({ providedIn: 'root' })
 export class HeroService {
@@ -28,3 +28,4 @@ export class HeroService {
     }));
   }
 }
+

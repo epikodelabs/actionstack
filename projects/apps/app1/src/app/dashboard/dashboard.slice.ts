@@ -1,8 +1,8 @@
 import { messagesModule } from './../messages/messages.slice';
-import { action,  selector, createModule, thunk } from '@actioncrew/actionstack';
+import { action,  selector, createModule, thunk } from '@epikodelabs/actionstack';
 import type { Hero } from '../hero';
 import type { addMessage } from '../messages/messages.slice';
-import { firstValueFrom } from '@actioncrew/streamix';
+import { firstValueFrom } from '@epikodelabs/streamix';
 import { HeroService } from '../hero.service';
 
 export const slice = "dashboard";
@@ -82,3 +82,4 @@ export const dashboardModule = createModule({
     heroService: new HeroService()
   }
 });
+

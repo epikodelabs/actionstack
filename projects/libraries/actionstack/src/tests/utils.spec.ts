@@ -1,8 +1,8 @@
 // utils.spec.ts - Jasmine Tests
 
-import { applyMiddleware, combineEnhancers, combineReducers, deepMerge, getProperty, setProperty } from '@actioncrew/actionstack';
-import type { StoreCreator, StoreEnhancer } from '@actioncrew/actionstack';
-import { createBehaviorSubject } from '@actioncrew/streamix';
+import { applyMiddleware, combineEnhancers, combineReducers, deepMerge, getProperty, setProperty } from '@epikodelabs/actionstack';
+import type { StoreCreator, StoreEnhancer } from '@epikodelabs/actionstack';
+import { createBehaviorSubject } from '@epikodelabs/streamix';
 
 describe('getProperty', () => {
   it('should retrieve top-level properties', () => {
@@ -608,3 +608,4 @@ describe('integration', () => {
     expect(results[2]).toEqual({ counter: 1 });
   });
 });
+

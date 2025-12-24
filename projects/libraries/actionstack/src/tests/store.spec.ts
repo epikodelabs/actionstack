@@ -1,12 +1,12 @@
-import type { Store } from '@actioncrew/actionstack';
+import type { Store } from '@epikodelabs/actionstack';
 import {
   action,
   applyMiddleware,
   createModule,
   createStore,
   thunk,
-} from '@actioncrew/actionstack';
-import { withTracker } from '@actioncrew/actionstack/tracking';
+} from '@epikodelabs/actionstack';
+import { withTracker } from '@epikodelabs/actionstack/tracking';
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -583,3 +583,4 @@ describe('store', () => {
     expect((await readState<any>(store, 'res')).ok).toBe(1);
   });
 });
+

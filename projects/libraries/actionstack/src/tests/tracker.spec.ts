@@ -5,10 +5,10 @@ import {
   filter,
   map,
   scheduler,
-} from "@actioncrew/streamix";
+} from "@epikodelabs/streamix";
 
-import { createTracker } from "@actioncrew/actionstack/tracking";
-import { disableTracing } from "@actioncrew/streamix/tracing";
+import { createTracker } from "@epikodelabs/actionstack/tracking";
+import { disableTracing } from "@epikodelabs/streamix/tracing";
 
 async function flush(): Promise<void> {
   await scheduler.flush();

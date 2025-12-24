@@ -1,6 +1,6 @@
-# 🧭 Mastering Starter Middleware in @actioncrew/actionstack
+# 🧭 Mastering Starter Middleware in @epikodelabs/actionstack
 
-Starter middleware in **@actioncrew/actionstack** is the backbone of your store’s middleware pipeline, orchestrating action processing with a focus on asynchronous workflows and concurrency control.
+Starter middleware in **@epikodelabs/actionstack** is the backbone of your store’s middleware pipeline, orchestrating action processing with a focus on asynchronous workflows and concurrency control.
 
 ## 🧩 What It Does
 
@@ -30,7 +30,7 @@ By using a robust locking mechanism, the middleware guarantees state is isolated
 
 ## 🤝 Thunks vs Callable Thunks
 
-In **@actioncrew/actionstack**, the starter middleware orchestrates asynchronous logic through two distinct types of thunks.
+In **@epikodelabs/actionstack**, the starter middleware orchestrates asynchronous logic through two distinct types of thunks.
 
 **Thunks** are functions that you directly invoke as a method (e.g., userModule.actions.loginUser()). The middleware intercepts this call and executes the thunk's logic, providing it with getState and dependencies. This is the standard way to handle user-initiated async workflows.
 
@@ -39,7 +39,7 @@ In **@actioncrew/actionstack**, the starter middleware orchestrates asynchronous
 ### ⚙️ Practical Example
 
 ```javascript
-import { createStore, applyMiddleware, createModule, action, thunk } from '@actioncrew/actionstack';
+import { createStore, applyMiddleware, createModule, action, thunk } from '@epikodelabs/actionstack';
 
 // Define a user module
 const userModule = createModule({
@@ -107,6 +107,7 @@ The combination of direct thunks and trigger-based callable thunks enables a cle
 
 ## 🧵 Final Thoughts
 
-The **starter** middleware is your app’s ultimate hype crew, turning chaotic async actions into a smooth, predictable dance party. With thunks, locks, and triggers, it ensures your state management is as seamless as a perfectly timed playlist. So crank up the code, let the actions flow, and keep building epic apps with **@actioncrew/actionstack**!
+The **starter** middleware is your app’s ultimate hype crew, turning chaotic async actions into a smooth, predictable dance party. With thunks, locks, and triggers, it ensures your state management is as seamless as a perfectly timed playlist. So crank up the code, let the actions flow, and keep building epic apps with **@epikodelabs/actionstack**!
 
 *Keep the state groovin’ and the async movin’—your app’s got this! 🌟🚀*
+

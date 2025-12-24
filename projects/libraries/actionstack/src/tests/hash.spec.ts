@@ -1,4 +1,4 @@
-import { hash, isValidSignature, salt, signature } from "@actioncrew/actionstack";
+import { hash, isValidSignature, salt, signature } from "@epikodelabs/actionstack";
 
 describe("hash", () => {
   it("salt() returns a fixed-length base36 string", () => {
@@ -22,3 +22,4 @@ describe("hash", () => {
     expect(isValidSignature(tampered)).toBeFalse();
   });
 });
+

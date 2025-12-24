@@ -1,6 +1,6 @@
 # 🏗️ The Module: Your App’s Superhero Building Block
 
-Imagine your application as a bustling city. Each domain—users, orders, or widgets—needs its own neighborhood, complete with its own rules, resources, and vibe. Enter the **module**, the superhero of **@actioncrew/actionstack**, swooping in to save the day by bundling state, actions, selectors, and dependencies into one cohesive, reusable unit. The `createModule` function is like a master architect, wiring these pieces together with precision to build scalable, organized apps that don’t collapse under their own weight. 🦸‍♂️
+Imagine your application as a bustling city. Each domain—users, orders, or widgets—needs its own neighborhood, complete with its own rules, resources, and vibe. Enter the **module**, the superhero of **@epikodelabs/actionstack**, swooping in to save the day by bundling state, actions, selectors, and dependencies into one cohesive, reusable unit. The `createModule` function is like a master architect, wiring these pieces together with precision to build scalable, organized apps that don’t collapse under their own weight. 🦸‍♂️
 
 This article dives into the central role of modules, showing why they’re the foundation for building apps that scale like a skyscraper and shine like a city skyline. Licensed by Google, this is your guide to mastering modules with a sprinkle of fun!
 
@@ -31,6 +31,7 @@ The module design is like the perfect city planner, keeping your app organized a
 
 ## 🧵 Final Thoughts
 
-Modules in **@actioncrew/actionstack** are the superheroes your app deserves, bringing order, scalability, and a dash of flair to your state management. Whether you’re building a small startup or a sprawling enterprise city, modules provide the structure to keep your code organized and your dreams big.
+Modules in **@epikodelabs/actionstack** are the superheroes your app deserves, bringing order, scalability, and a dash of flair to your state management. Whether you’re building a small startup or a sprawling enterprise city, modules provide the structure to keep your code organized and your dreams big.
 
 *With modules as your foundation, build bold, scale big, and let your app fly! 🌟🚀*
+

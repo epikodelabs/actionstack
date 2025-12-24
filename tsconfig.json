@@ -22,13 +22,13 @@
     "target": "ES2022",
     "module": "ES2022",
     "paths": {
-      "@actioncrew/actionstack/tools": [
+      "@epikodelabs/actionstack/tools": [
         "./projects/libraries/actionstack/tools/src/public-api.ts"
       ],
-      "@actioncrew/actionstack/tracking": [
+      "@epikodelabs/actionstack/tracking": [
         "./projects/libraries/actionstack/tracking/src/public-api.ts"
       ],
-      "@actioncrew/actionstack": [
+      "@epikodelabs/actionstack": [
         "./projects/libraries/actionstack/src/public-api.ts"
       ]
     },
@@ -49,3 +49,4 @@
     "projects/apps/app2/**"
   ]
 }
+

@@ -2,7 +2,7 @@ module.exports = {
   entries: [
     {
       filePath: './dist/actionstack/index.d.ts',
-      outFile: './dist/actionstack/@actioncrew/index.d.ts',
+      outFile: './dist/actionstack/@epikodelabs/index.d.ts',
       output: {
         inlineDeclareGlobals: false,
         noBanner: true,
@@ -10,13 +10,13 @@ module.exports = {
     },
     {
       filePath: './dist/actionstack/tools/index.d.ts',
-      outFile: './dist/actionstack/tools/@actioncrew/index.d.ts',
+      outFile: './dist/actionstack/tools/@epikodelabs/index.d.ts',
       output: {
         inlineDeclareGlobals: false,
         noBanner: true,
       },
       libraries: {
-        importedLibraries: ['@actioncrew/actionstack'],
+        importedLibraries: ['@epikodelabs/actionstack'],
         inlinedLibraries: [],
       }
     }
@@ -25,3 +25,4 @@ module.exports = {
     preferredConfigPath: './tsconfig.json'
   }
 };
+

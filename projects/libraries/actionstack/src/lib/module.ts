@@ -3,7 +3,7 @@ import {
   createSubject,
   switchMap,
   takeUntil
-} from '@actioncrew/streamix';
+} from '@epikodelabs/streamix';
 import { isAction } from '../lib';
 import type { ActionCreator, FeatureModule, Store, Streams, AsyncAction, Selector } from '../lib';
 
@@ -235,8 +235,8 @@ function processSelectors<
  * @template Selectors Shape of the processed selectors.
  * @param {any} moduleInstance The module object being initialized.
  * @param {Selectors} processedSelectors Processed selector factories.
- * @param {import('@actioncrew/streamix').ReplaySubject<void>} loaded$ Emits when the module is fully loaded.
- * @param {import('@actioncrew/streamix').Subject<void>} destroyed$ Emits when the module is destroyed.
+ * @param {import('@epikodelabs/streamix').ReplaySubject<void>} loaded$ Emits when the module is fully loaded.
+ * @param {import('@epikodelabs/streamix').Subject<void>} destroyed$ Emits when the module is destroyed.
  * @param {() => Store<State> | undefined} getStore Function that returns the store instance.
  */
 function initializeDataStreams<
@@ -421,3 +421,4 @@ function populateStore<
 }
 
 export { createModule, registerModule, unregisterModule, populateStore };
+

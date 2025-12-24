@@ -21,11 +21,11 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@actioncrew/actionstack/tools": [
+      "@epikodelabs/actionstack/tools": [
         "../../../dist/actionstack/tools",
         "../../../projects/libraries/actionstack/tools/src/public-api.ts"
       ],
-      "@actioncrew/actionstack": [
+      "@epikodelabs/actionstack": [
         "../../../dist/actionstack",
         "../../../projects/libraries/actionstack/src/public-api.ts"
       ]
@@ -33,3 +33,4 @@
   },
   "include": ["src"]
 }
+

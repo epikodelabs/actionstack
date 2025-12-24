@@ -1,4 +1,4 @@
-import type { Action } from '@actioncrew/actionstack';
+import type { Action } from '@epikodelabs/actionstack';
 import {
   createQueue,
   createActionHandler,
@@ -6,7 +6,7 @@ import {
   registerThunks,
   thunk,
   unregisterThunks,
-} from '@actioncrew/actionstack';
+} from '@epikodelabs/actionstack';
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -842,3 +842,4 @@ describe('starter', () => {
     });
   });
 });
+

@@ -1,6 +1,6 @@
 // Demonstrates hooking Streamix into UI intent -> ActionStack store updates
-import { createSubject, map, tap, filter, buffer, withLatestFrom } from '@actioncrew/streamix';
-import type { Subscription } from '@actioncrew/streamix';
+import { createSubject, map, tap, filter, buffer, withLatestFrom } from '@epikodelabs/streamix';
+import type { Subscription } from '@epikodelabs/streamix';
 import { counter } from './store';
 
 // UI intents
@@ -36,3 +36,4 @@ subscriptions.push(
   // Reset handler
   resetClicks$.pipe(tap(() => counter.actions.reset())).subscribe()
 );
+

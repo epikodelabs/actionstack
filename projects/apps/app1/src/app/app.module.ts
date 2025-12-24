@@ -1,11 +1,11 @@
-import { combineEnhancers, createStore } from '@actioncrew/actionstack';
-import { logger } from '@actioncrew/actionstack/tools';
+import { combineEnhancers, createStore } from '@epikodelabs/actionstack';
+import { logger } from '@epikodelabs/actionstack/tools';
 import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BrowserModule } from '@angular/platform-browser';
 
-import { applyMiddleware } from '@actioncrew/actionstack';
-import { withTracker } from '@actioncrew/actionstack/tracking';
+import { applyMiddleware } from '@epikodelabs/actionstack';
+import { withTracker } from '@epikodelabs/actionstack/tracking';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { MessagesModule } from './messages/messages.module';
@@ -27,4 +27,5 @@ export const store = createStore({ awaitStatePropagation: true }, combineEnhance
   bootstrap: [AppComponent],
 })
 export class AppModule {}
+
 

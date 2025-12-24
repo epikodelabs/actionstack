@@ -1,17 +1,17 @@
 {
-  "name": "@actioncrew/actionstack",
+  "name": "@epikodelabs/actionstack",
   "version": "3.0.15",
   "dependencies": {
     "tslib": "^2.3.0"
   },
   "peerDependencies": {
-    "@actioncrew/streamix": "^2.0.26"
+    "@epikodelabs/streamix": "^2.0.26"
   },
   "license": "MIT",
-  "homepage": "https://actioncrew.github.io/actionstack",
+  "homepage": "https://epikodelabs.github.io/actionstack",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/actioncrew/actionstack.git"
+    "url": "git+https://github.com/epikodelabs/actionstack.git"
   },
   "author": "Oleksii Shepel",
   "email": "oleksii.shepel@outlook.com",
@@ -25,3 +25,4 @@
   ],
   "type": "module"
 }
+

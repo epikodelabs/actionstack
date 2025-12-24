@@ -7,7 +7,7 @@ import type { Hero } from '../hero';
 import { loadHero, heroDetailsModule } from './hero-details.slice';
 import type { heroSelector } from './hero-details.slice';
 import { store } from '../app.module';
-import type { Stream } from '@actioncrew/streamix';
+import type { Stream } from '@epikodelabs/streamix';
 import { map, tap } from 'rxjs';
 import type { Subscription } from 'rxjs';
 import { registerModule } from 'projects/libraries/actionstack/src/lib/module';
@@ -49,3 +49,4 @@ export class HeroDetailsComponent implements OnInit {
     }
   }
 }
+
