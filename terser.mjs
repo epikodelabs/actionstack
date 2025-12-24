@@ -56,8 +56,5 @@ await deleteFiles(definitions);
 fs.rmSync('./dist/actionstack/esm2022', {recursive: true, force: true});
 fs.rmSync('./dist/actionstack/lib', {recursive: true, force: true});
 fs.rmSync('./dist/actionstack/tools/lib', {recursive: true, force: true});
-fs.copyFileSync('./dist/actionstack/@epikodelabs/index.d.ts', './dist/actionstack/index.d.ts');
-fs.copyFileSync('./dist/actionstack/tools/@epikodelabs/index.d.ts', './dist/actionstack/tools/index.d.ts');
-fs.rmSync('./dist/actionstack/@epikodelabs', {recursive: true, force: true});
-fs.rmSync('./dist/actionstack/tools/@epikodelabs', {recursive: true, force: true});
+fs.rmSync('./dist/actionstack/tracking/lib', {recursive: true, force: true});
 
