@@ -46,9 +46,13 @@ The next middleware function in the chain.
 
 `any` = `false`
 
+Boolean flag or legacy lock arg used to infer nested dispatch.
+
 #### maybeNestedDispatch
 
 `boolean` = `false`
+
+Indicates whether the action is dispatched from within another action.
 
 ### Returns
 

@@ -16,6 +16,9 @@
 
 - [ActionQueue](type-aliases/ActionQueue.md)
 - [Selector](type-aliases/Selector.md)
+- [AnySelector](type-aliases/AnySelector.md)
+- [StateOf](type-aliases/StateOf.md)
+- [ResultOf](type-aliases/ResultOf.md)
 - [ValueAtPath](type-aliases/ValueAtPath.md)
 - [StoreSettings](type-aliases/StoreSettings.md)
 - [Store](type-aliases/Store.md)
@@ -40,6 +43,7 @@
 - [StoreCreator](type-aliases/StoreCreator.md)
 - [StoreEnhancer](type-aliases/StoreEnhancer.md)
 - [Tracker](type-aliases/Tracker.md)
+- [PropertyPath](type-aliases/PropertyPath.md)
 
 ## Variables
 

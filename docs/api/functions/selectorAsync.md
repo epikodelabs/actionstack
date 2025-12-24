@@ -2,7 +2,7 @@
 
 ## Call Signature
 
-> **selectorAsync**\<`S1`, `R`\>(`s1`): (`state`) => `Promise`\<`ResultOf`\<`S1`\>\>
+> **selectorAsync**\<`S1`, `R`\>(`s1`): (`state`) => `Promise`\<[`ResultOf`](../type-aliases/ResultOf.md)\<`S1`\>\>
 
 Defined in: [selectors.ts:143](https://github.com/epikodelabs/actionstack/blob/v3/projects/libraries/actionstack/src/lib/selectors.ts#L143)
 
@@ -20,7 +20,7 @@ Only the projector may be async.
 
 #### S1
 
-`S1` *extends* `AnySelector`
+`S1` *extends* [`AnySelector`](../type-aliases/AnySelector.md)
 
 #### R
 
@@ -34,17 +34,17 @@ Only the projector may be async.
 
 ### Returns
 
-> (`state`): `Promise`\<`ResultOf`\<`S1`\>\>
+> (`state`): `Promise`\<[`ResultOf`](../type-aliases/ResultOf.md)\<`S1`\>\>
 
 #### Parameters
 
 ##### state
 
-`StateOf`\<`S1`\>
+[`StateOf`](../type-aliases/StateOf.md)\<`S1`\>
 
 #### Returns
 
-`Promise`\<`ResultOf`\<`S1`\>\>
+`Promise`\<[`ResultOf`](../type-aliases/ResultOf.md)\<`S1`\>\>
 
 ## Call Signature
 
@@ -66,7 +66,7 @@ Only the projector may be async.
 
 #### S1
 
-`S1` *extends* `AnySelector`
+`S1` *extends* [`AnySelector`](../type-aliases/AnySelector.md)
 
 #### R
 
@@ -90,7 +90,7 @@ Only the projector may be async.
 
 ##### state
 
-`StateOf`\<`S1`\>
+[`StateOf`](../type-aliases/StateOf.md)\<`S1`\>
 
 #### Returns
 
@@ -116,11 +116,11 @@ Only the projector may be async.
 
 #### S1
 
-`S1` *extends* `AnySelector`
+`S1` *extends* [`AnySelector`](../type-aliases/AnySelector.md)
 
 #### S2
 
-`S2` *extends* `AnySelector`
+`S2` *extends* [`AnySelector`](../type-aliases/AnySelector.md)
 
 #### R
 
@@ -148,7 +148,7 @@ Only the projector may be async.
 
 ##### state
 
-`StateOf`\<`S1`\>
+[`StateOf`](../type-aliases/StateOf.md)\<`S1`\>
 
 #### Returns
 
@@ -174,15 +174,15 @@ Only the projector may be async.
 
 #### S1
 
-`S1` *extends* `AnySelector`
+`S1` *extends* [`AnySelector`](../type-aliases/AnySelector.md)
 
 #### S2
 
-`S2` *extends* `AnySelector`
+`S2` *extends* [`AnySelector`](../type-aliases/AnySelector.md)
 
 #### S3
 
-`S3` *extends* `AnySelector`
+`S3` *extends* [`AnySelector`](../type-aliases/AnySelector.md)
 
 #### R
 
@@ -214,7 +214,7 @@ Only the projector may be async.
 
 ##### state
 
-`StateOf`\<`S1`\>
+[`StateOf`](../type-aliases/StateOf.md)\<`S1`\>
 
 #### Returns
 
@@ -240,19 +240,19 @@ Only the projector may be async.
 
 #### S1
 
-`S1` *extends* `AnySelector`
+`S1` *extends* [`AnySelector`](../type-aliases/AnySelector.md)
 
 #### S2
 
-`S2` *extends* `AnySelector`
+`S2` *extends* [`AnySelector`](../type-aliases/AnySelector.md)
 
 #### S3
 
-`S3` *extends* `AnySelector`
+`S3` *extends* [`AnySelector`](../type-aliases/AnySelector.md)
 
 #### S4
 
-`S4` *extends* `AnySelector`
+`S4` *extends* [`AnySelector`](../type-aliases/AnySelector.md)
 
 #### R
 
@@ -288,7 +288,7 @@ Only the projector may be async.
 
 ##### state
 
-`StateOf`\<`S1`\>
+[`StateOf`](../type-aliases/StateOf.md)\<`S1`\>
 
 #### Returns
 

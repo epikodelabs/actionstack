@@ -98,7 +98,7 @@ The object to retrieve the property from.
 
 The path to the property (e.g., "key" or ["user", "name"]).
 
-`"*"` | `PropertyPath`
+`"*"` | [`PropertyPath`](../type-aliases/PropertyPath.md)
 
 ### Returns
 

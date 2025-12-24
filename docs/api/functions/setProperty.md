@@ -114,7 +114,7 @@ The object to update.
 
 The path to the property (e.g., "key" or ["user", "name"]).
 
-`string` | `PropertyPath`
+`string` | [`PropertyPath`](../type-aliases/PropertyPath.md)
 
 #### value
 
