@@ -299,4 +299,7 @@ export const createStarter = () => {
 };
 
 // Create the starter middleware
+/**
+ * Default starter middleware instance.
+ */
 export const starter = createStarter();

@@ -1,12 +1,13 @@
 import type { Action, AsyncReducer, Reducer, StoreCreator, StoreEnhancer, Tree } from "./types";
 
+type PropertyPath = readonly (string | number)[];
+
 /**
  * Retrieves a property from an object based on a path.
  * @param obj - The object to retrieve the property from.
  * @param path - The path to the property (e.g., "key" or ["user", "name"]).
  * @returns The value of the property or `undefined` if the path is invalid.
  */
-type PropertyPath = readonly (string | number)[];
 export function getProperty<TObj>(obj: TObj, path: '*'): TObj;
 export function getProperty<TObj, K extends keyof NonNullable<TObj>>(
   obj: TObj,

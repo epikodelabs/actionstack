@@ -39,5 +39,8 @@ export const createPerformanceMonitor = () => {
 };
 
 // Create a pre-configured instance of the performance middleware
+/**
+ * Preconfigured performance monitor middleware.
+ */
 export const perfmon = createPerformanceMonitor();
 

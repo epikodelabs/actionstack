@@ -65,4 +65,7 @@ export function createQueue() {
   };
 }
 
+/**
+ * Type alias for the queue instance returned by {@link createQueue}.
+ */
 export type ActionQueue = ReturnType<typeof createQueue>;

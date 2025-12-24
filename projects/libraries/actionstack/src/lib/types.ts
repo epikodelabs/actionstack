@@ -26,10 +26,21 @@ export interface Action<T = any> {
   source?: any;
 }
 
+/**
+ * Dispatch function signature for synchronous actions and thunks.
+ *
+ * @template TState - The store state shape.
+ * @template TDependencies - Dependencies available to async actions.
+ */
 export type Dispatch<TState = any, TDependencies = any> = (
   action: Action | AsyncAction<TState, TDependencies>
 ) => Promise<void>;
 
+/**
+ * Getter function for the current store state.
+ *
+ * @template TState - The store state shape.
+ */
 export type GetState<TState = any> = () => TState;
 
 /**
@@ -303,6 +314,9 @@ export type ProcessingStrategy = "exclusive" | "concurrent";
  */
 export type SliceStrategy = "persistent" | "temporary";
 
+/**
+ * Maps selector definitions to stream factory functions.
+ */
 export type Streams<S extends Record<string, (state: any) => any>> = {
   [K in keyof S]: () => Stream<ReturnType<S[K]>>;
 };
@@ -435,6 +449,9 @@ export interface ActionStackTrackingHooks {
   complete?(subscription: Subscription): void;
 }
 
+/**
+ * Internal marker export used by tracking integrations.
+ */
 export const __ACTIONSTACK_TRACKING_HOOKS__ = 0;
 
 

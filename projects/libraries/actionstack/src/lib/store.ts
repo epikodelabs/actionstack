@@ -79,6 +79,12 @@ interface SystemState {
   _modules: string[];
 }
 
+/**
+ * Checks whether an action type belongs to the internal system namespace.
+ *
+ * @param type - Action type string to check.
+ * @returns True when the type starts with "system/".
+ */
 export function isSystemActionType(type: string): boolean {
   return typeof type === 'string' && type.startsWith('system/');
 }

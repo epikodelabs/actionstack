@@ -260,6 +260,9 @@ export const createLogger = (options: CreateLoggerOptions = {}) => {
   return loggerCreator;
 }
 
+/**
+ * Default logger middleware instance.
+ */
 const logger = createLogger();
 
 export { logger };
