@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/epikodelabs/actionstack/blob/master/LOGO.png?raw=true" alt="ActionStack Logo" width="500">
+  <img src="https://github.com/epikodelabs/actionstack/blob/main/LOGO.png?raw=true" alt="ActionStack Logo" width="500">
 </p>
 
 <p align="center">

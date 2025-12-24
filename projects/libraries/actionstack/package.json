@@ -1,11 +1,11 @@
 {
   "name": "@epikodelabs/actionstack",
-  "version": "3.0.15",
+  "version": "3.0.16",
   "dependencies": {
     "tslib": "^2.3.0"
   },
   "peerDependencies": {
-    "@epikodelabs/streamix": "^2.0.26"
+    "@epikodelabs/streamix": "^2.0.27"
   },
   "license": "MIT",
   "homepage": "https://epikodelabs.github.io/actionstack",

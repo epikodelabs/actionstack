@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/epikodelabs/actionstack/blob/master/LOGO.png?raw=true" alt="ActionStack Logo" width="500">
+  <img src="https://github.com/epikodelabs/actionstack/blob/main/LOGO.png?raw=true" alt="ActionStack Logo" width="500">
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
     <img src="https://img.shields.io/npm/dm/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Downloads">
   </a>
   <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
-    <img src="https://raw.githubusercontent.com/epikodelabs/actionstack/master/projects/libraries/actionstack/bundle-size.svg" alt="Bundle Size">
+    <img src="https://raw.githubusercontent.com/epikodelabs/actionstack/main/projects/libraries/actionstack/bundle-size.svg" alt="Bundle Size">
   </a>
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
     <img src="https://img.shields.io/badge/AI-Powered-blue" alt="AI-Powered">
