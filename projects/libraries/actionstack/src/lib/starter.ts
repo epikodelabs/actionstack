@@ -38,7 +38,8 @@ export function createActionHandler(
    *
    * @param {Action | AsyncAction} action - The action to be processed.
    * @param {Function} next - The next middleware function in the chain.
-   * @param {boolean} isNestedDispatch - Indicates whether the action is dispatched from within another action.
+   * @param {any} lockOrNested - Boolean flag or legacy lock arg used to infer nested dispatch.
+   * @param {boolean} maybeNestedDispatch - Indicates whether the action is dispatched from within another action.
    * @returns {Promise<void> | void} - A promise if the action is asynchronous, otherwise void.
    */
   const handleAction = async (
