@@ -74,23 +74,30 @@ jobs:
           echo "## API Reference" >> docs/index.md
           echo "Check the detailed [API Reference here](./api/)." >> docs/index.md
 
-      # 9️⃣ Build VitePress site
-      - name: Build documentation site
-        run: npx vitepress build docs --config vitepress.config.ts --base /actionstack --ignoreDeadLinks
+      # 9️⃣ Fix absolute links in all markdown files to be relative
+      - name: Fix absolute links in markdown files
+        run: |
+          find docs -name '*.md' -exec sed -i \
+            -e 's|](/|](./|g' \
+            -e 's|](./http|](http|g' {} +
 
-      # 🔟 Setup Pages
+      # 🔟 Build VitePress site (base is already set in config)
+      - name: Build documentation site
+        run: npx vitepress build docs --ignoreDeadLinks
+
+      # 1️⃣1️⃣ Setup Pages
       - name: Setup Pages
         uses: actions/configure-pages@v4
         if: github.ref == 'refs/heads/main'
 
-      # 1️⃣1️⃣ Upload Pages artifact
+      # 1️⃣2️⃣ Upload Pages artifact
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@main
         if: github.ref == 'refs/heads/main'
         with:
           path: docs/.vitepress/dist
 
-      # 1️⃣2️⃣ Deploy to GitHub Pages
+      # 1️⃣3️⃣ Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
