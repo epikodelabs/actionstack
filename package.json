@@ -1,6 +1,6 @@
 {
   "name": "@epikodelabs/actionstack",
-  "version": "3.0.16",
+  "version": "3.0.17",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
@@ -17,7 +17,7 @@
     "docs:rewrite": "node scripts/rewrite-vitepress-base.mjs"
   },
   "dependencies": {
-    "@epikodelabs/streamix": "2.0.27",
+    "@epikodelabs/streamix": "^2.0.27",
     "@angular/animations": "^17.3.12",
     "@angular/common": "^17.3.12",
     "@angular/compiler": "^17.3.12",
