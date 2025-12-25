@@ -1,6 +1,6 @@
 import type { Action, AsyncReducer, Reducer, StoreCreator, StoreEnhancer, Tree } from "./types";
 
-type PropertyPath = readonly (string | number)[];
+export type PropertyPath = readonly (string | number)[];
 
 /**
  * Retrieves a property from an object based on a path.

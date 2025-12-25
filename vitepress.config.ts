@@ -12,10 +12,10 @@ export default defineConfig({
   themeConfig: {
     // Site navigation
     nav: [
-      { text: 'Home', link: '/' },
+      { text: 'Home', link: '/README' },
       { text: 'Changelog', link: '/CHANGELOG' },
       { text: 'API Reference', link: '/api/' },
-      { text: 'GitHub', link: 'https://github.com/actioncrew/actionstack' }
+      { text: 'GitHub', link: 'https://github.com/epikodelabs/actionstack' }
     ],
 
     // Sidebar configuration
@@ -37,12 +37,12 @@ export default defineConfig({
         {
           text: 'Articles',
           items: [
-            { text: 'README', link: '/' },
-            { text: 'WHY', link: '/WHY.md' },
-            { text: 'Modules', link: '/MODULES.md' },
-            { text: 'Starter', link: '/STARTER.md' },
-            { text: 'Middleware', link: '/MIDDLEWARE.md' },
-            { text: 'Changelog', link: '/CHANGELOG.md' }
+            { text: 'README', link: '/README' },
+            { text: 'WHY', link: '/WHY' },
+            { text: 'Modules', link: '/MODULES' },
+            { text: 'Starter', link: '/STARTER' },
+            { text: 'Middleware', link: '/MIDDLEWARE' },
+            { text: 'Changelog', link: '/CHANGELOG' }
           ]
         }
       ]
@@ -50,7 +50,7 @@ export default defineConfig({
 
     // Social links
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/actioncrew/streamix' }
+      { icon: 'github', link: 'https://github.com/epikodelabs/streamix' }
     ],
 
     // Footer

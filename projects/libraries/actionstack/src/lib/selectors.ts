@@ -9,12 +9,12 @@ export type Selector<T, R> = (state: T) => R;
 /**
  * Helper types for inference
  */
-type AnySelector = (state: any) => any;
+export type AnySelector = (state: any) => any;
 
-type StateOf<F> =
+export type StateOf<F> =
   F extends (state: infer S) => any ? S : never;
 
-type ResultOf<F> =
+export type ResultOf<F> =
   F extends (state: any) => infer R ? R : never;
 
 /**
