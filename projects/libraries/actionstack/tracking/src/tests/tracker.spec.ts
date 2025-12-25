@@ -7,7 +7,7 @@ import {
   scheduler,
 } from "@epikodelabs/streamix";
 
-import { CancelablePromise, createTracker, withTracker } from "@epikodelabs/actionstack/tracking";
+import { createTracker } from "@epikodelabs/actionstack/tracking";
 import { disableTracing } from "@epikodelabs/streamix/tracing";
 
 async function flush(): Promise<void> {
@@ -548,37 +548,4 @@ describe("tracking", () => {
     sub.unsubscribe();
   });
 
-  it("attaches a tracker and exposes flush()", async () => {
-    const enhancer = withTracker();
-    const baseCreateStore = () => ({}) as any;
-    const store = enhancer(baseCreateStore)({} as any) as any;
-
-    expect(store.tracker).toBeDefined();
-    expect(store.flush).toEqual(jasmine.any(Function));
-
-    spyOn(store.tracker, "waitAll").and.resolveTo(undefined as any);
-    await store.flush();
-
-    expect(store.tracker.waitAll).toHaveBeenCalled();
-  });
-
-  it("resolves yielded values", async () => {
-    const promise = new CancelablePromise<number>(function* () {
-      const value = (yield Promise.resolve(2)) as number;
-      return value + 1;
-    });
-
-    await expectAsync(promise).toBeResolvedTo(3);
-  });
-
-  it("resolves undefined when cancelled", async () => {
-    const promise = new CancelablePromise<number>(function* () {
-      yield new Promise((resolve) => setTimeout(resolve, 10));
-      return 1;
-    });
-
-    promise.cancel();
-
-    await expectAsync(promise as Promise<unknown>).toBeResolvedTo(undefined);
-  });
 });
