@@ -50,7 +50,7 @@ export default defineConfig({
 
     // Social links
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/actioncrew/streamix' }
+      { icon: 'github', link: 'https://github.com/epikodelabs/streamix' }
     ],
 
     // Footer

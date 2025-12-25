@@ -73,36 +73,44 @@ jobs:
         run: |
           find docs -name '*.md' -exec sed -i \
             -e 's|](/|](./|g' \
-            -e 's|](./http|](http|g' {} +
+            -e 's|](./http|](http|g' \
+            -e 's|href="/|href="./|g' \
+            -e 's|src="/|src="./|g' {} +
 
-      # 9 Build VitePress site (base is already set in config)
+      # 9 Build VitePress site
       - name: Build documentation site
         run: npx vitepress build docs --config ./vitepress.config.ts --ignoreDeadLinks
 
-      # 10 Workaround: rewrite asset paths for /actionstack base
-      - name: Rewrite asset paths
+      # 10 Verify build output structure
+      - name: Verify build output
         run: |
-          find docs/.vitepress/dist -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '*.json' -o -name '*.map' \) -exec sed -i \
-            -e 's|"/assets/|"/actionstack/assets/|g' \
-            -e "s|'/assets/|'/actionstack/assets/|g" \
-            -e 's|"/vp-icons.css|"/actionstack/vp-icons.css|g' \
-            -e "s|'/vp-icons.css|'/actionstack/vp-icons.css|g" \
-            -e 's|"/hashmap.json|"/actionstack/hashmap.json|g' \
-            -e "s|'/hashmap.json|'/actionstack/hashmap.json|g" {} +
+          echo "Build output structure:"
+          ls -la docs/.vitepress/dist/
+          echo -e "\nChecking index.html for base path:"
+          grep -n "actionstack" docs/.vitepress/dist/index.html || true
 
-      # 11 Setup Pages
+      # 11 Fix paths for GitHub Pages deployment
+      - name: Prepare for GitHub Pages
+        run: |
+          # Create a .nojekyll file to disable Jekyll processing
+          touch docs/.vitepress/dist/.nojekyll
+          
+          # Create a CNAME file if you have a custom domain (optional)
+          # echo "your-domain.com" > docs/.vitepress/dist/CNAME
+
+      # 12 Setup Pages
       - name: Setup Pages
         uses: actions/configure-pages@v4
         if: github.ref == 'refs/heads/main'
 
-      # 12 Upload Pages artifact
+      # 13 Upload Pages artifact
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@main
         if: github.ref == 'refs/heads/main'
         with:
           path: docs/.vitepress/dist
 
-      # 13 Deploy to GitHub Pages
+      # 14 Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
