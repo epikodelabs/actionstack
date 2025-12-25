@@ -90,8 +90,5 @@ export default defineConfig({
     ['meta', { name: 'og:type', content: 'website' }],
     ['meta', { name: 'og:locale', content: 'en' }],
     ['meta', { name: 'og:site_name', content: 'My Project' }]
-  ],
-  vite: {
-    base: '/actionstack'
-  }
+  ]
 })
