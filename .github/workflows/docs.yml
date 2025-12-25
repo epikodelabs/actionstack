@@ -82,10 +82,13 @@ jobs:
       # 10 Workaround: rewrite asset paths for /actionstack base
       - name: Rewrite asset paths
         run: |
-          find docs/.vitepress/dist -name '*.html' -exec sed -i \
-            -e 's|href="/assets/|href="/actionstack/assets/|g' \
-            -e 's|src="/assets/|src="/actionstack/assets/|g' \
-            -e 's|href="/vp-icons.css|href="/actionstack/vp-icons.css|g' {} +
+          find docs/.vitepress/dist -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' \) -exec sed -i \
+            -e 's|"/assets/|"/actionstack/assets/|g' \
+            -e "s|'/assets/|'/actionstack/assets/|g" \
+            -e 's|"/vp-icons.css|"/actionstack/vp-icons.css|g' \
+            -e "s|'/vp-icons.css|'/actionstack/vp-icons.css|g" \
+            -e 's|"/hashmap.json|"/actionstack/hashmap.json|g' \
+            -e "s|'/hashmap.json|'/actionstack/hashmap.json|g" {} +
 
       # 11 Setup Pages
       - name: Setup Pages
