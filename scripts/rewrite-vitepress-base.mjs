@@ -1,129 +1,75 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+// Get current file directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const distRoot = path.resolve(__dirname, 'docs/.vitepress/dist');
+
+const distRoot = path.join(process.cwd(), 'docs/.vitepress/dist');
 const basePath = '/actionstack/';
 
-// Files to process
-const allowedExts = new Set(['.html', '.js', '.css', '.json', '.map', '.txt', '.xml']);
-// Files to skip (like images, fonts, etc.)
-const skipExts = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot']);
-
-// More comprehensive replacements
-const replacements = [
-  // Asset paths
-  ['"/assets/', `"${basePath}assets/`],
-  // CSS and JSON files
-  ['"/vp-icons.css', `"${basePath}vp-icons.css`],
-  ['"/hashmap.json', `"${basePath}hashmap.json`],
-  // Vite manifest and other generated files
-  ["'/manifest.webmanifest", `'${basePath}manifest.webmanifest`],
-  // Common VitePress patterns
-  ['"/@vite/', `"${basePath}@vite/`],
-  // Preload and prefetch links
-  ['rel="modulepreload" href="/', `rel="modulepreload" href="${basePath}`],
-  ['rel="prefetch" href="/', `rel="prefetch" href="${basePath}`],
-  ['rel="preload" href="/', `rel="preload" href="${basePath}`],
-  // JSON data attributes
-  ['data-vite-page="/', `data-vite-page="${basePath}`],
-  // Absolute paths at start of attributes
-  ['href="/', `href="${basePath}`],
-  ['src="/', `src="${basePath}`],
-  ['content="/', `content="${basePath}`],
-  ['action="/', `action="${basePath}`],
-  // JavaScript string literals (capture common patterns)
-  ['"/__', `"${basePath}__`],
-];
-
-async function walk(dir) {
-  const entries = await fs.readdir(dir, { withFileTypes: true });
-  const files = [];
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await walk(fullPath)));
-    } else if (entry.isFile()) {
-      const ext = path.extname(entry.name).toLowerCase();
-      if (skipExts.has(ext)) {
-        continue; // Skip binary files
-      }
-      if (allowedExts.has(ext) || ext === '' || !ext.includes('.')) {
-        files.push(fullPath);
-      }
-    }
-  }
-  return files;
-}
-
-async function rewriteFile(filePath) {
-  try {
-    let content = await fs.readFile(filePath, 'utf8');
-    let updated = content;
-    let changes = 0;
+function processDirectory(dir) {
+  const files = fs.readdirSync(dir, { withFileTypes: true });
+  
+  for (const file of files) {
+    const fullPath = path.join(dir, file.name);
     
-    // Apply all replacements
-    for (const [from, to] of replacements) {
-      if (content.includes(from)) {
-        const regex = new RegExp(from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-        const matches = content.match(regex);
-        if (matches) {
-          updated = updated.replace(regex, to);
-          changes += matches.length;
+    if (file.isDirectory()) {
+      processDirectory(fullPath);
+    } else if (file.isFile()) {
+      const ext = path.extname(file.name).toLowerCase();
+      
+      // Only process text files
+      if (['.html', '.js', '.css', '.json', '.map'].includes(ext)) {
+        try {
+          let content = fs.readFileSync(fullPath, 'utf8');
+          
+          // Simple but effective replacements
+          let updated = content
+            // Handle /assets/ paths with both single and double quotes
+            .replace(/"\/assets\//g, `"${basePath}assets/`)
+            // Handle root files with both single and double quotes
+            .replace(/"\/(hashmap\.json|manifest\.webmanifest|vp-icons\.css)/g, `"${basePath}$1`)
+            .replace(/'(\/(hashmap\.json|manifest\.webmanifest|vp-icons\.css))/g, `'${basePath}$1`)
+            // Handle CSS url() paths
+            .replace(/url\(\//g, `url(${basePath}`)
+            // Handle /@vite/ paths with both single and double quotes
+            .replace(/"\/@vite\//g, `"${basePath}@vite/`);
+          
+          // Also handle any other absolute paths that might have been missed
+          // This catches things like /some-file.js, /another-path, etc.
+          updated = updated.replace(/(["'(]\s*)\/([a-zA-Z0-9_\-][^"')\s]*)/g, (match, prefix, rest) => {
+            // Skip if it looks like a URL
+            if (rest.startsWith('http') || rest.startsWith('data:') || rest.startsWith('//')) {
+              return match;
+            }
+            // Skip if it's already been processed
+            if (rest.startsWith('actionstack/')) {
+              return match;
+            }
+            return `${prefix}${basePath}${rest}`;
+          });
+          
+          if (updated !== content) {
+            fs.writeFileSync(fullPath, updated, 'utf8');
+            console.log(`Updated: ${path.relative(distRoot, fullPath)}`);
+          }
+        } catch (err) {
+          // Skip binary files
         }
       }
     }
-    
-    if (updated !== content) {
-      await fs.writeFile(filePath, updated, 'utf8');
-      console.log(`✓ Updated ${filePath.replace(distRoot, '')} (${changes} changes)`);
-    }
-  } catch (err) {
-    console.error(`✗ Error processing ${filePath}:`, err.message);
   }
 }
 
-async function main() {
-  try {
-    // Check if dist folder exists
-    try {
-      await fs.access(distRoot);
-    } catch (err) {
-      console.error(`Error: dist folder not found at ${distRoot}`);
-      console.error('Make sure to build the VitePress site first: npx vitepress build docs');
-      process.exit(1);
-    }
-    
-    console.log(`Rewriting paths for base: ${basePath}`);
-    console.log(`Processing files in: ${distRoot}`);
-    
-    const files = await walk(distRoot);
-    console.log(`Found ${files.length} files to process`);
-    
-    await Promise.all(files.map(rewriteFile));
-    
-    // Create a simple test to verify
-    console.log('\nVerification test:');
-    try {
-      const indexHtml = await fs.readFile(path.join(distRoot, 'index.html'), 'utf8');
-      const hasBasePath = indexHtml.includes(basePath);
-      console.log(hasBasePath ? '✓ Base path found in index.html' : '✗ Base path NOT found in index.html');
-      
-      // Count occurrences
-      const basePathCount = (indexHtml.match(new RegExp(basePath, 'g')) || []).length;
-      console.log(`Found ${basePathCount} occurrences of base path in index.html`);
-    } catch (err) {
-      console.log('Could not read index.html for verification');
-    }
-    
-    console.log('\n✅ Path rewriting complete!');
-  } catch (err) {
-    console.error('❌ Fatal error:', err);
-    process.exit(1);
-  }
+// Check if dist folder exists
+if (!fs.existsSync(distRoot)) {
+  console.error(`Error: dist folder not found at ${distRoot}`);
+  console.error('Current directory:', process.cwd());
+  process.exit(1);
 }
 
-// Run the script
-await main();
+console.log(`Rewriting paths for base: ${basePath}`);
+processDirectory(distRoot);
+console.log('✅ Done!');
