@@ -82,7 +82,7 @@ jobs:
       # 10 Workaround: rewrite asset paths for /actionstack base
       - name: Rewrite asset paths
         run: |
-          find docs/.vitepress/dist -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' \) -exec sed -i \
+          find docs/.vitepress/dist -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '*.json' -o -name '*.map' \) -exec sed -i \
             -e 's|"/assets/|"/actionstack/assets/|g' \
             -e "s|'/assets/|'/actionstack/assets/|g" \
             -e 's|"/vp-icons.css|"/actionstack/vp-icons.css|g' \
