@@ -8,11 +8,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": [
         "--loader",
-        "./esm-loader.mjs",
-        "./node_modules/jasmine/bin/jasmine.js",
-        "--config=spec/support/jasmine.json"
+        "./node_modules/@actioncrew/ts-test-runner/esm-loader.mjs",
+        "--enable-source-maps"
       ],
+      "program": "${workspaceFolder}/node_modules/@actioncrew/ts-test-runner/bin/ts-jasmine-cli",
       "args": [
+        "--spec",
         "${file}"
       ],
       "cwd": "${workspaceFolder}",
@@ -34,10 +35,11 @@
       "runtimeArgs": [
         "--loader",
         "./esm-loader.mjs",
-        "./node_modules/jasmine/bin/jasmine.js",
-        "--config=spec/support/jasmine.json"
+        "--enable-source-maps"
       ],
+      "program": "${workspaceFolder}/node_modules/@actioncrew/ts-test-runner/bin/ts-jasmine-cli",
       "args": [
+        "--spec",
         "${file}"
       ],
       "cwd": "${workspaceFolder}",

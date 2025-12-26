@@ -203,8 +203,16 @@ export const createStarter = () => {
       const fn = async (action: { type: string }) => {
         // DO NOT await; return quickly for true concurrency
         const p = (async () => {
-          // handle main action
-          await handler(action, next);
+          try {
+            // handle main action
+            await handler(action, next);
+          } catch (err: any) {
+            const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
+            onError(
+              `[starter] [concurrent] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${msg}`
+            );
+            return;
+          }
 
           // find matching thunks
           const matching = getRegisteredThunks()

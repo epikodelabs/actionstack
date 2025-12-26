@@ -181,6 +181,23 @@ describe('starter', () => {
       expect(warn).toHaveBeenCalled();
       expect(String(warn.calls.mostRecent().args[0])).toContain('[object Object]');
     });
+
+    it('falls back when strategy() throws', async () => {
+      const warn = spyOn(console, 'warn');
+
+      const { dispatch, received } = createHarness({
+        toString() {
+          throw new Error('bad strategy');
+        },
+      } as any);
+      await dispatch({ type: 'PING' });
+
+      expect(received.map(a => a.type)).toEqual(['PING']);
+      expect(warn).toHaveBeenCalled();
+      expect(String(warn.calls.mostRecent().args[0])).toContain(
+        '[starter] Unknown strategy:'
+      );
+    });
   });
 
   describe('handler', () => {
@@ -407,6 +424,45 @@ describe('starter', () => {
         '[starter] [concurrent] Thunk error while processing action "PING": thunk error'
       );
     });
+
+    it('does not trigger thunks for non-matching actions', async () => {
+      const t1 = thunk(
+        'TEST/NO_MATCH',
+        () => async (dispatch) => {
+          await dispatch({ type: 'SHOULD_NOT_RUN' });
+        },
+        ['PING']
+      );
+
+      registerTestModule({ t1 });
+
+      const { dispatch, received } = createHarness('exclusive');
+      await dispatch({ type: 'PONG' });
+
+      expect(received.map(a => a.type)).toEqual(['PONG']);
+    });
+
+    it('trigger function runs once per dispatched action in concurrent mode', async () => {
+      let triggerCalls = 0;
+      const trigger = (action: any) => {
+        triggerCalls++;
+        return action.type === 'PING';
+      };
+
+      const t1 = thunk(
+        'TEST/TRIGGER_CALLS',
+        () => async () => {},
+        [trigger]
+      );
+
+      registerTestModule({ t1 });
+
+      const { dispatch } = createHarness('concurrent');
+      await dispatch({ type: 'PING' });
+      await dispatch({ type: 'PONG' });
+
+      expect(triggerCalls).toBe(2);
+    });
   });
 
   describe('resilience', () => {
@@ -472,6 +528,25 @@ describe('starter', () => {
 
       expect(warn).toHaveBeenCalled();
       expect(ran).toEqual(['ok']);
+    });
+
+    it('concurrent mode: failing next() logs once and clears inflight', async () => {
+      const warn = spyOn(console, 'warn');
+
+      const { dispatch: dispatchFn } = createHarness('concurrent', {
+        nextHook: () => {
+          throw new Error('next boom');
+        },
+      });
+      const dispatch = dispatchFn as any;
+
+      await dispatch({ type: 'PING' });
+      await dispatch.waitForAll();
+
+      expect(dispatch.pendingCount()).toBe(0);
+      expect(String(warn.calls.allArgs().flat().join(' '))).toContain(
+        '[starter] [concurrent] Unhandled error'
+      );
     });
   });
 
@@ -555,6 +630,14 @@ describe('starter', () => {
       await Promise.all(promises);
 
       expect(dispatch.pendingCount()).toBe(0);
+    });
+
+    it('waitForAll returns empty when there is no inflight work', async () => {
+      const { dispatch: dispatchFn } = createHarness('concurrent');
+      const dispatch = dispatchFn as any;
+
+      expect(dispatch.pendingCount()).toBe(0);
+      expect(await dispatch.waitForAll()).toEqual([]);
     });
   });
 
@@ -648,9 +731,66 @@ describe('starter', () => {
       expect(inners).toEqual(['INNER_1', 'INNER_2']);  // Sequential
       expect(overlaps).toEqual([]);  // No overlaps
     });
+
+    it('exclusive mode: sequential top-level dispatch calls do not overlap in next()', async () => {
+      const { dispatch, overlaps } = createHarness('exclusive', {
+        nextHook: async () => {
+          await new Promise(r => setTimeout(r, 0));
+        },
+      });
+
+      const p1 = dispatch({ type: 'PING' });
+      const p2 = dispatch({ type: 'PONG' });
+      await Promise.all([p1, p2]);
+
+      expect(overlaps).toEqual([]);
+    });
   });
 
   describe('stress', () => {
+    it('concurrent mode: drains inflight after a burst of actions with many matching thunks', async () => {
+      const thunkCount = 5;
+      const actionCount = 10;
+      const allowFinish = deferred<void>();
+      const allStarted = deferred<void>();
+      let startedCount = 0;
+
+      const actions: Record<string, any> = {};
+      for (let i = 0; i < thunkCount; i++) {
+        actions[`t${i}`] = thunk(
+          `TEST/STRESS_BURST_${i}`,
+          () => async () => {
+            startedCount++;
+            if (startedCount === thunkCount * actionCount) {
+              allStarted.resolve();
+            }
+            await allowFinish.promise;
+          },
+          ['PING']
+        );
+      }
+
+      registerTestModule(actions);
+
+      const { dispatch: dispatchFn } = createHarness('concurrent');
+      const dispatch = dispatchFn as any;
+
+      const promises = Array.from({ length: actionCount }, () =>
+        dispatch({ type: 'PING' })
+      );
+
+      expect(dispatch.pendingCount()).toBe(actionCount);
+
+      await allStarted.promise;
+      allowFinish.resolve();
+
+      await dispatch.waitForAll();
+      await Promise.all(promises);
+
+      expect(dispatch.pendingCount()).toBe(0);
+      expect(startedCount).toBe(thunkCount * actionCount);
+    });
+
     it('concurrent mode: runs many matching thunks concurrently (no starvation)', async () => {
       const thunkCount = 25;
       const started = Array.from({ length: thunkCount }, () => deferred<void>());
@@ -713,6 +853,42 @@ describe('starter', () => {
 
       expect(pingCount).toBe(2);
       expect(received.filter(a => a.type === 'PING')).toHaveSize(2);
+      expect(overlaps).toEqual([]);
+    });
+
+    it('exclusive mode: processes many actions with mixed triggers in order', async () => {
+      const log: string[] = [];
+      const t1 = thunk(
+        'TEST/MIXED_T1',
+        () => async () => {
+          log.push('t1');
+        },
+        ['PING']
+      );
+      const t2 = thunk(
+        'TEST/MIXED_T2',
+        () => async () => {
+          log.push('t2');
+        },
+        ['PONG']
+      );
+      const t3 = thunk(
+        'TEST/MIXED_T3',
+        () => async () => {
+          log.push('t3');
+        },
+        [(action: any) => action.type === 'PING' || action.type === 'PONG']
+      );
+
+      registerTestModule({ t1, t2, t3 });
+
+      const { dispatch, received, overlaps } = createHarness('exclusive');
+
+      await dispatch({ type: 'PING' });
+      await dispatch({ type: 'PONG' });
+
+      expect(received.map(a => a.type)).toEqual(['PING', 'PONG']);
+      expect(log).toEqual(['t1', 't3', 't2', 't3']);
       expect(overlaps).toEqual([]);
     });
 
@@ -839,6 +1015,25 @@ describe('starter', () => {
         'other-start',
         'other-end',
       ]);
+    });
+
+    it('concurrent mode: supports multiple trigger types on a single thunk', async () => {
+      const events: string[] = [];
+      const t1 = thunk(
+        'TEST/MULTI_TRIGGER',
+        () => async () => {
+          events.push('run');
+        },
+        ['PING', (action: any) => action.type === 'PONG']
+      );
+
+      registerTestModule({ t1 });
+
+      const { dispatch } = createHarness('concurrent');
+      await dispatch({ type: 'PING' });
+      await dispatch({ type: 'PONG' });
+
+      expect(events).toEqual(['run', 'run']);
     });
   });
 });
