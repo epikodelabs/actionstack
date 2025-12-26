@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.17
+
+Improved concurrent starter resilience when next() throws (logs and clears inflight), expanded starter stress coverage, and refreshed npm-visible package description.
+
 ## 3.0.16
 
 Removed the tracker/trackable utilities and the 'awaitStatePropagation' option so state propagation no longer waits for tracked streams.

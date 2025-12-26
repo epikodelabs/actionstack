@@ -1,3 +1,7 @@
+# ActionStack
+
+Next-generation state management for reactive applications, built on Streamix for performance and simplicity.
+
 <p align="center">
   <img src="https://github.com/epikodelabs/actionstack/blob/main/LOGO.png?raw=true" alt="ActionStack Logo" width="500">
 </p>

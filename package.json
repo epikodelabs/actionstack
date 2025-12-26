@@ -1,6 +1,7 @@
 {
   "name": "@epikodelabs/actionstack",
   "version": "3.0.17",
+  "description": "Next-generation state management for reactive applications, built on Streamix for performance and simplicity.",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
