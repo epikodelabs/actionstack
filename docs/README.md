@@ -1,10 +1,9 @@
-<p align="center">
-  <img src="https://github.com/epikodelabs/actionstack/blob/main/LOGO.png?raw=true" alt="ActionStack Logo" width="500">
-</p>
+# actionstack
+Next-generation state management for reactive applications.
+Built on Streamix for ultimate performance and simplicity.
 
 <p align="center">
-  <strong>Next-generation state management for reactive applications</strong><br>
-  Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="external">Streamix</a> for ultimate performance and simplicity
+  <img src="https://github.com/epikodelabs/actionstack/blob/main/LOGO.png?raw=true" alt="ActionStack Logo" width="500">
 </p>
 
 <p align="center">
@@ -24,6 +23,12 @@
     <img src="https://img.shields.io/badge/AI-Powered-blue" alt="AI-Powered">
   </a>
 </p>
+
+---
+
+## Give a Star on GitHub
+
+If actionstack helps you, please give it a star: https://github.com/epikodelabs/actionstack
 
 ---
 
