@@ -26,7 +26,7 @@ Built on Streamix for ultimate performance and simplicity.
 
 ---
 
-## Give a Star on GitHub
+## ⭐ Give a Star on GitHub
 
 If actionstack helps you, please give it a star: https://github.com/epikodelabs/actionstack
 
