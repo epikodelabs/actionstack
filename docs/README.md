@@ -3,7 +3,7 @@ Next-generation state management for reactive applications.
 Built on Streamix for ultimate performance and simplicity.
 
 <p align="center">
-  <img src="https://github.com/epikodelabs/actionstack/blob/main/LOGO.png?raw=true" alt="ActionStack Logo" width="500">
+  <img src="https://github.com/epikodelabs/actionstack/blob/main/LOGO.png?raw=true" alt="actionstack logo" width="500">
 </p>
 
 <p align="center">
@@ -206,7 +206,7 @@ const store = createStore({
 ---
 
 ## 🔗 Why Query + Thunks = Perfect Match
-The combination of Streamix's `query()` method and ActionStack's thunks creates a uniquely powerful and streamlined approach:
+The combination of Streamix's `query()` method and actionstack's thunks creates a uniquely powerful and streamlined approach:
 
 - **Reactive by default** — Subscribe to streams for UI updates
 - **Imperative when needed** — Use query() for instant access in business logic
@@ -216,9 +216,9 @@ The combination of Streamix's `query()` method and ActionStack's thunks creates 
 
 ---
 
-## 🆚 ActionStack vs Other Solutions
+## 🆚 actionstack vs Other Solutions
 
-| Feature | ActionStack | Redux + RTK | Zustand |
+| Feature | actionstack | Redux + RTK | Zustand |
 |---------|----------------|-------------|---------|
 | Bundle Size | Minimal | Large | Small |
 | Reactivity | Built-in | Manual | Manual |
