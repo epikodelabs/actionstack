@@ -11,7 +11,7 @@
     "test": "ng test",
     "minify": "node terser.mjs && npx dts-bundler",
     "bundle": "dts-bundle-generator --config bundle.config.cjs && npm run minify",
-    "docs:generate": "typedoc --plugin typedoc-plugin-markdown --out docs/api --hideBreadcrumbs --hidePageHeader",
+    "docs:generate": "typedoc --plugin typedoc-plugin-markdown --out docs/api",
     "docs:dev": "npm run docs:generate && vitepress dev docs --config vitepress.config.ts",
     "docs:build": "npm run docs:generate && vitepress build docs --config vitepress.config.ts && npm run docs:rewrite",
     "docs:rewrite": "node scripts/rewrite-vitepress-base.mjs"
