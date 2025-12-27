@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const distRoot = path.join(process.cwd(), 'docs/.vitepress/dist');
-const basePath = '/actionstack/';
+const basePath = '/actionstack';
 const baseSegment = basePath.replace(/^\/|\/$/g, '');
 
 function processDirectory(dir) {
@@ -40,7 +40,7 @@ function processDirectory(dir) {
           
           // Also handle any other absolute paths that might have been missed
           // This catches things like /some-file.js, /another-path, etc.
-          updated = updated.replace(/(["'(]\s*)\/([a-zA-Z0-9_\-][^"')\s]*)/g, (match, prefix, rest) => {
+          updated = updated.replace(/(["'`]\s*)\/([a-zA-Z0-9_\-][^"'`) \s]*)/g, (match, prefix, rest) => {
             // Skip if it looks like a URL
             if (rest.startsWith('http') || rest.startsWith('data:') || rest.startsWith('//')) {
               return match;
