@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  base: '/actionstack',
+  base: '/actionstack/',
   title: 'ActionStack',
   description: 'Documentation for state-management library',
 
