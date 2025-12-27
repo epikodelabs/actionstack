@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 
 const distRoot = path.join(process.cwd(), 'docs/.vitepress/dist');
 const basePath = '/actionstack/';
+const baseSegment = basePath.replace(/^\/|\/$/g, '');
 
 function processDirectory(dir) {
   const files = fs.readdirSync(dir, { withFileTypes: true });
@@ -45,7 +46,7 @@ function processDirectory(dir) {
               return match;
             }
             // Skip if it's already been processed
-            if (rest.startsWith('actionstack/')) {
+            if (rest === baseSegment || rest.startsWith(`${baseSegment}/`)) {
               return match;
             }
             return `${prefix}${basePath}${rest}`;
