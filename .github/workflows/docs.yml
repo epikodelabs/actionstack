@@ -68,7 +68,7 @@ jobs:
 
       # 9 Build VitePress site
       - name: Build documentation site
-        run: npx vitepress build docs --config ./vitepress.config.ts --ignoreDeadLinks
+        run: npx vitepress build docs --config ./vitepress.config.ts
 
       # 10 Fix absolute paths in built files
       - name: Fix absolute paths
