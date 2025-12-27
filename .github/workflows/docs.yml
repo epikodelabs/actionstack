@@ -39,12 +39,7 @@ jobs:
 
       # 4 Generate Typedoc Markdown for API
       - name: Generate API docs
-        run: |
-          npx typedoc \
-            --plugin typedoc-plugin-markdown \
-            --out docs/api \
-            --hideBreadcrumbs \
-            --hidePageHeader
+        run: npm run docs:generate
 
       # 5 Rename main API README.md to index.md
       - name: Rename API README to index
@@ -62,11 +57,7 @@ jobs:
 
       # 7 Use main README as homepage and link to API folder
       - name: Create site index.md
-        run: |
-          cp docs/README.md docs/index.md
-          echo "" >> docs/index.md
-          echo "## API Reference" >> docs/index.md
-          echo "Check the detailed [API Reference here](./api/)." >> docs/index.md
+        run: npm run docs:index
 
       # 8 Fix absolute links in all markdown files to be relative
       - name: Fix absolute links in markdown files
