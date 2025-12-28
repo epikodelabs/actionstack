@@ -9,6 +9,8 @@ const __dirname = path.dirname(__filename);
 const distRoot = path.join(process.cwd(), 'docs/.vitepress/dist');
 const basePath = '/actionstack/';
 const baseSegment = basePath.replace(/^\/|\/$/g, '');
+const escapedBaseSegment = baseSegment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const urlPrefixRegex = new RegExp(`url\\((['"]?)\\/(?!${escapedBaseSegment}(?:\\/|$))`, 'g');
 
 function processDirectory(dir) {
   const files = fs.readdirSync(dir, { withFileTypes: true });
@@ -32,9 +34,8 @@ function processDirectory(dir) {
             .replace(/"\/assets\//g, `"${basePath}assets/`)
             // Handle root files with both single and double quotes
             .replace(/"\/(hashmap\.json|manifest\.webmanifest|vp-icons\.css)/g, `"${basePath}$1`)
-            .replace(/'(\/(hashmap\.json|manifest\.webmanifest|vp-icons\.css))/g, `'${basePath}$1`)
             // Handle CSS url() paths
-            .replace(/url\(\//g, `url(${basePath}`)
+            .replace(urlPrefixRegex, (match, quote) => `url(${quote}${basePath}`)
             // Handle /@vite/ paths with both single and double quotes
             .replace(/"\/@vite\//g, `"${basePath}@vite/`);
           
