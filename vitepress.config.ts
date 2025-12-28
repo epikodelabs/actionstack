@@ -1,29 +1,68 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { defineConfig } from 'vitepress'
+
+const docsDir = path.resolve(process.cwd(), 'docs')
+
+function formatDocLabel(fileBase: string) {
+  const normalized = fileBase
+    .replace(/[-_]+/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+  return normalized
+}
+
+function getDocsSidebarItems() {
+  if (!fs.existsSync(docsDir)) {
+    return [
+      { text: 'Getting Started', link: '/' },
+      { text: 'Changelog', link: '/CHANGELOG' }
+    ]
+  }
+
+  const files = fs
+    .readdirSync(docsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
+    .map((entry) => entry.name)
+
+  const items = files
+    .map((fileName) => {
+      const base = fileName.replace(/\.md$/i, '')
+      if (base.toLowerCase() === 'readme') {
+        return { text: 'Getting Started', link: '/' }
+      }
+      return { text: formatDocLabel(base), link: `/${base}` }
+    })
+    .sort((a, b) => {
+      if (a.link === '/') return -1
+      if (b.link === '/') return 1
+      return a.text.localeCompare(b.text)
+    })
+
+  return items
+}
 
 export default defineConfig({
   base: '/actionstack/',
-  title: 'ActionStack',
-  description: 'Documentation for state-management library',
+  srcDir: './', // Use root of dist as source
+  title: 'actionstack',
+  description: 'Documentation and guides.',
 
-  // Clean URLs
   cleanUrls: true,
 
-  // Theme configuration
   themeConfig: {
-    // Site navigation
     nav: [
-      { text: 'Home', link: '/README' },
+      { text: 'Home', link: '/' },
       { text: 'Changelog', link: '/CHANGELOG' },
       { text: 'API Reference', link: '/api/' },
-      { text: 'GitHub', link: 'https://github.com/epikodelabs/actionstack' }
+      { text: 'GitHub', link: 'https://github.com/epikodelabs/streamix' }
     ],
 
-    // Sidebar configuration
     sidebar: {
       '/api/': [
         {
           text: 'API Reference',
-           items: [
+          items: [
             { text: 'Overview', link: '/api/' },
             { text: 'Enumerations', link: '/api/#enumerations' },
             { text: 'Functions', link: '/api/#functions' },
@@ -35,36 +74,31 @@ export default defineConfig({
       ],
       '/': [
         {
-          text: 'Articles',
+          text: 'Documentation',
+          items: getDocsSidebarItems()
+        },
+        {
+          text: 'API Reference',
           items: [
-            { text: 'README', link: '/README' },
-            { text: 'WHY', link: '/WHY' },
-            { text: 'Modules', link: '/MODULES' },
-            { text: 'Starter', link: '/STARTER' },
-            { text: 'Middleware', link: '/MIDDLEWARE' },
-            { text: 'Changelog', link: '/CHANGELOG' }
+            { text: 'Full API Docs', link: '/api/' }
           ]
         }
       ]
     },
 
-    // Social links
     socialLinks: [
       { icon: 'github', link: 'https://github.com/epikodelabs/streamix' }
     ],
 
-    // Footer
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2025 Oleksii Shepel'
+      copyright: 'Copyright © 2025 epikodelabs'
     },
 
-    // Search
     search: {
       provider: 'local'
     },
 
-    // Last updated
     lastUpdated: {
       text: 'Updated at',
       formatOptions: {
@@ -74,7 +108,6 @@ export default defineConfig({
     }
   },
 
-  // Markdown configuration
   markdown: {
     theme: {
       light: 'github-light',
@@ -83,12 +116,11 @@ export default defineConfig({
     lineNumbers: true
   },
 
-  // Head tags for SEO and PWA
   head: [
-    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['link', { rel: 'icon', href: '/streamix/favicon.ico' }],
     ['meta', { name: 'theme-color', content: '#3c82f6' }],
     ['meta', { name: 'og:type', content: 'website' }],
     ['meta', { name: 'og:locale', content: 'en' }],
-    ['meta', { name: 'og:site_name', content: 'My Project' }]
+    ['meta', { name: 'og:site_name', content: 'Streamix' }]
   ]
 })
