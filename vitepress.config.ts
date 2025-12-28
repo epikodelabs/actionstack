@@ -55,7 +55,7 @@ export default defineConfig({
       { text: 'Home', link: '/' },
       { text: 'Changelog', link: '/CHANGELOG' },
       { text: 'API Reference', link: '/api/' },
-      { text: 'GitHub', link: 'https://github.com/epikodelabs/streamix' }
+      { text: 'GitHub', link: 'https://github.com/epikodelabs/actionstack' }
     ],
 
     sidebar: {
@@ -87,7 +87,7 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/epikodelabs/streamix' }
+      { icon: 'github', link: 'https://github.com/epikodelabs/actionstack' }
     ],
 
     footer: {
@@ -117,10 +117,10 @@ export default defineConfig({
   },
 
   head: [
-    ['link', { rel: 'icon', href: '/streamix/favicon.ico' }],
+    ['link', { rel: 'icon', href: '/actionstack/favicon.ico' }],
     ['meta', { name: 'theme-color', content: '#3c82f6' }],
     ['meta', { name: 'og:type', content: 'website' }],
     ['meta', { name: 'og:locale', content: 'en' }],
-    ['meta', { name: 'og:site_name', content: 'Streamix' }]
+    ['meta', { name: 'og:site_name', content: 'actionstack' }]
   ]
 })
