@@ -11,9 +11,11 @@
     "test": "ng test",
     "minify": "node terser.mjs && npx dts-bundler",
     "bundle": "dts-bundle-generator --config bundle.config.cjs && npm run minify",
-    "docs:generate": "typedoc --plugin typedoc-plugin-markdown --out docs/api",
-    "docs:dev": "npm run docs:generate && cd docs && vitepress dev --config ../vitepress.config.ts",
-    "docs:build": "npm run docs:generate && cd docs && vitepress build --config ../vitepress.config.ts && cd .. && npm run docs:rewrite",
+    "docs:generate": "node scripts/copy-vitepress-config.mjs && typedoc --plugin typedoc-plugin-markdown --out dist/api",
+    "docs:prepare": "node scripts/docs-prepare.mjs",
+    "docs:fix-api-links": "node scripts/fix-typedoc-links.mjs",
+    "docs:dev": "npm run docs:prepare && npm run docs:generate && npm run docs:fix-api-links && vitepress dev dist",
+    "docs:build": "npm run docs:prepare && npm run docs:generate && npm run docs:fix-api-links && vitepress build dist && npm run docs:rewrite",
     "docs:rewrite": "node scripts/rewrite-vitepress-base.mjs"
   },
   "dependencies": {

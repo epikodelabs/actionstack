@@ -343,7 +343,7 @@ async function processMarkdownFiles(options) {
 // Example usage
 (async () => {
     await processMarkdownFiles({
-        testGlob: ["projects/libraries/streamix/src/tests/*.spec.ts"],
+        testGlob: ["projects/libraries/actionstack/src/tests/*.spec.ts"],
         markdownGlob: ["docs/api/**/*.md"],
         examplesTitle: "Examples",
         maxExamples: 1,

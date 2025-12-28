@@ -55,7 +55,7 @@ if (!fs.existsSync(distRoot)) {
   process.exit(1);
 }
 
-const baseSegment = basePath.replace(/^\/+|\/+$/g, ''); // "streamix"
+const baseSegment = basePath.replace(/^\/+|\/+$/g, '');
 
 function processDirectory(dir) {
   const files = fs.readdirSync(dir, { withFileTypes: true });
