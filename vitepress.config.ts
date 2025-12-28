@@ -117,6 +117,7 @@ export default defineConfig({
   },
 
   head: [
+    ['meta', { charset: 'utf-8' }],
     ['link', { rel: 'icon', href: '/actionstack/favicon.ico' }],
     ['meta', { name: 'theme-color', content: '#3c82f6' }],
     ['meta', { name: 'og:type', content: 'website' }],
