@@ -7,7 +7,7 @@ Built on Streamix for ultimate performance and simplicity.
 </p>
 
 <p align="center">
-  <a href="https://github.com/epikodelabs/actionstack/actions/workflows/build.yml/badge.svg?branch=main">
+  <a href="https://github.com/epikodelabs/actionstack/actions/workflows/build.yml">
     <img src="https://github.com/epikodelabs/actionstack/actions/workflows/build.yml/badge.svg?branch=main" alt="Build Status">
   </a>
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
@@ -34,13 +34,13 @@ If actionstack helps you, please give it a star: https://github.com/epikodelabs/
 
 ## Key Features
 
-- **Modular Architecture**Feature-based modules with co-located state and logic
-- **Reactive Streams**Built on Streamix for high-performance reactive updates
-- **Action Handlers**No reducers needed - sync actions with state logic
-- **Thunk Support**Built-in async operations via thunks
-- **Safe Concurrency**Built-in locking and execution control
-- **Dynamic Loading**Load/unload modules at runtime
-- **Type Safety**Full TypeScript support with intelligent inference
+- **Modular Architecture** - Feature-based modules with co-located state and logic
+- **Reactive Streams** - Built on Streamix for high-performance reactive updates
+- **Action Handlers** - No reducers needed - sync actions with state logic
+- **Thunk Support** - Built-in async operations via thunks
+- **Safe Concurrency** - Built-in locking and execution control
+- **Dynamic Loading** - Load/unload modules at runtime
+- **Type Safety** - Full TypeScript support with intelligent inference
 
 ---
 
@@ -208,11 +208,11 @@ const store = createStore({
 ## Why Query + Thunks = Perfect Match
 The combination of Streamix's `query()` method and actionstack's thunks creates a uniquely powerful and streamlined approach:
 
-- **Reactive by default**Subscribe to streams for UI updates
-- **Imperative when needed**Use query() for instant access in business logic
-- **Consistent API**Same selectors work for both reactive and imperative use
-- **Type-safe**Full TypeScript inference across reactive and sync access patterns
-- **Performance optimized**Query avoids subscription overhead for one-time reads
+- **Reactive by default** - Subscribe to streams for UI updates
+- **Imperative when needed** - Use query() for instant access in business logic
+- **Consistent API** - Same selectors work for both reactive and imperative use
+- **Type-safe** - Full TypeScript inference across reactive and sync access patterns
+- **Performance optimized** - Query avoids subscription overhead for one-time reads
 
 ---
 
@@ -229,9 +229,15 @@ The combination of Streamix's `query()` method and actionstack's thunks creates 
 ---
 
 ## Resources
-- **API Documentation](https://epikodelabs.github.io/actionstack/api)**GitHub Repository](https://github.com/epikodelabs/actionstack)**Community support](https://github.com/epikodelabs/actionstack/discussions)**Streamix: Reactive foundation](https://www.npmjs.com/package/@epikodelabs/streamix)**p align="center">
-  <strong>Ready for next-gen state management? </strong><br>
-  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">Install from NPM</a>  
+- **[API Documentation](https://epikodelabs.github.io/actionstack/api)**
+- **[GitHub Repository](https://github.com/epikodelabs/actionstack)**
+- **[Community support](https://github.com/epikodelabs/actionstack/discussions)**
+- **[Streamix: Reactive foundation](https://www.npmjs.com/package/@epikodelabs/streamix)**
+
+---
+
+<p align="center">
+  <strong>Ready for next-gen state management?</strong><br>
+  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">Install from NPM</a>
   <a href="https://github.com/epikodelabs/actionstack">View on GitHub</a>
 </p>
-
