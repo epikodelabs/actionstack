@@ -11,10 +11,9 @@
     "test": "ng test",
     "minify": "node terser.mjs && npx dts-bundler",
     "bundle": "dts-bundle-generator --config bundle.config.cjs && npm run minify",
-    "docs:generate": "typedoc --plugin typedoc-plugin-markdown --out docs/api --hideBreadcrumbs --hidePageHeader",
-    "docs:index": "cp docs/README.md docs/index.md && printf '\\n## API Reference\\nCheck the detailed [API Reference here](./api/).\\n' >> docs/index.md",
-    "docs:dev": "npm run docs:generate && npm run docs:index && vitepress dev docs --config vitepress.config.ts",
-    "docs:build": "npm run docs:generate && npm run docs:index && vitepress build docs --config vitepress.config.ts && npm run docs:rewrite",
+    "docs:generate": "typedoc --plugin typedoc-plugin-markdown --out docs/api",
+    "docs:dev": "npm run docs:generate && cd docs && vitepress dev --config ../vitepress.config.ts",
+    "docs:build": "npm run docs:generate && cd docs && vitepress build --config ../vitepress.config.ts && cd .. && npm run docs:rewrite",
     "docs:rewrite": "node scripts/rewrite-vitepress-base.mjs"
   },
   "dependencies": {

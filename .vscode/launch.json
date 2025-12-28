@@ -2,53 +2,6 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "type": "node",
-      "request": "launch",
-      "name": "Run Jasmine Test (ESM Loader)",
-      "runtimeExecutable": "node",
-      "runtimeArgs": [
-        "--loader",
-        "./esm-loader.mjs",
-        "./node_modules/jasmine/bin/jasmine.js",
-        "--config=spec/support/jasmine.json"
-      ],
-      "args": [
-        "${file}"
-      ],
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen",
-      "sourceMaps": false,
-      "skipFiles": [
-        "<node_internals>/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/dist/**/*.js"
-      ]
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Debug Jasmine Test (ESM Loader)",
-      "runtimeExecutable": "node",
-      "runtimeArgs": [
-        "--loader",
-        "./esm-loader.mjs",
-        "./node_modules/jasmine/bin/jasmine.js",
-        "--config=spec/support/jasmine.json"
-      ],
-      "args": [
-        "${file}"
-      ],
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen",
-      "sourceMaps": true,
-      "skipFiles": [
-        "<node_internals>/**"
-      ]
-    },
-    {
       "name": "ng serve",
       "type": "chrome",
       "request": "launch",
