@@ -44,7 +44,6 @@ function getDocsSidebarItems() {
 
 export default defineConfig({
   base: '/actionstack/',
-  srcDir: './', // Use root of dist as source
   title: 'actionstack',
   description: 'Documentation and guides.',
 
