@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const distRoot = path.join(process.cwd(), 'docs/.vitepress/dist');
-const basePath = '/actionstack';
+const basePath = '/actionstack/';
 const baseSegment = basePath.replace(/^\/|\/$/g, '');
 
 function processDirectory(dir) {
