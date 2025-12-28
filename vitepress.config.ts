@@ -48,7 +48,7 @@ export default defineConfig({
   title: 'actionstack',
   description: 'Documentation and guides.',
 
-  cleanUrls: false,
+  cleanUrls: true,
 
   themeConfig: {
     nav: [

@@ -17,6 +17,7 @@ const replacements = [
   [/\(\.\.\/\.\.\/index\)/g, '(../../)'],
   [/\(\.\.\/\.\.\/README\)/g, '(../../)'],
   [/\(\.\.\/\.\.\/README\.md\)/g, '(../../)'],
+  [/\]\((?!https?:|mailto:|#)([^)\s]+)\.md(#[^)]+)?\)/g, ']($1$2)'],
 ];
 
 const readmePath = path.join(apiRoot, 'README.md');
