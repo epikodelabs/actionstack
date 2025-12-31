@@ -1,7 +1,7 @@
 import type { Tracker } from "@epikodelabs/actionstack";
 import { scheduler, type Subscription } from "@epikodelabs/streamix";
 import {
-  createValueTracer,
+  createTerminalTracer,
   enableTracing,
   type ValueTracer,
 } from "@epikodelabs/streamix/tracing";
@@ -17,7 +17,7 @@ const DEFAULT_TIMEOUT = 30_000;
 let sharedTracer: ValueTracer | null = null;
 
 function getSharedTracer(): ValueTracer {
-  sharedTracer ??= createValueTracer({ maxTraces: MAX_TRACES });
+  sharedTracer ??= createTerminalTracer({ maxTraces: MAX_TRACES });
   return sharedTracer;
 }
 
