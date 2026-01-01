@@ -30,7 +30,7 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
-describe("tracking", () => {
+describe("tracker", () => {
   afterEach(async () => {
     disableTracing();
     await flush();

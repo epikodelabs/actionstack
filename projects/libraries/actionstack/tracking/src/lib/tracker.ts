@@ -3,12 +3,14 @@ import { scheduler, type Subscription } from "@epikodelabs/streamix";
 import {
   createTerminalTracer,
   enableTracing,
+  type ValueTrace,
   type ValueTracer,
 } from "@epikodelabs/streamix/tracing";
 import { CancelablePromise } from "./promise";
 
 const MAX_TRACES = 10_000;
 const DEFAULT_TIMEOUT = 30_000;
+const COLLAPSING_OPERATORS = new Set(["buffer"]);
 
 /**
  * Streamix tracing is effectively global (one active tracer at a time),
@@ -57,6 +59,20 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
   const tracer = getSharedTracer();
   tracer.clear();
   enableTracing(tracer);
+
+  // Track completion of traced subscriptions to ignore phantom emissions.
+  const completedSubscriptions = new Set<string>();
+  const subscriptionObservers = new Map<string, () => void>();
+
+  const observeSubscription = (subscriptionId: string) => {
+    if (subscriptionObservers.has(subscriptionId)) return;
+    const unsubscribe = tracer.observeSubscription(subscriptionId, {
+      complete: () => {
+        completedSubscriptions.add(subscriptionId);
+      },
+    });
+    subscriptionObservers.set(subscriptionId, unsubscribe);
+  };
 
   /**
    * Gets the signal state of a subscription.
@@ -111,6 +127,11 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
       subscriptions.set(sub, false);
     }
     tracer.clear();
+    completedSubscriptions.clear();
+    for (const unsubscribe of subscriptionObservers.values()) {
+      unsubscribe();
+    }
+    subscriptionObservers.clear();
   };
 
   /**
@@ -121,6 +142,48 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
    */
   const isInFlight = (state: string): boolean =>
     state === "emitted" || state === "processing" || state === "transformed";
+
+  const collapseBufferedTraces = (traces: ValueTrace[]): void => {
+    const latestDeliveredByKey = new Map<
+      string,
+      { valueId: string; operatorIndex: number; operatorName: string; deliveredAt: number }
+    >();
+
+    for (const trace of traces) {
+      if (trace.state !== "delivered" || trace.operatorSteps.length === 0) continue;
+      const last = trace.operatorSteps.at(-1);
+      if (!last || !COLLAPSING_OPERATORS.has(last.operatorName)) continue;
+      const key = `${trace.subscriptionId}:${last.operatorName}`;
+      latestDeliveredByKey.set(key, {
+        valueId: trace.valueId,
+        operatorIndex: last.operatorIndex,
+        operatorName: last.operatorName,
+        deliveredAt: trace.deliveredAt ?? 0,
+      });
+    }
+
+    for (const trace of traces) {
+      if (!isInFlight(trace.state)) continue;
+      const last = trace.operatorSteps.at(-1);
+      if (!last || !COLLAPSING_OPERATORS.has(last.operatorName)) continue;
+      const key = `${trace.subscriptionId}:${last.operatorName}`;
+      const target = latestDeliveredByKey.get(key);
+      if (!target) continue;
+      if (target.deliveredAt && trace.emittedAt > target.deliveredAt) continue;
+
+      trace.state = "collapsed";
+      trace.collapsedInto = {
+        operatorIndex: target.operatorIndex,
+        operatorName: target.operatorName,
+        targetValueId: target.valueId,
+      };
+      trace.droppedReason = {
+        operatorIndex: last.operatorIndex,
+        operatorName: last.operatorName,
+        reason: "collapsed",
+      };
+    }
+  };
 
   /**
    * Waits for all tracked traces to reach a terminal state.
@@ -135,16 +198,23 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
     return new CancelablePromise<void>(function* () {
       // Flush scheduler and snapshot current traces
       yield scheduler.flush();
-      const trackedIds = new Set(tracer.getAllTraces().map((t) => t.valueId));
+      const initialTraces = tracer.getAllTraces();
+      const trackedIds = new Set(initialTraces.map((t) => t.valueId));
+      for (const t of initialTraces) {
+        observeSubscription(t.subscriptionId);
+      }
 
       /**
        * Checks if all traces in the snapshot are terminal.
        */
       const allTrackedTerminal = (): boolean => {
-        for (const t of tracer.getAllTraces()) {
+        const traces = tracer.getAllTraces();
+        collapseBufferedTraces(traces);
+        for (const t of traces) {
           // Only check traces from the snapshot
           if (!trackedIds.has(t.valueId)) continue;
-          if (isInFlight(t.state)) {
+          observeSubscription(t.subscriptionId);
+          if (isInFlight(t.state) && !completedSubscriptions.has(t.subscriptionId)) {
             return false;
           }
         }

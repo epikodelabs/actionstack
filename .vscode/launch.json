@@ -8,7 +8,7 @@
       "runtimeExecutable": "node",
       "runtimeArgs": [
         "--loader",
-        "./node_modules/@actioncrew/ts-test-runner/esm-loader.mjs",
+        "@actioncrew/ts-test-runner/esm-loader.mjs",
         "--enable-source-maps"
       ],
       "program": "${workspaceFolder}/node_modules/@actioncrew/ts-test-runner/bin/ts-jasmine-cli",
@@ -25,29 +25,6 @@
       ],
       "outFiles": [
         "${workspaceFolder}/dist/**/*.js"
-      ]
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Debug Jasmine Test (ESM Loader)",
-      "runtimeExecutable": "node",
-      "runtimeArgs": [
-        "--loader",
-        "./esm-loader.mjs",
-        "--enable-source-maps"
-      ],
-      "program": "${workspaceFolder}/node_modules/@actioncrew/ts-test-runner/bin/ts-jasmine-cli",
-      "args": [
-        "--spec",
-        "${file}"
-      ],
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen",
-      "sourceMaps": true,
-      "skipFiles": [
-        "<node_internals>/**"
       ]
     },
     {
