@@ -1,12 +1,15 @@
 # actionstack
 Next-generation state management for reactive applications.
-Built on Streamix for ultimate performance and simplicity.
+Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="noopener">streamix</a> for ultimate performance and simplicity.
 
 <p align="center">
   <img src="https://github.com/epikodelabs/actionstack/blob/main/LOGO.png?raw=true" alt="actionstack logo" width="500">
 </p>
 
-<p align="center">
+<div
+  align="center"
+  style="display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap;"
+>
   <a href="https://github.com/epikodelabs/actionstack/actions/workflows/build.yml">
     <img src="https://github.com/epikodelabs/actionstack/actions/workflows/build.yml/badge.svg?branch=main" alt="Build Status">
   </a>
@@ -22,7 +25,7 @@ Built on Streamix for ultimate performance and simplicity.
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
     <img src="https://img.shields.io/badge/AI-Powered-blue" alt="AI-Powered">
   </a>
-</p>
+</div>
 
 ---
 

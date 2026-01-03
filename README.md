@@ -1,6 +1,6 @@
 # actionstack
 Next-generation state management for reactive applications.
-Built on Streamix for ultimate performance and simplicity.
+Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="noopener">streamix</a> for ultimate performance and simplicity.
 
 <p align="center">
   <img src="https://github.com/epikodelabs/actionstack/blob/main/LOGO.png?raw=true" alt="actionstack logo" width="500">
