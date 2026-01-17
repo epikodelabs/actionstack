@@ -42,11 +42,5 @@ export function signature() {
  * @returns {boolean}    - True if the signature is a valid format and the internal hash check passes, false otherwise.
  */
 export function isValidSignature(sign: string) {
-  if (typeof sign !== 'string') return false;
-
-  const dottedPattern = /^([0-9a-z]\.){9}[0-9a-z]$/;
-  if (!dottedPattern.test(sign)) return false;
-
-  const normalized = sign.replace(/\./g, '');
-  return normalized.length === 10 && hash(normalized.slice(0, 7)) === normalized.slice(7, 10);
+  return typeof sign === 'string' && (sign = sign.replace(/\./g, '')).length === 10 && hash(sign.slice(0, 7)) === sign.slice(7, 10);
 }
