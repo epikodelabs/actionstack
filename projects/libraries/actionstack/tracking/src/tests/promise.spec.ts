@@ -20,4 +20,108 @@ describe("CancelablePromise", () => {
 
     await expectAsync(promise as Promise<unknown>).toBeResolvedTo(undefined);
   });
+
+  it("supports then/finally chaining", async () => {
+    const promise = new CancelablePromise<number>(function* () {
+      return 7;
+    });
+
+    let thenValue = 0;
+    let finallyCalled = false;
+
+    await promise
+      .then((value) => {
+        thenValue = value;
+        return value + 1;
+      })
+      .finally(() => {
+        finallyCalled = true;
+      });
+
+    expect(thenValue).toBe(7);
+    expect(finallyCalled).toBeTrue();
+  });
+
+  it("calls catch/finally after a rejection", async () => {
+    const promise = new CancelablePromise<number>(function* () {
+      yield Promise.reject(new Error("boom"));
+      return 1;
+    });
+
+    let catchCalled = false;
+    let finallyCalled = false;
+
+    await promise
+      .catch(() => {
+        catchCalled = true;
+      })
+      .finally(() => {
+        finallyCalled = true;
+      });
+
+    expect(catchCalled).toBeTrue();
+    expect(finallyCalled).toBeTrue();
+  });
+
+  it("rejects when the generator throws synchronously", async () => {
+    const promise = new CancelablePromise<number>(function* () {
+      throw new Error("sync boom");
+    });
+
+    await expectAsync(promise).toBeRejectedWithError("sync boom");
+  });
+
+  it("continues when yielding a non-promise value", async () => {
+    const promise = new CancelablePromise<number>(function* () {
+      const emitted = (yield 5) as number;
+      return emitted + 1;
+    });
+
+    await expectAsync(promise).toBeResolvedTo(6);
+  });
+
+  it("resolves when run is invoked with a canceled instance", async () => {
+    const promise = new CancelablePromise<number>(function* () {
+      yield new Promise<never>(() => {});
+      return 1;
+    });
+
+    const unsafePromise = promise as unknown as {
+      cancelled: boolean;
+      run: (value?: unknown) => void;
+    };
+    unsafePromise.cancelled = true;
+    unsafePromise.run();
+
+    await expectAsync(promise as Promise<unknown>).toBeResolvedTo(undefined);
+  });
+
+  it("continues after handling a rejection and yielding again", async () => {
+    let resumed = false;
+    const promise = new CancelablePromise<void>(function* () {
+      try {
+        yield Promise.reject(new Error("boom"));
+      } catch {
+        resumed = true;
+        yield Promise.resolve();
+      }
+    });
+
+    await expectAsync(promise).toBeResolved();
+    expect(resumed).toBeTrue();
+  });
+
+  it("resolves after handling a rejection without further yields", async () => {
+    const promise = new CancelablePromise<number>(function* () {
+      try {
+        yield Promise.reject(new Error("boom"));
+      } catch {
+        return 5;
+      }
+
+      return 5;
+    });
+
+    await expectAsync(promise).toBeResolvedTo(5);
+  });
 });

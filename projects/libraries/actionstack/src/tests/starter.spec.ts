@@ -247,6 +247,36 @@ describe('starter', () => {
       expect(queue.enqueue).toHaveBeenCalled();
       expect(next).toHaveBeenCalledWith({ type: 'NESTED' });
     });
+
+    it('passes inlineIfRunning to queue enqueue when nested dispatch occurs', async () => {
+      const options: any[] = [];
+      const queue = {
+        enqueue: jasmine
+          .createSpy('enqueue')
+          .and.callFake(async (operation: any, opts: any) => {
+            options.push(opts);
+            return operation();
+          }),
+      } as any;
+
+      const handler = createActionHandler(
+        {
+          getState: () => ({}),
+          dependencies: () => ({}),
+          queue,
+          dispatch: async () => {},
+        } as any,
+        { lockThunks: true }
+      );
+
+      const next = jasmine.createSpy('next').and.resolveTo();
+
+      await handler({ type: 'TOP' } as any, next, false);
+      await handler({ type: 'NESTED' } as any, next, true);
+
+      expect(options[0]).toEqual({ inlineIfRunning: false });
+      expect(options[1]).toEqual({ inlineIfRunning: true });
+    });
   });
 
   describe('execution', () => {

@@ -1,11 +1,13 @@
 {
   "srcDirs": [
     "./projects/libraries/actionstack/src/lib",
-    "./projects/libraries/actionstack/tools/src/lib"
+    "./projects/libraries/actionstack/tools/src/lib",
+    "./projects/libraries/actionstack/tracking/src/lib"
   ],
   "testDirs": [
     "./projects/libraries/actionstack/src/tests",
-    "./projects/libraries/actionstack/tools/src/tests"
+    "./projects/libraries/actionstack/tools/src/tests",
+    "./projects/libraries/actionstack/tracking/src/tests"
   ],
   "exclude": [
     "**/node_modules/**"

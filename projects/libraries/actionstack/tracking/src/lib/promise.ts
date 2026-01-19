@@ -2,29 +2,40 @@
  * A cancelable promise implementation using generators
  */
 export class CancelablePromise<T> {
-  private generator: Generator<unknown, T, unknown>;
+  private generator: Generator<unknown, T | undefined, unknown>;
   private cancelled = false;
   private resolve!: (value: T | PromiseLike<T>) => void;
   private reject!: (reason?: any) => void;
   private promise: Promise<T>;
-  private onCancelCallbacks: Array<() => void> = [];
-  private wasCancelled = false;
   public readonly [Symbol.toStringTag] = 'Promise';
 
-  constructor(generatorFn: () => Generator<unknown, T, unknown>) {
+  // Use microtask-settling helpers to avoid triggering
+  // runtime unhandled rejection detection before callers
+  // have a chance to attach handlers.
+  private safeResolve = (value?: T) => {
+    queueMicrotask(() => this.resolve(value as T));
+  };
+
+  private safeReject = (reason?: any) => {
+    queueMicrotask(() => this.reject(reason));
+  };
+
+  constructor(generatorFn: () => Generator<unknown, T | undefined, unknown>) {
     this.generator = generatorFn();
     this.promise = new Promise<T>((resolve, reject) => {
       this.resolve = resolve;
       this.reject = reject;
-      this.run();
+      // Defer running the generator to the next microtask so callers
+      // have a chance to attach handlers synchronously (e.g. .then/.catch).
+      queueMicrotask(() => this.run());
     });
   }
 
   private run(value?: unknown): void {
     if (this.cancelled) {
-      // If cancelled, resolve with undefined (or a special value)
-      // instead of rejecting
-      this.resolve(undefined as T);
+      // If cancelled, resolve with undefined (the original behaviour).
+      // Use microtask settle to avoid unhandled rejection races.
+      this.safeResolve(undefined as T);
       return;
     }
 
@@ -32,7 +43,7 @@ export class CancelablePromise<T> {
       const result = this.generator.next(value);
       
       if (result.done) {
-        this.resolve(result.value);
+        this.safeResolve(result.value as T);
         return;
       }
 
@@ -51,12 +62,12 @@ export class CancelablePromise<T> {
               try {
                 const errorResult = this.generator.throw(err);
                 if (errorResult.done) {
-                  this.resolve(errorResult.value);
+                  this.safeResolve(errorResult.value as T);
                 } else {
                   this.run(errorResult.value);
                 }
               } catch (error) {
-                this.reject(error);
+                this.safeReject(error);
               }
             }
           }
@@ -67,10 +78,10 @@ export class CancelablePromise<T> {
       }
     } catch (error) {
       if (!this.cancelled) {
-        this.reject(error);
+        this.safeReject(error);
       } else {
-        // If cancelled, resolve instead of reject
-        this.resolve(undefined as T);
+        // If cancelled, resolve instead of reject (preserve original semantics)
+        this.safeResolve(undefined as T);
       }
     }
   }
@@ -78,7 +89,6 @@ export class CancelablePromise<T> {
   cancel(): void {
     if (this.cancelled) return;
     this.cancelled = true;
-    this.wasCancelled = true;
     
     try {
       this.generator.return(undefined as any);
@@ -87,8 +97,8 @@ export class CancelablePromise<T> {
     }
     
     // Don't reject, just resolve with undefined
-    // This prevents unhandled rejections
-    this.resolve(undefined as T);
+    // This prevents unhandled rejections; settle on microtask.
+    this.safeResolve(undefined as T);
   }
 
   then<TResult1 = T, TResult2 = never>(

@@ -4,6 +4,7 @@ import {
   applyMiddleware,
   createModule,
   createStore,
+  isSystemActionType,
   thunk,
 } from '@epikodelabs/actionstack';
 import { withTracker } from '@epikodelabs/actionstack/tracking';
@@ -41,6 +42,13 @@ describe('store', () => {
     spyOn(console, 'log').and.stub();
     spyOn(console, 'warn').and.stub();
     spyOn(console, 'error').and.stub();
+  });
+
+  it('identifies system action types', () => {
+    expect(isSystemActionType('system/READY')).toBeTrue();
+    expect(isSystemActionType('system/')).toBeTrue();
+    expect(isSystemActionType('foo/system/READY')).toBeFalse();
+    expect(isSystemActionType(undefined as any)).toBeFalse();
   });
 
   it('initializes system module state', async () => {
@@ -95,6 +103,19 @@ describe('store', () => {
       ran = true;
     });
     expect(ran).toBeTrue();
+  });
+
+  it('warns when dispatching invalid actions', async () => {
+    const store = createStore();
+    await flush(store);
+    (console.warn as any).calls.reset();
+
+    await store.dispatch(null as any);
+
+    expect((console.warn as any).calls.any()).toBeTrue();
+    expect(String((console.warn as any).calls.mostRecent().args[0])).toContain(
+      'Invalid action dispatched:'
+    );
   });
 
   it('select returns defaultValue and warns when selector throws', async () => {

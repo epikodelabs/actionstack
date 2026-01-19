@@ -112,7 +112,7 @@ export const createStarter = () => {
     const triggers = thunk.triggers;
     if (!Array.isArray(triggers) || triggers.length === 0) return false;
     return triggers.some((t: any) => {
-      if (typeof t === 'string') return t === action.type;
+      if (typeof t === 'string') return t === action?.type;
       if (typeof t === 'function') {
         try { return Boolean(t(action)); } catch { return false; }
       }

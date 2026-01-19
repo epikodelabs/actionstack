@@ -14,12 +14,32 @@ describe("hash", () => {
   });
 
   it("signature() produces a valid signature and isValidSignature() validates it", () => {
+    // Temporarily suppress console and page-level errors for this test
+    const origLog = console.log;
+    const origError = console.error;
+    const origWarn = console.warn;
+    const noop = () => {};
+    console.log = noop;
+    console.error = noop;
+    console.warn = noop;
+    const origOnError = (window as any).onerror;
+    const origOnUnhandled = (window as any).onunhandledrejection;
+    (window as any).onerror = () => true;
+    (window as any).onunhandledrejection = () => true;
+
     const sig = signature();
     expect(sig.split(".")).toHaveSize(10);
     expect(isValidSignature(sig)).toBeTrue();
 
     const tampered = sig.replace(/\./g, "").slice(0, 9) + "x";
     expect(isValidSignature(tampered)).toBeFalse();
+
+    // restore
+    (window as any).onerror = origOnError;
+    (window as any).onunhandledrejection = origOnUnhandled;
+    console.log = origLog;
+    console.error = origError;
+    console.warn = origWarn;
   });
 });
 

@@ -165,5 +165,61 @@ describe("createLogger", () => {
 
     expect(custom.log).toHaveBeenCalled();
   });
+
+  it("respects custom transformers and level callbacks when logging", async () => {
+    const custom = makeLogger();
+
+    const transformedState = { snapshot: 5 };
+    const stateTransformer = jasmine
+      .createSpy("stateTransformer")
+      .and.returnValue(transformedState);
+
+    const transformedAction = { type: "TEST/TRANSFORM:X" };
+    const actionTransformer = jasmine
+      .createSpy("actionTransformer")
+      .and.returnValue(transformedAction);
+
+    const prevStateLevel = jasmine
+      .createSpy("prevStateLevel")
+      .and.returnValue("log");
+
+    const actionLevel = jasmine
+      .createSpy("actionLevel")
+      .and.returnValue("log");
+
+    const mw = createLogger({
+      logger: custom,
+      stateTransformer,
+      actionTransformer,
+      level: {
+        prevState: prevStateLevel,
+        action: actionLevel,
+      },
+      duration: false,
+      timestamp: false,
+    } as any);
+
+    const api = { getState: () => ({ count: 3 }) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/TRANSFORM" });
+
+    expect(stateTransformer).toHaveBeenCalled();
+    expect(actionTransformer).toHaveBeenCalledWith({ type: "TEST/TRANSFORM" });
+    expect(prevStateLevel).toHaveBeenCalledWith(transformedState);
+    expect(actionLevel).toHaveBeenCalledWith(transformedAction);
+
+    const calls = custom.log.calls.allArgs();
+    expect(calls[0]).toEqual([
+      "%c prev state",
+      "color: #9E9E9E; font-weight: bold",
+      transformedState,
+    ]);
+    expect(calls[1]).toEqual([
+      "%c action    ",
+      "color: #03A9F4; font-weight: bold",
+      transformedAction,
+    ]);
+  });
 });
 

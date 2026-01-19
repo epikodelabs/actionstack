@@ -43,12 +43,19 @@ function getSharedTracer(): ValueTracer {
  * await tracker.waitAll(); // Waits for value to be delivered
  * tracker.complete(sub);
  */
-export const createTracker = (): Tracker & { cancelAll: () => void } => {
-  const subscriptions = new Map<Subscription, boolean>();
-  const timeout = DEFAULT_TIMEOUT;
+interface TrackerOptions {
+  timeout?: number;
+}
 
-  // Serialize waitAll calls
+export const createTracker = (
+  options: TrackerOptions = {}
+): Tracker & { cancelAll: () => void } => {
+  const subscriptions = new Map<Subscription, boolean>();
+  const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+
+  // Serialize waitAll calls - but track queue items for cancellation
   let waitQueue: Promise<void> = Promise.resolve();
+  const queuedItems = new Map<symbol, { canceled: boolean }>();
   
   // Track active wait operations for cancellation
   const activeWaits = new Set<CancelablePromise<void>>();
@@ -58,54 +65,25 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
   tracer.clear();
   enableTracing(tracer);
 
-  /**
-   * Gets the signal state of a subscription.
-   * 
-   * @param subscription - The subscription to check
-   * @returns true if the subscription has been signaled, false otherwise
-   */
   const state: Tracker["state"] = (subscription) =>
     subscriptions.get(subscription) ?? false;
 
-  /**
-   * Signals that a subscription has received a value.
-   * 
-   * This is typically called from within a stream subscriber's `next` callback.
-   * 
-   * @param subscription - The subscription to signal
-   */
   const signal: Tracker["signal"] = (subscription) => {
     if (!subscriptions.has(subscription)) return;
     subscriptions.set(subscription, true);
   };
 
-  /**
-   * Marks a subscription as complete and removes it from tracking.
-   * 
-   * @param subscription - The subscription to complete
-   */
   const complete: Tracker["complete"] = (subscription) => {
     if (!subscriptions.has(subscription)) return;
     subscriptions.delete(subscription);
   };
 
-  /**
-   * Adds a subscription to the tracker's monitoring.
-   * 
-   * @param subscription - The subscription to track
-   */
   const track: Tracker["track"] = (subscription) => {
     if (!subscriptions.has(subscription)) {
       subscriptions.set(subscription, false);
     }
   };
 
-  /**
-   * Resets all subscription signals and clears the tracer.
-   * 
-   * This is typically called before dispatching a new action to start
-   * fresh tracking for that action's execution.
-   */
   const reset: Tracker["reset"] = () => {
     for (const sub of subscriptions.keys()) {
       subscriptions.set(sub, false);
@@ -113,36 +91,16 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
     tracer.clear();
   };
 
-  /**
-   * Checks if a trace state indicates in-flight processing.
-   * 
-   * @param state - The trace state to check
-   * @returns true if the trace is still in-flight
-   */
   const isInFlight = (state: string): boolean =>
     state === "emitted" || state === "processing" || state === "transformed";
 
-  /**
-   * Waits for all tracked traces to reach a terminal state.
-   * 
-   * Uses a snapshot approach: only waits for traces that exist at the start
-   * of the wait. New traces created during the wait are ignored, preventing
-   * infinite waiting when subscriptions dispatch more actions.
-   * 
-   * @returns A CancelablePromise that resolves when all tracked traces are terminal
-   */
   const waitUsingTracing = (): CancelablePromise<void> => {
     return new CancelablePromise<void>(function* () {
-      // Flush scheduler and snapshot current traces
       yield scheduler.flush();
       const trackedIds = new Set(tracer.getAllTraces().map((t) => t.valueId));
 
-      /**
-       * Checks if all traces in the snapshot are terminal.
-       */
       const allTrackedTerminal = (): boolean => {
         for (const t of tracer.getAllTraces()) {
-          // Only check traces from the snapshot
           if (!trackedIds.has(t.valueId)) continue;
           if (isInFlight(t.state)) {
             return false;
@@ -153,36 +111,25 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
 
       const start = Date.now();
       
-      // Poll until all tracked traces are terminal
       while (true) {
         yield scheduler.flush();
 
         if (allTrackedTerminal()) {
-          // Extra flush to ensure subscriber callbacks are delivered
           yield scheduler.flush();
           if (allTrackedTerminal()) break;
         }
 
-        // Timeout check
         if (Date.now() - start > timeout) {
           throw buildTimeoutError(tracer);
         }
 
-        // Brief pause before next check
         yield new Promise<void>((resolve) => setTimeout(resolve, 10));
       }
 
-      // Final flush for any remaining callbacks
       yield scheduler.flush();
     });
   };
 
-  /**
-   * Builds a detailed timeout error showing what traces are still in-flight.
-   * 
-   * @param tracer - The tracer instance
-   * @returns An error with diagnostic information
-   */
   const buildTimeoutError = (tracer: ValueTracer): Error => {
     const traces = tracer.getAllTraces();
     const inflight = traces.filter((x) => isInFlight(x.state));
@@ -206,100 +153,136 @@ export const createTracker = (): Tracker & { cancelAll: () => void } => {
     return new Error(msg);
   };
 
-  /**
-   * Enqueues a wait operation in the serialization queue.
-   * 
-   * @param work - The async work to enqueue
-   * @returns A promise that resolves when the work completes
-   */
-  const enqueueWait = (work: () => Promise<void>): Promise<void> => {
-    const run = waitQueue.then(work);
+  const enqueueWait = (
+    queueId: symbol,
+    work: () => Promise<void>
+  ): Promise<void> => {
+    const run = waitQueue.then(async () => {
+      const item = queuedItems.get(queueId);
+      if (item?.canceled) {
+        // Skip this work, it was cancelled
+        return;
+      }
+      await work();
+    });
     // Update queue to point to the new work, swallowing errors
     waitQueue = run.catch(() => {});
     return run;
   };
 
-  /**
-   * Waits for all tracked stream operations to complete.
-   * 
-   * This method:
-   * 1. Serializes multiple calls via an internal queue
-   * 2. Takes a snapshot of current traces and only waits for those
-   * 3. Returns a CancelablePromise that can be cancelled
-   * 4. Ignores new traces created during the wait (prevents infinite waiting)
-   * 
-   * The snapshot approach is critical for avoiding deadlocks when subscriptions
-   * dispatch more actions - we only wait for the traces that existed when
-   * waitAll() was called.
-   * 
-   * @returns A CancelablePromise that resolves when tracked traces are terminal
-   * 
-   * @example
-   * const tracker = createTracker();
-   * // ... set up streams and tracking ...
-   * await tracker.waitAll(); // Waits for current operations
-   * // or
-   * const wait = tracker.waitAll();
-   * wait.cancel(); // Cancel the wait
-   */
   const waitAll = (): CancelablePromise<void> => {
+    const queueId = Symbol('wait');
+    const queueItem = { canceled: false };
+    queuedItems.set(queueId, queueItem);
+
     let innerWait: CancelablePromise<void> | null = null;
-    let canceled = false;
 
-    // Enqueue the wait work
-    const work = enqueueWait(async () => {
-      if (canceled) return;
-      
-      // Let microtasks run to set up tracing hooks
-      await new Promise<void>((r) => queueMicrotask(r));
-      if (canceled) return;
+    // Outer promise that we will expose as a thenable. We translate the
+    // inner queued work outcomes into this promise and reject it when the
+    // caller cancels.
+    let resolveOuter: () => void;
+    let rejectOuter: (err?: any) => void;
+    let settled = false;
+    const outerPromise = new Promise<void>((resolve, reject) => {
+      resolveOuter = resolve;
+      rejectOuter = reject;
 
-      // Perform the actual wait
-      innerWait = waitUsingTracing();
-      
-      try {
-        await Promise.resolve(innerWait);
-      } finally {
-        innerWait = null;
-      }
+      const run = enqueueWait(queueId, async () => {
+        // If the queue item was canceled before running, the enqueueWait
+        // implementation will skip calling this work. We still handle
+        // cancellation below via the run completion handler.
+        if (queueItem.canceled) {
+          // If canceled, resolve outer promise (cancel is normal termination)
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+          return;
+        }
+
+        // Let microtasks run to set up tracing hooks
+        await new Promise<void>((r) => queueMicrotask(r));
+        if (queueItem.canceled) {
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+          return;
+        }
+
+        innerWait = waitUsingTracing();
+
+        // Translate inner wait outcome, but only settle once
+        innerWait.then(() => {
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        }, (err) => {
+          if (!settled) {
+            settled = true;
+            reject(err);
+          }
+        });
+
+        try {
+          await Promise.resolve(innerWait);
+          if (!queueItem.canceled && !settled) {
+            settled = true;
+            resolve();
+          }
+        } finally {
+          innerWait = null;
+          queuedItems.delete(queueId);
+        }
+      });
+
+      // If enqueueWait skipped the work because the item was canceled,
+      // its returned promise will still settle — handle that to ensure the
+      // outer promise is rejected appropriately.
+      run.then(() => {
+        if (queueItem.canceled && innerWait === null) {
+          try {
+            if (!settled) {
+              settled = true;
+              resolve();
+            }
+          } catch {}
+        }
+      }, (err) => {
+        try {
+          if (!settled) {
+            settled = true;
+            reject(err);
+          }
+        } catch {}
+      }).catch(() => {});
     });
 
-    // Wrap in CancelablePromise for the caller
-    const cancelableWait = new CancelablePromise<void>(function* () {
-      yield work;
-    });
-
-    // Track for cancelAll()
-    activeWaits.add(cancelableWait);
-    cancelableWait.finally(() => {
-      activeWaits.delete(cancelableWait);
-    });
-
-    // Override cancel to also cancel inner wait
-    const originalCancel = cancelableWait.cancel.bind(cancelableWait);
-    cancelableWait.cancel = () => {
-      canceled = true;
-      if (innerWait) {
-        innerWait.cancel();
-      }
-      originalCancel();
+    const thenable: any = {
+      cancel: () => {
+        queueItem.canceled = true;
+        try { if (innerWait) innerWait.cancel(); } catch {}
+        try {
+          if (!settled) {
+            settled = true;
+            resolveOuter();
+          }
+        } catch {}
+      },
+      then: outerPromise.then.bind(outerPromise),
+      catch: outerPromise.catch.bind(outerPromise),
+      finally: outerPromise.finally.bind(outerPromise),
+      [Symbol.toStringTag]: 'Promise',
     };
 
-    return cancelableWait;
+    // Track for cancelAll()
+    activeWaits.add(thenable as any);
+    outerPromise.finally(() => activeWaits.delete(thenable as any));
+
+    return thenable as unknown as CancelablePromise<void>;
   };
 
-  /**
-   * Cancels all active wait operations.
-   * 
-   * This is useful for cleanup or when you want to abort all pending waits,
-   * for example during application shutdown or test teardown.
-   * 
-   * @example
-   * const tracker = createTracker();
-   * const wait1 = tracker.waitAll();
-   * const wait2 = tracker.waitAll();
-   * tracker.cancelAll(); // Cancels both waits
-   */
   const cancelAll = () => {
     for (const wait of activeWaits) {
       wait.cancel();

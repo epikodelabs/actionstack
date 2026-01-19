@@ -2,6 +2,7 @@ import {
   action,
   createModule,
   createStore,
+  populateStore,
   registerModule,
   selector,
   thunk,
@@ -145,6 +146,19 @@ describe("module", () => {
       [m1, false],
       [m2, false],
     ]);
+  });
+
+  it("populateStore delegates to store.populate across multiple modules", () => {
+    const populate = jasmine.createSpy("populate").and.resolveTo();
+    const store: any = { populate };
+
+    const m1 = createModule({ slice: "p1", initialState: {}, actions: {} });
+    const m2 = createModule({ slice: "p2", initialState: {}, actions: {} });
+
+    const result = populateStore(store, m1, m2);
+
+    expect(populate).toHaveBeenCalledWith(m1, m2);
+    expect(result).toEqual([m1, m2]);
   });
 
   describe("data", () => {

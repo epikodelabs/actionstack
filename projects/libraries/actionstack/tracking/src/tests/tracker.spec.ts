@@ -423,19 +423,17 @@ describe("tracker", () => {
 
   it("can cancel a wait in the middle of a queue", async () => {
     const tracker = createTracker();
-    const allowFirst = deferred<void>();
-    const allowSecond = deferred<void>();
+    const allowValue = deferred<void>();
+    let deliverCount = 0;
 
-    let callCount = 0;
     const hold = createOperator<number, number>("hold", (source) => ({
       async next() {
         const r = await source.next();
         if (r.done) return r;
-        callCount++;
-        if (callCount === 1) {
-          await allowFirst.promise;
-        } else if (callCount === 2) {
-          await allowSecond.promise;
+        deliverCount++;
+        // Only the first call blocks
+        if (deliverCount === 1) {
+          await allowValue.promise;
         }
         return r;
       },
@@ -446,23 +444,31 @@ describe("tracker", () => {
     const stream = createStream("test", async function* () {
       yield 1;
       yield 2;
+      yield 3;
     });
 
-    const sub = stream.pipe(hold).subscribe({ next: () => {} });
+    const sub = stream.pipe(hold).subscribe({ next: () => { } });
     tracker.track(sub);
 
+    // Queue three waits - all waiting for the first value to unblock
     const wait1 = tracker.waitAll();
     const wait2 = tracker.waitAll();
     const wait3 = tracker.waitAll();
 
+    // Cancel the middle wait
     wait2.cancel();
 
-    allowFirst.resolve();
+    // Unblock the stream - this allows all values to flow
+    allowValue.resolve();
+    await flush();
+
+    // wait1 should complete successfully
     await wait1;
 
-    await wait2.catch(() => {});
+    // wait2 was cancelled; the primitive resolves to `undefined` on cancel
+    await expectAsync(wait2).toBeResolvedTo(undefined);
 
-    allowSecond.resolve();
+    // wait3 should also complete (not be impacted by the canceled middle wait)
     await wait3;
 
     tracker.complete(sub);
