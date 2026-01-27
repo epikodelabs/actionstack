@@ -29,8 +29,9 @@ export function createQueue() {
     };
 
     let result: Promise<T>;
-    if (options?.inlineIfRunning && runningCount > 0) {
-      // Re-entrant enqueue: run inline but still extend the queue chain
+    if (options?.inlineIfRunning) {
+      // Explicit nested enqueue requested by the caller (child action).
+      // Run inline as a microtask so the parent can await it without deadlock.
       result = Promise.resolve().then(runOperation);
     } else {
       // Create the chained promise that will execute the operation
@@ -42,7 +43,10 @@ export function createQueue() {
 
     // Chain the next operation (with error handling to prevent queue lock)
     // This maintains the sequential order regardless of operation success/failure
-    if (options?.inlineIfRunning && runningCount > 0) {
+    if (options?.inlineIfRunning) {
+      // Maintain ordering by ensuring `last` waits for both the previous chain
+      // and this inline-started operation to settle. This prevents reordering
+      // while still allowing parent/child awaits to proceed.
       last = Promise.all([last, finalized]).then(
         () => undefined,
         () => undefined

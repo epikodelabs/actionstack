@@ -13,10 +13,32 @@ function deferred<T>(): Deferred<T> {
     resolve = res;
     reject = rej;
   });
+
   return { promise, resolve, reject };
 }
 
 describe("queue", () => {
+  it("child enqueues run inline and siblings wait", async () => {
+    const q = createQueue();
+    const events: string[] = [];
+
+    const p1 = q.enqueue(async () => {
+      events.push("A-start");
+      await q.enqueue(async () => {
+        events.push("child");
+      }, { inlineIfRunning: true });
+      events.push("A-end");
+    });
+
+    const pSibling = q.enqueue(async () => {
+      events.push("sibling");
+    });
+
+    await Promise.all([p1, pSibling]);
+
+    expect(events).toEqual(["A-start", "child", "A-end", "sibling"]);
+  });
+  
   it("runs enqueued operations sequentially and tracks pending", async () => {
     const q = createQueue();
     const gate = deferred<void>();
