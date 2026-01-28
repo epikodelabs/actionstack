@@ -1,5 +1,5 @@
 import { getRegisteredThunks } from './actions';
-import type { ActionQueue } from './queue';
+import { createQueue, type ActionQueue } from './queue';
 import type { Action, AsyncAction } from './types';
 
 /**
@@ -31,7 +31,7 @@ export function createActionHandler(
   const dependencies = config.dependencies;
   const queue = config.queue ?? { enqueue: async (operation: () => Promise<void> | void) => operation() };
   const lockThunks = options.lockThunks ?? false;
-
+  const nestedQueue = lockThunks ? createQueue() : null;
 
   /**
    * Handles the given action, processing it either synchronously or asynchronously.
@@ -69,9 +69,16 @@ export function createActionHandler(
       await runThunk();
       return;
     } else {
-      await queue.enqueue(() => next(action), {
-        inlineIfRunning: isNestedDispatch,
-      });
+      const run = () =>
+        queue.enqueue(() => next(action), {
+          inlineIfRunning: lockThunks && isNestedDispatch,
+        });
+
+      if (lockThunks && isNestedDispatch && nestedQueue) {
+        await nestedQueue.enqueue(run);
+      } else {
+        await run();
+      }
       return;
     }
   };
