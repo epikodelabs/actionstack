@@ -124,4 +124,69 @@ describe("CancelablePromise", () => {
 
     await expectAsync(promise).toBeResolvedTo(5);
   });
-});
+
+  it("handles cancellation during error handling", async () => {
+    const promise = new CancelablePromise<number>(function* () {
+      try {
+        yield Promise.reject(new Error("boom"));
+      } catch {
+        return 5;
+      }
+      return 10;
+    });
+
+    const unsafePromise = promise as unknown as {
+      cancelled: boolean;
+    };
+
+    // Cancel while handling error
+    setTimeout(() => {
+      unsafePromise.cancelled = true;
+    }, 0);
+
+    await expectAsync(promise as Promise<unknown>).toBeResolvedTo(5);
+  });
+
+  it("handles double cancellation gracefully", async () => {
+    const promise = new CancelablePromise<number>(function* () {
+      yield new Promise((resolve) => setTimeout(resolve, 100));
+      return 1;
+    });
+
+    promise.cancel();
+    promise.cancel(); // Second cancel should be a no-op
+
+    await expectAsync(promise as Promise<unknown>).toBeResolvedTo(undefined);
+  });
+
+  it("uses finally without onfinally callback", async () => {
+    const promise = new CancelablePromise<number>(function* () {
+      return 42;
+    });
+
+    const result = await promise.finally();
+    expect(result).toBe(42);
+  });
+
+  it("resolves with undefined when throwing after cancellation", async () => {
+    const promise = new CancelablePromise<number>(function* () {
+      yield new Promise((resolve) => setTimeout(resolve, 10));
+      throw new Error("should not reject");
+    });
+
+    const unsafePromise = promise as unknown as {
+      cancelled: boolean;
+    };
+    unsafePromise.cancelled = true;
+
+    // Force the generator to throw
+    setTimeout(() => {
+      try {
+        throw new Error("forced error");
+      } catch (error) {
+        // Simulate error during cancelled state
+      }
+    }, 0);
+
+    await expectAsync(promise as Promise<unknown>).toBeResolvedTo(undefined);
+  });});

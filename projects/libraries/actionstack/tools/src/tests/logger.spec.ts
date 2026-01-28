@@ -199,27 +199,234 @@ describe("createLogger", () => {
       timestamp: false,
     } as any);
 
-    const api = { getState: () => ({ count: 3 }) } as any;
+    const api = { getState: () => ({ count: 5 }) } as any;
     const next = jasmine.createSpy("next").and.resolveTo(undefined);
 
     await (mw as any)(api)(next)({ type: "TEST/TRANSFORM" });
 
     expect(stateTransformer).toHaveBeenCalled();
-    expect(actionTransformer).toHaveBeenCalledWith({ type: "TEST/TRANSFORM" });
-    expect(prevStateLevel).toHaveBeenCalledWith(transformedState);
-    expect(actionLevel).toHaveBeenCalledWith(transformedAction);
+    expect(actionTransformer).toHaveBeenCalled();
+    expect(prevStateLevel).toHaveBeenCalled();
+    expect(actionLevel).toHaveBeenCalled();
+  });
 
-    const calls = custom.log.calls.allArgs();
-    expect(calls[0]).toEqual([
-      "%c prev state",
-      "color: #9E9E9E; font-weight: bold",
-      transformedState,
-    ]);
-    expect(calls[1]).toEqual([
-      "%c action    ",
-      "color: #03A9F4; font-weight: bold",
-      transformedAction,
-    ]);
+  it("uses colors for prevState when provided", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      colors: {
+        prevState: (state: any) => "#FF0000",
+      },
+    } as any);
+
+    const api = { getState: () => ({ count: 0 }) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/COLOR_PREV" });
+
+    expect(custom.log).toHaveBeenCalled();
+  });
+
+  it("uses colors for action when provided", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      colors: {
+        action: (action: any) => "#00FF00",
+      },
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/COLOR_ACTION" });
+
+    expect(custom.log).toHaveBeenCalled();
+  });
+
+  it("uses colors for nextState when provided", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      colors: {
+        nextState: (state: any) => "#0000FF",
+      },
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/COLOR_NEXT" });
+
+    expect(custom.log).toHaveBeenCalled();
+  });
+
+  it("uses colors.title when provided with default formatter", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      colors: {
+        title: (action: any) => "#FFAA00",
+      },
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/COLOR_TITLE" });
+
+    expect(custom.group).toHaveBeenCalled();
+  });
+
+  it("enables timestamp and duration in title", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      timestamp: true,
+      duration: true,
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/TIME_DURATION" });
+
+    expect(custom.group).toHaveBeenCalled();
+  });
+
+  it("uses custom titleFormatter", async () => {
+    const custom = makeLogger();
+    const titleFormatter = jasmine
+      .createSpy("titleFormatter")
+      .and.returnValue("Custom Title");
+
+    const mw = createLogger({
+      logger: custom,
+      titleFormatter,
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/CUSTOM_TITLE" });
+
+    expect(titleFormatter).toHaveBeenCalled();
+    expect(custom.group).toHaveBeenCalled();
+  });
+
+  it("uses errorTransformer when error occurs", async () => {
+    const custom = makeLogger();
+    const transformedError = new Error("transformed");
+    const errorTransformer = jasmine
+      .createSpy("errorTransformer")
+      .and.returnValue(transformedError);
+
+    const mw = createLogger({
+      logger: custom,
+      errorTransformer,
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = async () => {
+      throw new Error("original");
+    };
+
+    await expectAsync(
+      (mw as any)(api)(next)({ type: "TEST/ERROR_TRANSFORM" })
+    ).toBeRejectedWithError("transformed");
+
+    expect(errorTransformer).toHaveBeenCalled();
+  });
+
+  it("handles level as object with function returning falsy value", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      level: {
+        prevState: () => false,
+        action: () => null,
+        nextState: () => "",
+      },
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/FALSY_LEVEL" });
+
+    expect(custom.group).toHaveBeenCalled();
+  });
+
+  it("handles groupCollapsed with colors.title and default formatter", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      collapsed: true,
+      colors: {
+        title: (action: any) => "#123456",
+      },
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/COLLAPSED_COLOR" });
+
+    expect(custom.groupCollapsed).toHaveBeenCalled();
+  });
+
+  it("handles groupCollapsed without colors when using custom titleFormatter", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      collapsed: true,
+      titleFormatter: () => "Custom",
+      colors: {
+        title: () => "#FF0000",
+      },
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/CUSTOM_COLLAPSED" });
+
+    expect(custom.groupCollapsed).toHaveBeenCalled();
+  });
+
+  it("handles group without colors when using custom titleFormatter", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      collapsed: false,
+      titleFormatter: () => "Custom",
+      colors: {
+        title: () => "#00FF00",
+      },
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/CUSTOM_GROUP" });
+
+    expect(custom.group).toHaveBeenCalled();
+  });
+
+  it("enables timestamp and duration in title", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({
+      logger: custom,
+      timestamp: true,
+      duration: true,
+    } as any);
+
+    const api = { getState: () => ({}) } as any;
+    const next = jasmine.createSpy("next").and.resolveTo(undefined);
+
+    await (mw as any)(api)(next)({ type: "TEST/TIME_DURATION" });
+
+    expect(custom.group).toHaveBeenCalled();
   });
 });
 

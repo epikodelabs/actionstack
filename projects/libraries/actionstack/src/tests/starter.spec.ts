@@ -190,6 +190,30 @@ describe('starter', () => {
 
       expect(received.map(a => a.type)).toEqual(['PING']);  // No side effect
     });
+
+    it('ignores thunks with invalid trigger types inside the triggers array', async () => {
+      const t1 = thunk(
+        'TEST/INVALID_TRIGGER_TYPE',
+        () => async (dispatch) => {
+          await dispatch({ type: 'SHOULD_NOT_RUN' });
+        },
+        ['PING', 123 as any] // Invalid trigger type
+      );
+
+      registerTestModule({ t1 });
+
+      const { dispatch, received } = createHarness('exclusive');
+      await dispatch({ type: 'PING' });
+
+      // The thunk should still run because 'PING' is a valid trigger.
+      // The invalid trigger '123' should be ignored.
+      expect(received.map(a => a.type)).toContain('SHOULD_NOT_RUN');
+
+      // Now dispatch something that would only match the invalid one
+      const { dispatch: dispatch2, received: received2 } = createHarness('exclusive');
+      await dispatch2({ type: '123' });
+      expect(received2.map(a => a.type)).not.toContain('SHOULD_NOT_RUN');
+    });
   });
 
   describe('strategy', () => {
@@ -888,6 +912,276 @@ describe('starter', () => {
       await Promise.all([p1, p2]);
 
       expect(overlaps).toEqual([]);
+    });
+  });
+
+  describe('edgeCases', () => {
+    it('createActionHandler handles lockThunks without nestedQueue on non-nested dispatch', async () => {
+      const handler = createActionHandler(
+        {
+          getState: () => ({}),
+          dependencies: () => ({}),
+          queue: createQueue(),
+          dispatch: async () => {},
+        } as any,
+        { lockThunks: false }
+      );
+
+      const next = jasmine.createSpy('next').and.resolveTo();
+      await handler({ type: 'TEST' } as any, next, false);
+      expect(next).toHaveBeenCalledWith({ type: 'TEST' });
+    });
+
+    it('createActionHandler uses default queue when queue is not provided', async () => {
+      const handler = createActionHandler({
+        getState: () => ({}),
+        dependencies: () => ({}),
+        dispatch: async () => {},
+      } as any);
+
+      const next = jasmine.createSpy('next').and.resolveTo();
+      await handler({ type: 'TEST' } as any, next);
+      expect(next).toHaveBeenCalledWith({ type: 'TEST' });
+    });
+
+    it('matchesAction handles null/undefined action gracefully', async () => {
+      const t1 = thunk(
+        'TEST/NULL_CHECK',
+        () => async (dispatch) => {
+          await dispatch({ type: 'SHOULD_NOT_RUN' });
+        },
+        ['PING']
+      );
+
+      registerTestModule({ t1 });
+
+      const { dispatch, received } = createHarness('exclusive');
+      // The middleware may handle null differently, but we verify it doesn't crash
+      try {
+        await dispatch(null as any);
+      } catch {}
+
+      // Normal operation should still work
+      await dispatch({ type: 'PONG' });
+      expect(received.map(a => a?.type).filter(Boolean)).toContain('PONG');
+    });
+
+    it('resolveThunk returns null when thunk throws during instantiation', async () => {
+      const warn = spyOn(console, 'warn');
+
+      const badThunk: any = () => {
+        throw new Error('instantiate fail');
+      };
+      badThunk.isThunk = true;
+      badThunk.type = 'TEST/BAD_RESOLVE';
+      badThunk.triggers = ['PING'];
+
+      registerTestModule({ badThunk });
+
+      const { dispatch, received } = createHarness('exclusive');
+      await dispatch({ type: 'PING' });
+
+      expect(received.map(a => a.type)).toEqual(['PING']);
+      expect(warn).toHaveBeenCalled();
+    });
+
+    it('concurrent mode handles empty matching thunks array', async () => {
+      const { dispatch, received } = createHarness('concurrent');
+      await dispatch({ type: 'NO_MATCHING_THUNKS' });
+      expect(received.map(a => a.type)).toEqual(['NO_MATCHING_THUNKS']);
+    });
+
+    it('createActionHandler passes dependencies correctly to thunk', async () => {
+      const deps = { value: 42 };
+      let capturedDeps: any;
+
+      const handler = createActionHandler({
+        getState: () => ({}),
+        dependencies: () => deps,
+        queue: createQueue(),
+        dispatch: async () => {},
+      } as any);
+
+      const next = jasmine.createSpy('next').and.resolveTo();
+      const thunkAction = async (_dispatch: any, _getState: any, dependencies: any) => {
+        capturedDeps = dependencies;
+      };
+
+      await handler(thunkAction, next);
+      expect(capturedDeps).toBe(deps);
+    });
+
+    it('resolveThunk returns thunk directly when it is not a function', async () => {
+      const thunkObject = {
+        type: 'TEST/OBJECT_THUNK',
+        triggers: ['PING'],
+      };
+
+      registerTestModule({ thunkObject });
+
+      const { dispatch, received } = createHarness('exclusive');
+      await dispatch({ type: 'PING' });
+      
+      // Should handle non-function thunks gracefully
+      expect(received.map(a => a.type)).toEqual(['PING']);
+    });
+
+    it('concurrent mode handles catch error in inflight promise', async () => {
+      const errorThunk = thunk(
+        'TEST/CATCH_ERROR',
+        () => async () => {
+          throw new Error('uncaught error');
+        },
+        ['PING']
+      );
+
+      registerTestModule({ errorThunk });
+
+      const { dispatch: dispatchFn } = createHarness('concurrent');
+      const dispatch = dispatchFn as any;
+
+      // This should trigger the catch block in the inflight promise
+      await dispatch({ type: 'PING' });
+      await dispatch.waitForAll();
+
+      expect(dispatch.pendingCount()).toBe(0);
+    });
+
+    it('concurrent mode handles non-Error rejection reasons', async () => {
+      const warn = spyOn(console, 'warn');
+      
+      const badThunk = thunk(
+        'TEST/NON_ERROR_REJECT',
+        () => async () => {
+          throw 'string error'; // Non-Error rejection
+        },
+        ['PING']
+      );
+
+      registerTestModule({ badThunk });
+
+      const { dispatch: dispatchFn } = createHarness('concurrent');
+      const dispatch = dispatchFn as any;
+
+      await dispatch({ type: 'PING' });
+      await dispatch.waitForAll();
+
+      expect(warn).toHaveBeenCalled();
+      const messages = warn.calls.all().map(c => String(c.args[0]));
+      expect(messages.some(m => m.includes('string error'))).toBeTrue();
+    });
+
+    it('concurrent mode handles undefined/null rejection reasons', async () => {
+      const warn = spyOn(console, 'warn');
+      
+      const badThunk = thunk(
+        'TEST/NULL_REJECT',
+        () => async () => {
+          throw null; // null rejection
+        },
+        ['PING']
+      );
+
+      registerTestModule({ badThunk });
+
+      const { dispatch: dispatchFn } = createHarness('concurrent');
+      const dispatch = dispatchFn as any;
+
+      await dispatch({ type: 'PING' });
+      await dispatch.waitForAll();
+
+      expect(warn).toHaveBeenCalled();
+      const messages = warn.calls.all().map(c => String(c.args[0]));
+      expect(messages.some(m => m.includes('unknown'))).toBeTrue();
+    });
+
+    it('exclusive mode handles non-Error exceptions', async () => {
+      const warn = spyOn(console, 'warn');
+      
+      const badThunk = thunk(
+        'TEST/EXCL_NON_ERROR',
+        () => async () => {
+          throw 'string error';
+        },
+        ['PING']
+      );
+
+      registerTestModule({ badThunk });
+
+      const { dispatch } = createHarness('exclusive');
+      await dispatch({ type: 'PING' });
+
+      expect(warn).toHaveBeenCalled();
+      const messages = warn.calls.all().map(c => String(c.args[0]));
+      expect(messages.some(m => m.includes('string error'))).toBeTrue();
+    });
+
+    it('exclusive mode handles null/undefined exceptions', async () => {
+      const warn = spyOn(console, 'warn');
+      
+      const badThunk = thunk(
+        'TEST/EXCL_NULL',
+        () => async () => {
+          throw undefined;
+        },
+        ['PING']
+      );
+
+      registerTestModule({ badThunk });
+
+      const { dispatch } = createHarness('exclusive');
+      await dispatch({ type: 'PING' });
+
+      expect(warn).toHaveBeenCalled();
+      const messages = warn.calls.all().map(c => String(c.args[0]));
+      expect(messages.some(m => m.includes('unknown'))).toBeTrue();
+    });
+
+    it('concurrent mode main handler error with non-Error type', async () => {
+      const warn = spyOn(console, 'warn');
+
+      const { dispatch } = createHarness('concurrent', {
+        nextHook: () => {
+          throw 'next error string';
+        },
+      });
+
+      await dispatch({ type: 'PING' });
+      
+      expect(warn).toHaveBeenCalled();
+      const messages = warn.calls.all().map(c => String(c.args[0]));
+      expect(messages.some(m => m.includes('next error string'))).toBeTrue();
+    });
+
+    it('concurrent mode main handler error with null', async () => {
+      const warn = spyOn(console, 'warn');
+
+      const { dispatch } = createHarness('concurrent', {
+        nextHook: () => {
+          throw null;
+        },
+      });
+
+      await dispatch({ type: 'PING' });
+      
+      expect(warn).toHaveBeenCalled();
+      const messages = warn.calls.all().map(c => String(c.args[0]));
+      expect(messages.some(m => m.includes('unknown'))).toBeTrue();
+    });
+
+    it('concurrent mode p.catch handles non-Error', async () => {
+      const warn = spyOn(console, 'warn');
+
+      // Create a scenario where the outer promise catches an error
+      const { dispatch } = createHarness('concurrent', {
+        nextHook: async () => {
+          throw { custom: 'object' };
+        },
+      });
+
+      await dispatch({ type: 'PING' });
+      
+      expect(warn).toHaveBeenCalled();
     });
   });
 

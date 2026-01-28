@@ -554,4 +554,74 @@ describe("tracker", () => {
     sub.unsubscribe();
   });
 
+
+
+
+  it("handles signal on untracked subscription", async () => {
+    const tracker = createTracker();
+    const stream = createStream("test", async function* () {
+      yield 1;
+    });
+    const sub = stream.subscribe({ next: () => {} });
+
+    // Signal without tracking - should be no-op
+    tracker.signal(sub);
+    expect(tracker.state(sub)).toBeFalse();
+
+    sub.unsubscribe();
+  });
+
+  it("handles complete on untracked subscription", async () => {
+    const tracker = createTracker();
+    const stream = createStream("test", async function* () {
+      yield 1;
+    });
+    const sub = stream.subscribe({ next: () => {} });
+
+    // Complete without tracking - should be no-op
+    tracker.complete(sub);
+    expect(tracker.state(sub)).toBeFalse();
+
+    sub.unsubscribe();
+  });
+
+  it("handles multiple waitAll calls in sequence", async () => {
+    const tracker = createTracker();
+    
+    const stream1 = createStream("test1", async function* () {
+      yield 1;
+    });
+    const sub1 = stream1.subscribe({ next: () => {} });
+    tracker.track(sub1);
+
+    await tracker.waitAll();
+    tracker.complete(sub1);
+    sub1.unsubscribe();
+
+    const stream2 = createStream("test2", async function* () {
+      yield 2;
+    });
+    const sub2 = stream2.subscribe({ next: () => {} });
+    tracker.track(sub2);
+
+    await tracker.waitAll();
+    tracker.complete(sub2);
+    sub2.unsubscribe();
+  });
+
+
+  it("handles multiple simultaneous cancellations", async () => {
+    const tracker = createTracker();
+
+    const wait1 = tracker.waitAll();
+    const wait2 = tracker.waitAll();
+    const wait3 = tracker.waitAll();
+
+    tracker.cancelAll();
+
+    await expectAsync(wait1).toBeResolved();
+    await expectAsync(wait2).toBeResolved();
+    await expectAsync(wait3).toBeResolved();
+  });
+
 });
