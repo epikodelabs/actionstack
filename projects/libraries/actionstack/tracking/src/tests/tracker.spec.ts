@@ -7,7 +7,6 @@ import {
 } from "@epikodelabs/streamix";
 
 import { createTerminalTracer, createTracker } from "@epikodelabs/actionstack/tracking";
-import { disableTracing, enableTracing } from "@epikodelabs/streamix/tracing";
 
 async function flush(): Promise<void> {
   // Then wait for next event loop tick
@@ -33,12 +32,7 @@ function deferred<T>(): Deferred<T> {
 describe("tracker", () => {
   const tracer = createTerminalTracer();
 
-  beforeEach(() => {
-    enableTracing(tracer);
-  });
-
   afterEach(async () => {
-    disableTracing();
     await flush();
   });
 
