@@ -9,7 +9,7 @@
     "react:serve": "vite --config projects/apps/app2/vite.config.ts",
     "react:build": "vite build --config projects/apps/app2/vite.config.ts",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test",
+    "test": "npx testify",
     "minify": "node terser.mjs && npx typegen",
     "docs:generate": "typedoc --plugin typedoc-plugin-markdown --out docs/api --hideBreadcrumbs --hidePageHeader",
     "docs:dev": "npm run docs:generate && vitepress dev docs --config vitepress.config.ts",
