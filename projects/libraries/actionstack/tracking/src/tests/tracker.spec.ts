@@ -3,15 +3,15 @@ import {
   createOperator,
   createStream,
   filter,
-  map,
-  scheduler,
+  map
 } from "@epikodelabs/streamix";
 
-import { createTracker } from "@epikodelabs/actionstack/tracking";
-import { disableTracing } from "@epikodelabs/streamix/tracing";
+import { createTerminalTracer, createTracker } from "@epikodelabs/actionstack/tracking";
+import { disableTracing, enableTracing } from "@epikodelabs/streamix/tracing";
 
 async function flush(): Promise<void> {
-  await scheduler.flush();
+  // Then wait for next event loop tick
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 type Deferred<T> = {
@@ -31,18 +31,24 @@ function deferred<T>(): Deferred<T> {
 }
 
 describe("tracker", () => {
+  const tracer = createTerminalTracer();
+
+  beforeEach(() => {
+    enableTracing(tracer);
+  });
+
   afterEach(async () => {
     disableTracing();
     await flush();
   });
 
   it("resolves immediately when nothing is tracked", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     await tracker.waitAll();
   });
 
   it("updates state via signal(), reset(), and complete()", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
     });
@@ -64,7 +70,7 @@ describe("tracker", () => {
   });
 
   it("allows tracking the same subscription multiple times", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
     });
@@ -80,7 +86,7 @@ describe("tracker", () => {
   });
 
   it("waits for async values to be delivered", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const allowDeliver = deferred<void>();
     const started = deferred<void>();
 
@@ -110,11 +116,12 @@ describe("tracker", () => {
 
     const waitPromise = tracker.waitAll();
 
-    await new Promise((r) => setTimeout(r, 10));
+    await flush();
     expect(received).toEqual([]);
 
     allowDeliver.resolve();
     await waitPromise;
+    await flush();
 
     expect(received).toEqual([1]);
 
@@ -123,22 +130,22 @@ describe("tracker", () => {
   });
 
   it("resolves when traces are already terminal", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
     });
     const sub = stream.subscribe({ next: () => {} });
     tracker.track(sub);
 
-    await flush();
     await tracker.waitAll();
+    await flush();
 
     tracker.complete(sub);
     sub.unsubscribe();
   });
 
   it("resolves when values are delivered", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
       yield 2;
@@ -152,6 +159,7 @@ describe("tracker", () => {
     tracker.track(sub);
 
     await tracker.waitAll();
+    await flush();
 
     expect(received).toEqual([2, 4, 6]);
 
@@ -160,7 +168,7 @@ describe("tracker", () => {
   });
 
   it("resolves when values are filtered", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
       yield 2;
@@ -174,6 +182,7 @@ describe("tracker", () => {
 
     tracker.track(sub);
     await tracker.waitAll();
+    await flush();
 
     expect(received).toEqual([2, 3]);
 
@@ -182,7 +191,7 @@ describe("tracker", () => {
   });
 
   it("resolves when values are buffered", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
       yield 2;
@@ -196,6 +205,7 @@ describe("tracker", () => {
 
     tracker.track(sub);
     await tracker.waitAll();
+    await flush();
 
     expect(received).toEqual([[1, 2, 3]]);
 
@@ -204,7 +214,7 @@ describe("tracker", () => {
   });
 
   it("resolves when an operator errors", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
 
     const boom = createOperator<number, number>("boom", (source) => ({
       async next() {
@@ -230,6 +240,7 @@ describe("tracker", () => {
 
     tracker.track(sub);
     await tracker.waitAll();
+    await flush();
 
     expect(errorCaught).toBeTrue();
 
@@ -238,7 +249,7 @@ describe("tracker", () => {
   });
 
   it("resolves when a subscriber callback throws", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
       yield 2;
@@ -259,6 +270,7 @@ describe("tracker", () => {
 
     tracker.track(sub);
     await tracker.waitAll();
+    await flush();
 
     expect(errorCaught).toBeTrue();
 
@@ -267,7 +279,7 @@ describe("tracker", () => {
   });
 
   it("serializes multiple waitAll calls", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
       yield 2;
@@ -290,7 +302,7 @@ describe("tracker", () => {
   });
 
   it("can cancel a wait before completion", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const allowDeliver = deferred<void>();
     const started = deferred<void>();
 
@@ -331,7 +343,7 @@ describe("tracker", () => {
   });
 
   it("can cancel multiple concurrent waits", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const allowDeliver = deferred<void>();
 
     const hold = createOperator<number, number>("hold", (source) => ({
@@ -367,7 +379,7 @@ describe("tracker", () => {
   });
 
   it("cancelAll() cancels all active waits", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const allowDeliver = deferred<void>();
 
     const hold = createOperator<number, number>("hold", (source) => ({
@@ -402,7 +414,7 @@ describe("tracker", () => {
   });
 
   it("cancelled wait does not block subsequent waits", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
       yield 2;
@@ -422,7 +434,7 @@ describe("tracker", () => {
   });
 
   it("can cancel a wait in the middle of a queue", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const allowValue = deferred<void>();
     let deliverCount = 0;
 
@@ -476,7 +488,7 @@ describe("tracker", () => {
   });
 
   it("handles multiple cancel calls safely", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
     });
@@ -496,7 +508,7 @@ describe("tracker", () => {
   });
 
   it("cancelled promise does not affect tracer state", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
       yield 2;
@@ -514,6 +526,7 @@ describe("tracker", () => {
     await wait1.catch(() => {});
 
     await tracker.waitAll();
+    await flush();
 
     expect(received).toEqual([1, 2, 3]);
 
@@ -522,7 +535,7 @@ describe("tracker", () => {
   });
 
   it("supports then/catch/finally chaining", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
       yield 2;
@@ -558,7 +571,7 @@ describe("tracker", () => {
 
 
   it("handles signal on untracked subscription", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
     });
@@ -572,7 +585,7 @@ describe("tracker", () => {
   });
 
   it("handles complete on untracked subscription", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     const stream = createStream("test", async function* () {
       yield 1;
     });
@@ -586,7 +599,7 @@ describe("tracker", () => {
   });
 
   it("handles multiple waitAll calls in sequence", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
     
     const stream1 = createStream("test1", async function* () {
       yield 1;
@@ -611,7 +624,7 @@ describe("tracker", () => {
 
 
   it("handles multiple simultaneous cancellations", async () => {
-    const tracker = createTracker();
+    const tracker = createTracker(tracer);
 
     const wait1 = tracker.waitAll();
     const wait2 = tracker.waitAll();
@@ -623,5 +636,4 @@ describe("tracker", () => {
     await expectAsync(wait2).toBeResolved();
     await expectAsync(wait3).toBeResolved();
   });
-
 });

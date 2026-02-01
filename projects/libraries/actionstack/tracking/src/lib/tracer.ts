@@ -5,28 +5,7 @@
  * without tracking individual operator steps or durations. Optimized for production
  * use with minimal overhead.
  *
- * Usage:
- * ```ts
- * import { createTerminalTracer } from './streamix-terminal-tracer';
- * import { enableTracing } from './streamix-trace-core';
- *
- * const tracer = createTerminalTracer({
- *   maxTraces: 5_000,
- *   onTraceUpdate: (trace) => {
- *     if (trace.state === 'delivered') {
- *       metrics.increment('values_delivered');
- *     }
- *   }
- * });
- *
- * enableTracing(tracer);
- *
- * // Subscribe to terminal events only
- * tracer.subscribe({
- *   delivered: (trace) => console.log('Delivered:', trace.valueId),
- *   filtered: (trace) => console.log('Filtered:', trace.valueId),
- * });
- * ```
+ * MODIFIED: Added 'emitted' event support for counter-based tracking.
  */
 import { unwrapPrimitive } from "@epikodelabs/streamix";
 import {
@@ -44,6 +23,8 @@ import {
 /* ============================================================================ */
 
 export type TracerEventHandlers = {
+  /** Invoked when a trace is created/emitted. */
+  emitted?: (trace: ValueTrace) => void;
   /** Invoked when a trace is marked as delivered. */
   delivered?: (trace: ValueTrace) => void;
   /** Invoked when a trace becomes terminal due to filtering. */
@@ -291,6 +272,7 @@ export const createTerminalTracer = (
       }
 
       const exported = exportTrace(record);
+      notify("emitted", exported);
       onTraceUpdate?.(exported);
       return exported;
     },
@@ -337,6 +319,7 @@ export const createTerminalTracer = (
       }
       
       const exported = exportTrace(record);
+      notify("emitted", exported);
       onTraceUpdate?.(exported);
       return valueId;
     },
