@@ -30,13 +30,13 @@
  */
 import { unwrapPrimitive } from "@epikodelabs/streamix";
 import {
-    OperatorOutcome,
-    TerminalReason,
-    ValueState,
-    ValueTrace,
-    ValueTracer,
-    generateValueId,
-    unwrapTracedValue,
+  OperatorOutcome,
+  TerminalReason,
+  ValueState,
+  ValueTrace,
+  ValueTracer,
+  generateValueId,
+  unwrapTracedValue,
 } from "@epikodelabs/streamix/tracing";
 
 /* ============================================================================ */
@@ -114,6 +114,7 @@ interface MinimalTraceRecord {
     operatorName: string;
     baseValueId: string;
   };
+  readonly expandedInto?: string[]; // Track values expanded from this trace
   readonly collapsedInto?: {
     operatorIndex: number;
     operatorName: string;
@@ -145,8 +146,10 @@ const toValueState = (t: MinimalTraceRecord): ValueState => {
     }
   }
 
-  // Active state
-  if (t.parentTraceId) return "expanded";
+  // Active state - check for expanded traces first
+  if (t.expandedFrom) return "expanded";
+  if (t.expandedInto && t.expandedInto.length > 0) return "expanded";
+  
   if (t.finalValue !== undefined) return "transformed";
   return "emitted";
 };
@@ -323,6 +326,16 @@ export const createTerminalTracer = (
           };
 
       retainTrace(valueId, record);
+      
+      // Update the base trace to mark it as expanded
+      if (base && base.status === "active") {
+        const updatedBase: MinimalTraceRecord = {
+          ...base,
+          expandedInto: [...(base.expandedInto || []), valueId],
+        };
+        retainTrace(baseId, updatedBase);
+      }
+      
       const exported = exportTrace(record);
       onTraceUpdate?.(exported);
       return valueId;
@@ -396,6 +409,12 @@ export const createTerminalTracer = (
         const exported = exportTrace(terminated);
         notify("dropped", exported);
         onTraceUpdate?.(exported);
+        return vId;
+      }
+
+      // Handle expanded outcome
+      if (outcome === "expanded") {
+        // Don't update the trace - expansion will be handled by createExpandedTrace
         return vId;
       }
 
