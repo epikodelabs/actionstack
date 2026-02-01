@@ -1,23 +1,25 @@
 import type { Tracker } from "@epikodelabs/actionstack";
-import { scheduler, type Subscription } from "@epikodelabs/streamix";
+import { type Subscription } from "@epikodelabs/streamix";
 import {
-  createValueTracer,
   enableTracing,
-  type ValueTracer,
 } from "@epikodelabs/streamix/tracing";
 import { CancelablePromise } from "./promise";
+import { createTerminalTracer, ExtendedValueTracer } from "./tracer";
 
-const MAX_TRACES = 10_000;
+const MAX_TRACES = 5_000;
 const DEFAULT_TIMEOUT = 30_000;
 
 /**
  * Streamix tracing is effectively global (one active tracer at a time),
- * so this package uses a single shared ValueTracer instance.
+ * so this package uses a single shared terminal tracer instance.
+ * 
+ * Terminal tracer is optimized for production use - it tracks only terminal
+ * states (delivered/filtered/collapsed/errored) without operator steps or durations.
  */
-let sharedTracer: ValueTracer | null = null;
+let sharedTracer: ExtendedValueTracer | null = null;
 
-function getSharedTracer(): ValueTracer {
-  sharedTracer ??= createValueTracer({ maxTraces: MAX_TRACES });
+function getSharedTracer(): ExtendedValueTracer {
+  sharedTracer ??= createTerminalTracer({ maxTraces: MAX_TRACES });
   return sharedTracer;
 }
 
@@ -28,7 +30,7 @@ function getSharedTracer(): ValueTracer {
  * streams and determine when all tracked operations have completed.
  * 
  * Key behaviors:
- * - Enables global Streamix tracing on creation
+ * - Enables global Streamix tracing on creation (using terminal tracer for performance)
  * - `waitAll()` returns a CancelablePromise that resolves when all traces are terminal
  * - Multiple `waitAll()` calls are serialized via an internal queue
  * - Supports cancellation of individual waits or all waits via `cancelAll()`
@@ -60,7 +62,7 @@ export const createTracker = (
   // Track active wait operations for cancellation
   const activeWaits = new Set<CancelablePromise<void>>();
 
-  // Initialize global tracer
+  // Initialize global terminal tracer
   const tracer = getSharedTracer();
   tracer.clear();
   enableTracing(tracer);
@@ -96,7 +98,6 @@ export const createTracker = (
 
   const waitUsingTracing = (): CancelablePromise<void> => {
     return new CancelablePromise<void>(function* () {
-      yield scheduler.flush();
       const trackedIds = new Set(tracer.getAllTraces().map((t) => t.valueId));
 
       const allTrackedTerminal = (): boolean => {
@@ -112,10 +113,7 @@ export const createTracker = (
       const start = Date.now();
       
       while (true) {
-        yield scheduler.flush();
-
         if (allTrackedTerminal()) {
-          yield scheduler.flush();
           if (allTrackedTerminal()) break;
         }
 
@@ -125,12 +123,10 @@ export const createTracker = (
 
         yield new Promise<void>((resolve) => setTimeout(resolve, 10));
       }
-
-      yield scheduler.flush();
     });
   };
 
-  const buildTimeoutError = (tracer: ValueTracer): Error => {
+  const buildTimeoutError = (tracer: ExtendedValueTracer): Error => {
     const traces = tracer.getAllTraces();
     const inflight = traces.filter((x) => isInFlight(x.state));
 
@@ -140,9 +136,7 @@ export const createTracker = (
     if (inflight.length > 0) {
       msg += `\nStill in-flight (showing up to 5):\n`;
       for (const tr of inflight.slice(0, 5)) {
-        const last = tr.operatorSteps.at(-1);
         msg += `- ${tr.valueId} state=${tr.state}`;
-        if (last) msg += ` lastOp=${last.operatorName}`;
         msg += `\n`;
       }
       if (inflight.length > 5) {
@@ -301,4 +295,3 @@ export const createTracker = (
     cancelAll,
   };
 };
-
