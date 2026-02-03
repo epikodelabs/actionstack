@@ -7,38 +7,24 @@
  *
  * MODIFIED: Added 'emitted' event support for counter-based tracking.
  */
-import { unwrapPrimitive } from "@epikodelabs/streamix";
 import {
   OperatorOutcome,
   TerminalReason,
-  ValueState,
   ValueTrace,
-  ValueTracer,
+  createTraceStore,
+  createTracerSubscriptions,
+  defaultOpName,
   generateValueId,
-  unwrapTracedValue,
+  toValueState,
+  unwrapForExport,
+  type ExtendedValueTracer,
 } from "@epikodelabs/streamix/tracing";
 
 /* ============================================================================ */
 /* PUBLIC TYPES */
 /* ============================================================================ */
 
-export type TracerEventHandlers = {
-  /** Invoked when a trace is created/emitted. */
-  emitted?: (trace: ValueTrace) => void;
-  /** Invoked when a trace is marked as delivered. */
-  delivered?: (trace: ValueTrace) => void;
-  /** Invoked when a trace becomes terminal due to filtering. */
-  filtered?: (trace: ValueTrace) => void;
-  /** Invoked when a trace becomes terminal due to collapsing. */
-  collapsed?: (trace: ValueTrace) => void;
-  /** Invoked when a trace becomes terminal for reasons other than filtering/collapsing. */
-  dropped?: (trace: ValueTrace) => void;
-};
-
-export type TracerSubscriptionEventHandlers = TracerEventHandlers & {
-  /** Invoked when a subscription is completed (via `final` iterator completion/return/throw). */
-  complete?: () => void;
-};
+export type { ExtendedValueTracer, TracerEventHandlers, TracerSubscriptionEventHandlers } from "@epikodelabs/streamix/tracing";
 
 /** Configuration for terminal tracer creation. */
 export interface TerminalTracerOptions {
@@ -52,28 +38,11 @@ export interface TerminalTracerOptions {
   onTraceUpdate?: (trace: ValueTrace) => void;
 }
 
-/**
- * Extended tracer interface that includes subscription and utility methods.
- */
-export interface ExtendedValueTracer extends ValueTracer {
-  /** Subscribes to value-level events across all subscriptions. Returns an unsubscribe function. */
-  subscribe: (handlers: TracerEventHandlers) => () => void;
-  /** Subscribes to value-level events for a specific subscription id. Returns an unsubscribe function. */
-  observeSubscription: (subId: string, handlers: TracerSubscriptionEventHandlers) => () => void;
-  /** Returns the current in-memory traces (subject to LRU eviction). */
-  getAllTraces: () => ValueTrace[];
-  /** Returns basic tracer stats. */
-  getStats: () => { total: number };
-  /** Clears all in-memory traces and subscription observers. */
-  clear: () => void;
-}
-
 /* ============================================================================ */
 /* INTERNAL MODEL */
 /* ============================================================================ */
 
 type TraceStatus = "active" | "delivered" | "terminal";
-type SubscriptionState = "active" | "completed";
 
 /**
  * Minimal trace record - no operator steps, just terminal states.
@@ -114,29 +83,6 @@ interface MinimalTraceRecord {
 /* HELPER FUNCTIONS */
 /* ============================================================================ */
 
-const toValueState = (t: MinimalTraceRecord): ValueState => {
-  if (t.status === "delivered") return "delivered";
-
-  if (t.status === "terminal") {
-    switch (t.terminalReason!) {
-      case "filtered": return "filtered";
-      case "collapsed": return "collapsed";
-      case "errored": return "errored";
-      case "late": return "dropped";
-      default: return "dropped";
-    }
-  }
-
-  // Active state - check for expanded traces first
-  if (t.expandedFrom) return "expanded";
-  if (t.expandedInto && t.expandedInto.length > 0) return "expanded";
-  
-  if (t.finalValue !== undefined) return "transformed";
-  return "emitted";
-};
-
-const unwrapForExport = (value: any): any => unwrapPrimitive(unwrapTracedValue(value));
-
 const exportTrace = (t: MinimalTraceRecord): ValueTrace => ({
   valueId: t.valueId,
   parentTraceId: t.parentTraceId,
@@ -145,7 +91,14 @@ const exportTrace = (t: MinimalTraceRecord): ValueTrace => ({
   subscriptionId: t.subscriptionId,
   emittedAt: t.emittedAt,
   deliveredAt: t.deliveredAt,
-  state: toValueState(t),
+  state: toValueState({
+    status: t.status,
+    terminalReason: t.terminalReason,
+    parentTraceId: t.parentTraceId,
+    expandedFrom: t.expandedFrom,
+    expandedInto: t.expandedInto,
+    hasFinalValue: t.finalValue !== undefined,
+  }),
   sourceValue: unwrapForExport(t.sourceValue),
   finalValue: t.finalValue !== undefined ? unwrapForExport(t.finalValue) : undefined,
   operatorSteps: [], // Terminal tracer doesn't track steps
@@ -155,8 +108,6 @@ const exportTrace = (t: MinimalTraceRecord): ValueTrace => ({
   totalDuration: t.totalDuration,
   operatorDurations: new Map(), // Terminal tracer doesn't track durations
 });
-
-const defaultOpName = (opIdx: number): string => `op${opIdx}`;
 
 /* ============================================================================ */
 /* TERMINAL TRACER IMPLEMENTATION */
@@ -176,68 +127,24 @@ export const createTerminalTracer = (
 ): ExtendedValueTracer => {
   const { maxTraces = 5_000, onTraceUpdate } = options;
 
-  const traces = new Map<string, MinimalTraceRecord>();
-  const subscribers: TracerEventHandlers[] = [];
-  const subscriptionSubscribers = new Map<string, Set<TracerSubscriptionEventHandlers>>();
-  const subscriptionStates = new Map<string, SubscriptionState>();
-
-  // LRU eviction for memory management
-  const retainTrace = (valueId: string, trace: MinimalTraceRecord): void => {
-    traces.set(valueId, trace);
-    if (traces.size > maxTraces) {
-      const firstKey = traces.keys().next().value;
-      if (firstKey) traces.delete(firstKey);
-    }
-  };
-
-  const isCompleted = (subId: string): boolean =>
-    subscriptionStates.get(subId) === "completed";
-
-  const notify = (event: keyof TracerEventHandlers, trace: ValueTrace): void => {
-    for (const sub of subscribers) {
-      sub[event]?.(trace);
-    }
-    const subHandlers = subscriptionSubscribers.get(trace.subscriptionId);
-    if (subHandlers) {
-      for (const handler of subHandlers) {
-        handler[event]?.(trace);
-      }
-    }
-  };
+  const { traces, retainTrace, clearTraces } = createTraceStore<MinimalTraceRecord>(maxTraces);
+  const {
+    subscribe,
+    observeSubscription,
+    completeSubscription,
+    ensureActive,
+    isCompleted,
+    notify,
+    clearSubscriptions,
+  } = createTracerSubscriptions();
 
   return {
-    subscribe(handlers: TracerEventHandlers): () => void {
-      subscribers.push(handlers);
-      return () => {
-        const idx = subscribers.indexOf(handlers);
-        if (idx >= 0) subscribers.splice(idx, 1);
-      };
-    },
-
-    observeSubscription(subId: string, handlers: TracerSubscriptionEventHandlers): () => void {
-      if (!subscriptionSubscribers.has(subId)) {
-        subscriptionSubscribers.set(subId, new Set());
-      }
-      subscriptionSubscribers.get(subId)!.add(handlers);
-      return () => subscriptionSubscribers.get(subId)?.delete(handlers);
-    },
-
-    completeSubscription(subId: string): void {
-      if (subscriptionStates.get(subId) === "completed") return;
-      subscriptionStates.set(subId, "completed");
-      const handlers = subscriptionSubscribers.get(subId);
-      if (handlers) {
-        for (const h of handlers) {
-          h.complete?.();
-        }
-        subscriptionSubscribers.delete(subId);
-      }
-    },
+    subscribe,
+    observeSubscription,
+    completeSubscription,
 
     startTrace(valueId: string, streamId: string, streamName: string | undefined, subId: string, value: any): ValueTrace {
-      if (!subscriptionStates.has(subId)) {
-        subscriptionStates.set(subId, "active");
-      }
+      ensureActive(subId);
 
       const now = Date.now();
       const record: MinimalTraceRecord = {
@@ -324,7 +231,7 @@ export const createTerminalTracer = (
       return valueId;
     },
 
-    enterOperator(vId: string, opIdx: number, opName: string, val: any): void {
+    enterOperator(_vId: string, _opIdx: number, _opName: string, _val: any): void {
       // Terminal tracer doesn't track operator entry
     },
 
@@ -411,7 +318,7 @@ export const createTerminalTracer = (
       return vId;
     },
 
-    collapseValue(vId: string, opIdx: number, opName: string, targetId: string, val?: any): void {
+    collapseValue(vId: string, opIdx: number, opName: string, targetId: string, _val?: any): void {
       const trace = traces.get(vId);
       if (!trace) return;
 
@@ -507,9 +414,8 @@ export const createTerminalTracer = (
     },
 
     clear(): void {
-      traces.clear();
-      subscriptionSubscribers.clear();
-      subscriptionStates.clear();
+      clearTraces();
+      clearSubscriptions();
     },
   };
 };

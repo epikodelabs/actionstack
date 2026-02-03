@@ -1,6 +1,6 @@
 import { CancelablePromise } from "@epikodelabs/actionstack";
-import { ExtendedValueTracer, TracerSubscriptionEventHandlers } from "@epikodelabs/actionstack/tracking";
 import { Subscription } from "@epikodelabs/streamix";
+import { ExtendedValueTracer, TracerSubscriptionEventHandlers } from "./tracer";
 
 export interface Tracker {
   track(subscription: Subscription): void;
