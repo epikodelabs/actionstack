@@ -1,5 +1,12 @@
 import type { Stream } from '@epikodelabs/streamix';
-import { createBehaviorSubject, distinctUntilChanged, map } from '@epikodelabs/streamix';
+import {
+  createAsyncIterator,
+  createBehaviorSubject,
+  createReceiver,
+  createSubscription,
+  firstValueFrom,
+  pipeSourceThrough,
+} from '@epikodelabs/streamix';
 import { action, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
 import { createModule, registerModule } from './module';
 import { createQueue } from './queue';
@@ -500,56 +507,99 @@ export function createStore<T = any>(
     selector: (state: Readonly<T>) => R | Promise<R>,
     defaultValue?: R
   ): Stream<R> => {
-    const source$ = currentState.pipe(
-      map(async (state: T) => {
-        if (state == null) return defaultValue as R;
-        try {
-          const value = await selector(state);
-          return value === undefined ? (defaultValue as R) : value;
-        } catch (err: any) {
-          console.warn(`Error in selector: ${err?.message ?? err}`);
-          return defaultValue as R;
-        }
-      }),
-      distinctUntilChanged()
-    );
+    const subscribe = (callbackOrReceiver?: ((value: R) => any) | any) => {
+      const receiver = createReceiver<R>(callbackOrReceiver);
+      const tracker = store.tracker;
+      let hasValue = false;
+      let lastValue = defaultValue as R;
+      let sourceSubscription: any;
 
-    const tracker = store.tracker;
-    if (!tracker) return source$;
+      const subscription = createSubscription(async () => {
+        tracker?.complete(subscription as any);
+        await sourceSubscription?.unsubscribe?.();
+      });
 
-    return {
-      ...source$,
-      subscribe(observer: any) {
-        let subscription: any;
-        const wrappedObserver = {
-          next: (value: R) => {
-            observer?.next?.(value);
-            if (subscription) tracker.signal(subscription);
-          },
-          error: (err: any) => {
-            observer?.error?.(err);
-            if (subscription) tracker.complete(subscription);
-          },
-          complete: () => {
-            observer?.complete?.();
-            if (subscription) tracker.complete(subscription);
-          },
-        };
+      tracker?.track(subscription as any);
 
-        subscription = source$.subscribe(wrappedObserver);
-        tracker.track(subscription);
+      sourceSubscription = currentState.subscribe({
+        next: async (state: T) => {
+          if (subscription.unsubscribed || receiver.completed) {
+            return;
+          }
 
-        const originalUnsubscribe = subscription?.unsubscribe?.bind(subscription);
-        if (typeof originalUnsubscribe === 'function') {
-          subscription.unsubscribe = () => {
-            tracker.complete(subscription);
-            return originalUnsubscribe();
-          };
-        }
+          tracker?.start(subscription as any);
 
-        return subscription;
+          try {
+            let selected = defaultValue as R;
+            if (state != null) {
+              try {
+                const value = await selector(state);
+                selected = value === undefined ? (defaultValue as R) : value;
+              } catch (err: any) {
+                console.warn(`Error in selector: ${err?.message ?? err}`);
+              }
+            }
+
+            if (hasValue && Object.is(lastValue, selected)) {
+              tracker?.finish(subscription as any);
+              return;
+            }
+
+            hasValue = true;
+            lastValue = selected;
+
+            try {
+              await receiver.next(selected);
+              tracker?.finish(subscription as any);
+            } catch (err) {
+              tracker?.finish(subscription as any);
+              try {
+                await receiver.error(err);
+              } finally {
+                tracker?.complete(subscription as any);
+                await sourceSubscription?.unsubscribe?.();
+              }
+            }
+          } catch (err) {
+            tracker?.finish(subscription as any);
+            throw err;
+          }
+        },
+        error: async (err: any) => {
+          try {
+            await receiver.error(err);
+          } finally {
+            tracker?.complete(subscription as any);
+          }
+        },
+        complete: async () => {
+          try {
+            await receiver.complete();
+          } finally {
+            tracker?.complete(subscription as any);
+          }
+        },
+      });
+
+      return subscription;
+    };
+
+    let stream!: Stream<R>;
+    stream = {
+      type: 'stream',
+      name: 'select',
+      pipe: ((...ops: any[]) => pipeSourceThrough(stream as any, ops)) as any,
+      subscribe,
+      query: () => firstValueFrom(stream),
+      [Symbol.asyncIterator]: () => {
+        const factory = createAsyncIterator<R>({
+          register: (receiver) => subscribe(receiver),
+        });
+        return factory();
       },
     };
+
+    return stream;
   };
 
   /**

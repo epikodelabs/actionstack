@@ -387,17 +387,8 @@ export type StoreCreator<T = any> = (settings?: StoreSettings, enhancer?: StoreE
 export type StoreEnhancer = (next: StoreCreator) => StoreCreator;
 
 /**
- * Tracker used in tests to wait until all in-flight stream emissions have reached
- * a terminal tracing state.
- *
- * Why tracing?
- * - Some values never reach subscriber callbacks (filtered/collapsed/errored).
- * - Using tracing lets us wait for the *pipeline* to settle, not just callbacks.
- *
- * Notes:
- * - This implementation intentionally does NOT rely on internal/private tracer fields.
- * - It treats the world as "test-scoped": when you call `waitAll()`, it waits until
- *   *all traces currently known by the tracer* are terminal.
+ * Tracker used to wait until all in-flight select emissions for tracked
+ * subscriptions have settled.
  */
 export type Tracker = {
   /** Maximum time to wait for the stream graph to settle (ms). */
@@ -406,8 +397,14 @@ export type Tracker = {
   /** Returns current boolean state for the subscription (if tracked). */
   state: (subscription: Subscription) => boolean;
 
-  /** Signals that a tracked subscription executed some callback work. */
+  /** Compatibility alias for marking a tracked subscription as busy. */
   signal: (subscription: Subscription) => void;
+
+  /** Marks the beginning of one in-flight emission for a tracked subscription. */
+  start: (subscription: Subscription) => void;
+
+  /** Marks the end of one in-flight emission for a tracked subscription. */
+  finish: (subscription: Subscription) => void;
 
   /** Marks subscription as complete and removes it from the tracker. */
   complete: (subscription: Subscription) => void;
@@ -418,8 +415,11 @@ export type Tracker = {
   /** Resets internal statuses and clears collected traces. */
   reset: () => void;
 
+  /** Cancels all active waits. */
+  cancelAll: () => void;
+
   /**
-   * Waits until tracing shows no in-flight values (no "emitted"/"processing").
+   * Waits until tracked subscriptions have no in-flight emissions.
    * Calls are queued: each new call waits for the previous waitAll to finish.
    */
   waitAll: () => CancelablePromise<void>;

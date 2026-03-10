@@ -278,7 +278,7 @@ describe("createLogger", () => {
     expect(custom.group).toHaveBeenCalled();
   });
 
-  it("enables timestamp and duration in title", async () => {
+  it("enables timestamp and duration in title with grouped logger output", async () => {
     const custom = makeLogger();
     const mw = createLogger({
       logger: custom,

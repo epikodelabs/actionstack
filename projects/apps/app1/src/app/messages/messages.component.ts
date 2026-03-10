@@ -7,7 +7,8 @@ import { registerModule } from '@epikodelabs/actionstack';
 @Component({
   selector: 'app-messages',
   templateUrl: './messages.component.html',
-  styleUrls: ['./messages.component.css']
+  styleUrls: ['./messages.component.css'],
+  standalone: false
 })
 export class MessagesComponent {
   messages$!: Stream<any>;

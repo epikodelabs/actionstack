@@ -12,7 +12,8 @@ import { registerModule, unregisterModule } from '@epikodelabs/actionstack';
 @Component({
   selector: 'app-heroes',
   templateUrl: './heroes.component.html',
-  styleUrls: ['./heroes.component.css']
+  styleUrls: ['./heroes.component.css'],
+  standalone: false
 })
 export class HeroesComponent implements OnInit, OnDestroy {
   heroes: Hero[] = [];

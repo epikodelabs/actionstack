@@ -1,633 +1,97 @@
-import {
-  buffer,
-  createOperator,
-  createStream,
-  filter,
-  map
-} from "@epikodelabs/streamix";
+import { createSubscription } from "@epikodelabs/streamix";
 
 import { createTerminalTracer, createTracker } from "@epikodelabs/actionstack/tracking";
 
-async function flush(): Promise<void> {
-  // Then wait for next event loop tick
-  await new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-type Deferred<T> = {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason?: unknown) => void;
-};
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
 describe("tracker", () => {
-  const tracer = createTerminalTracer();
-
-  afterEach(async () => {
-    await flush();
-  });
-
   it("resolves immediately when nothing is tracked", async () => {
-    const tracker = createTracker(tracer);
+    const tracker = createTracker();
     await tracker.waitAll();
   });
 
-  it("updates state via signal(), reset(), and complete()", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-    });
-    const sub = stream.subscribe({ next: () => {} });
+  it("tracks pending work via start() and finish()", async () => {
+    const tracker = createTracker();
+    const sub = createSubscription();
 
     tracker.track(sub);
     expect(tracker.state(sub)).toBeFalse();
 
-    tracker.signal(sub);
+    tracker.start(sub);
+    expect(tracker.state(sub)).toBeTrue();
+
+    tracker.finish(sub);
+    expect(tracker.state(sub)).toBeFalse();
+  });
+
+  it("reset() clears pending counts without dropping tracked subscriptions", () => {
+    const tracker = createTracker();
+    const sub = createSubscription();
+
+    tracker.track(sub);
+    tracker.start(sub);
     expect(tracker.state(sub)).toBeTrue();
 
     tracker.reset();
     expect(tracker.state(sub)).toBeFalse();
+  });
 
+  it("complete() removes the subscription from tracking", () => {
+    const tracker = createTracker();
+    const sub = createSubscription();
+
+    tracker.track(sub);
+    tracker.start(sub);
     tracker.complete(sub);
+
     expect(tracker.state(sub)).toBeFalse();
-
-    sub.unsubscribe();
   });
 
-  it("allows tracking the same subscription multiple times", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
+  it("waitAll() waits until pending work is finished", async () => {
+    const tracker = createTracker();
+    const sub = createSubscription();
+
+    tracker.track(sub);
+    tracker.start(sub);
+
+    let resolved = false;
+    const wait = tracker.waitAll().then(() => {
+      resolved = true;
     });
-    const sub = stream.subscribe({ next: () => {} });
 
-    tracker.track(sub);
-    tracker.track(sub);
+    await Promise.resolve();
+    expect(resolved).toBeFalse();
 
-    await tracker.waitAll();
+    tracker.finish(sub);
+    await wait;
 
-    tracker.complete(sub);
-    sub.unsubscribe();
+    expect(resolved).toBeTrue();
   });
 
-  it("waits for async values to be delivered", async () => {
-    const tracker = createTracker(tracer);
-    const allowDeliver = deferred<void>();
-    const started = deferred<void>();
-
-    const hold = createOperator<number, number>("hold", (source) => ({
-      async next() {
-        const r = await source.next();
-        if (r.done) return r;
-        started.resolve();
-        await allowDeliver.promise;
-        return r;
-      },
-      return: source.return?.bind(source),
-      throw: source.throw?.bind(source),
-    }));
-
-    const stream = createStream("test", async function* () {
-      yield 1;
-    });
-
-    const received: number[] = [];
-    const sub = stream
-      .pipe(hold)
-      .subscribe({ next: (v) => received.push(v) });
-    tracker.track(sub);
-
-    await started.promise;
-
-    const waitPromise = tracker.waitAll();
-
-    await flush();
-    expect(received).toEqual([]);
-
-    allowDeliver.resolve();
-    await waitPromise;
-    await flush();
-
-    expect(received).toEqual([1]);
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("resolves when traces are already terminal", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-    });
-    const sub = stream.subscribe({ next: () => {} });
-    tracker.track(sub);
-
-    await tracker.waitAll();
-    await flush();
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("resolves when values are delivered", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-      yield 3;
-    });
-
-    const received: number[] = [];
-    const sub = stream
-      .pipe(map((x) => x * 2))
-      .subscribe({ next: (v) => received.push(v) });
-    tracker.track(sub);
-
-    await tracker.waitAll();
-    await flush();
-
-    expect(received).toEqual([2, 4, 6]);
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("resolves when values are filtered", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-      yield 3;
-    });
-
-    const received: number[] = [];
-    const sub = stream
-      .pipe(filter((x) => x > 1))
-      .subscribe({ next: (v) => received.push(v) });
+  it("cancelAll() cancels active waits", async () => {
+    const tracker = createTracker();
+    const sub = createSubscription();
 
     tracker.track(sub);
-    await tracker.waitAll();
-    await flush();
+    tracker.start(sub);
 
-    expect(received).toEqual([2, 3]);
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("resolves when values are buffered", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-      yield 3;
-    });
-
-    const received: number[][] = [];
-    const sub = stream
-      .pipe(buffer(50))
-      .subscribe({ next: (v) => received.push(v) });
-
-    tracker.track(sub);
-    await tracker.waitAll();
-    await flush();
-
-    expect(received).toEqual([[1, 2, 3]]);
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("resolves when an operator errors", async () => {
-    const tracker = createTracker(tracer);
-
-    const boom = createOperator<number, number>("boom", (source) => ({
-      async next() {
-        const r = await source.next();
-        if (r.done) return r;
-        throw new Error("BOOM");
-      },
-      return: source.return?.bind(source),
-      throw: source.throw?.bind(source),
-    }));
-
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-    });
-
-    let errorCaught = false;
-    const sub = stream.pipe(boom).subscribe({
-      error: () => {
-        errorCaught = true;
-      },
-    });
-
-    tracker.track(sub);
-    await tracker.waitAll();
-    await flush();
-
-    expect(errorCaught).toBeTrue();
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("resolves when a subscriber callback throws", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-      yield 3;
-    });
-
-    let errorCaught = false;
-    const sub = stream.subscribe({
-      next: (v) => {
-        if (v === 2) {
-          throw new Error("Callback error");
-        }
-      },
-      error: () => {
-        errorCaught = true;
-      },
-    });
-
-    tracker.track(sub);
-    await tracker.waitAll();
-    await flush();
-
-    expect(errorCaught).toBeTrue();
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("serializes multiple waitAll calls", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-      yield 3;
-    });
-    const sub = stream.pipe(map((x) => x)).subscribe({ next: () => {} });
-    tracker.track(sub);
-
-    const order: string[] = [];
-
-    const p1 = tracker.waitAll().then(() => order.push("first"));
-    const p2 = tracker.waitAll().then(() => order.push("second"));
-
-    await Promise.all([p1, p2]);
-
-    expect(order).toEqual(["first", "second"]);
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("can cancel a wait before completion", async () => {
-    const tracker = createTracker(tracer);
-    const allowDeliver = deferred<void>();
-    const started = deferred<void>();
-
-    const hold = createOperator<number, number>("hold", (source) => ({
-      async next() {
-        const r = await source.next();
-        if (r.done) return r;
-        started.resolve();
-        await allowDeliver.promise;
-        return r;
-      },
-      return: source.return?.bind(source),
-      throw: source.throw?.bind(source),
-    }));
-
-    const stream = createStream("test", async function* () {
-      yield 1;
-    });
-
-    const received: number[] = [];
-    const sub = stream
-      .pipe(hold)
-      .subscribe({ next: (v) => received.push(v) });
-    tracker.track(sub);
-
-    await started.promise;
-
-    const waitPromise = tracker.waitAll();
-
-    waitPromise.cancel();
-    await waitPromise.catch(() => {});
-
-    allowDeliver.resolve();
-    await flush();
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("can cancel multiple concurrent waits", async () => {
-    const tracker = createTracker(tracer);
-    const allowDeliver = deferred<void>();
-
-    const hold = createOperator<number, number>("hold", (source) => ({
-      async next() {
-        const r = await source.next();
-        if (r.done) return r;
-        await allowDeliver.promise;
-        return r;
-      },
-      return: source.return?.bind(source),
-      throw: source.throw?.bind(source),
-    }));
-
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-      yield 3;
-    });
-
-    const sub = stream.pipe(hold).subscribe({ next: () => {} });
-    tracker.track(sub);
-
-    const waits = [tracker.waitAll(), tracker.waitAll(), tracker.waitAll()];
-
-    waits.forEach((w) => w.cancel());
-    await Promise.all(waits.map((w) => w.catch(() => {})));
-
-    allowDeliver.resolve();
-    await flush();
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("cancelAll() cancels all active waits", async () => {
-    const tracker = createTracker(tracer);
-    const allowDeliver = deferred<void>();
-
-    const hold = createOperator<number, number>("hold", (source) => ({
-      async next() {
-        const r = await source.next();
-        if (r.done) return r;
-        await allowDeliver.promise;
-        return r;
-      },
-      return: source.return?.bind(source),
-      throw: source.throw?.bind(source),
-    }));
-
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-    });
-
-    const sub = stream.pipe(hold).subscribe({ next: () => {} });
-    tracker.track(sub);
-
-    const waits = [tracker.waitAll(), tracker.waitAll(), tracker.waitAll()];
-
-    tracker.cancelAll();
-    await Promise.all(waits.map((w) => w.catch(() => {})));
-
-    allowDeliver.resolve();
-    await flush();
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("cancelled wait does not block subsequent waits", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-      yield 3;
-    });
-    const sub = stream.pipe(map((x) => x)).subscribe({ next: () => {} });
-    tracker.track(sub);
-
-    const wait1 = tracker.waitAll();
-    wait1.cancel();
-    await wait1.catch(() => {});
-
-    await tracker.waitAll();
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("can cancel a wait in the middle of a queue", async () => {
-    const tracker = createTracker(tracer);
-    const allowValue = deferred<void>();
-    let deliverCount = 0;
-
-    const hold = createOperator<number, number>("hold", (source) => ({
-      async next() {
-        const r = await source.next();
-        if (r.done) return r;
-        deliverCount++;
-        // Only the first call blocks
-        if (deliverCount === 1) {
-          await allowValue.promise;
-        }
-        return r;
-      },
-      return: source.return?.bind(source),
-      throw: source.throw?.bind(source),
-    }));
-
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-      yield 3;
-    });
-
-    const sub = stream.pipe(hold).subscribe({ next: () => { } });
-    tracker.track(sub);
-
-    // Queue three waits - all waiting for the first value to unblock
     const wait1 = tracker.waitAll();
     const wait2 = tracker.waitAll();
-    const wait3 = tracker.waitAll();
 
-    // Cancel the middle wait
-    wait2.cancel();
+    tracker.cancelAll();
 
-    // Unblock the stream - this allows all values to flow
-    allowValue.resolve();
-    await flush();
-
-    // wait1 should complete successfully
-    await wait1;
-
-    // wait2 was cancelled; the primitive resolves to `undefined` on cancel
+    await expectAsync(wait1).toBeResolvedTo(undefined);
     await expectAsync(wait2).toBeResolvedTo(undefined);
-
-    // wait3 should also complete (not be impacted by the canceled middle wait)
-    await wait3;
-
-    tracker.complete(sub);
-    sub.unsubscribe();
   });
 
-  it("handles multiple cancel calls safely", async () => {
+  it("accepts a legacy tracer argument without using streamix/tracing", async () => {
+    const tracer = createTerminalTracer();
     const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-    });
-    const sub = stream.subscribe({ next: () => {} });
+    const sub = createSubscription();
+
     tracker.track(sub);
-
-    const wait = tracker.waitAll();
-
-    wait.cancel();
-    wait.cancel();
-    wait.cancel();
-
-    await wait.catch(() => {});
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("cancelled promise does not affect tracer state", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-      yield 3;
-    });
-
-    const received: number[] = [];
-    const sub = stream
-      .pipe(map((x) => x))
-      .subscribe({ next: (v) => received.push(v) });
-    tracker.track(sub);
-
-    const wait1 = tracker.waitAll();
-    wait1.cancel();
-    await wait1.catch(() => {});
-
-    await tracker.waitAll();
-    await flush();
-
-    expect(received).toEqual([1, 2, 3]);
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-  it("supports then/catch/finally chaining", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-      yield 2;
-    });
-    const sub = stream.subscribe({ next: () => {} });
-    tracker.track(sub);
-
-    let thenCalled = false;
-    let catchCalled = false;
-    let finallyCalled = false;
-
-    await tracker
-      .waitAll()
-      .then(() => {
-        thenCalled = true;
-      })
-      .catch(() => {
-        catchCalled = true;
-      })
-      .finally(() => {
-        finallyCalled = true;
-      });
-
-    expect(thenCalled).toBeTrue();
-    expect(catchCalled).toBeFalse();
-    expect(finallyCalled).toBeTrue();
-
-    tracker.complete(sub);
-    sub.unsubscribe();
-  });
-
-
-
-
-  it("handles signal on untracked subscription", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-    });
-    const sub = stream.subscribe({ next: () => {} });
-
-    // Signal without tracking - should be no-op
     tracker.signal(sub);
-    expect(tracker.state(sub)).toBeFalse();
+    expect(tracker.state(sub)).toBeTrue();
 
-    sub.unsubscribe();
-  });
-
-  it("handles complete on untracked subscription", async () => {
-    const tracker = createTracker(tracer);
-    const stream = createStream("test", async function* () {
-      yield 1;
-    });
-    const sub = stream.subscribe({ next: () => {} });
-
-    // Complete without tracking - should be no-op
-    tracker.complete(sub);
-    expect(tracker.state(sub)).toBeFalse();
-
-    sub.unsubscribe();
-  });
-
-  it("handles multiple waitAll calls in sequence", async () => {
-    const tracker = createTracker(tracer);
-    
-    const stream1 = createStream("test1", async function* () {
-      yield 1;
-    });
-    const sub1 = stream1.subscribe({ next: () => {} });
-    tracker.track(sub1);
-
+    tracker.finish(sub);
     await tracker.waitAll();
-    tracker.complete(sub1);
-    sub1.unsubscribe();
-
-    const stream2 = createStream("test2", async function* () {
-      yield 2;
-    });
-    const sub2 = stream2.subscribe({ next: () => {} });
-    tracker.track(sub2);
-
-    await tracker.waitAll();
-    tracker.complete(sub2);
-    sub2.unsubscribe();
-  });
-
-
-  it("handles multiple simultaneous cancellations", async () => {
-    const tracker = createTracker(tracer);
-
-    const wait1 = tracker.waitAll();
-    const wait2 = tracker.waitAll();
-    const wait3 = tracker.waitAll();
-
-    tracker.cancelAll();
-
-    await expectAsync(wait1).toBeResolved();
-    await expectAsync(wait2).toBeResolved();
-    await expectAsync(wait3).toBeResolved();
   });
 });

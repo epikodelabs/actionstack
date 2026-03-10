@@ -330,7 +330,7 @@ describe('selectStreamAsync', () => {
   });
 });
 
-describe('integration', () => {
+describe('selectors integration', () => {
   it('should work with nested slice selectors', () => {
     interface RootState {
       feature: TestState;

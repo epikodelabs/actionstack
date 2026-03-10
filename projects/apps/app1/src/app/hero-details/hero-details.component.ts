@@ -15,7 +15,8 @@ import { registerModule } from 'projects/libraries/actionstack/src/lib/module';
 @Component({
   selector: 'app-hero-details',
   templateUrl: './hero-details.component.html',
-  styleUrls: [ './hero-details.component.css' ]
+  styleUrls: [ './hero-details.component.css' ],
+  standalone: false
 })
 export class HeroDetailsComponent implements OnInit {
   hero$!: Stream<Hero | undefined>;

@@ -522,7 +522,7 @@ describe('applyChange', () => {
 });
 
 // Edge Cases and Integration Tests
-describe('integration', () => {
+describe('utils integration', () => {
   it('should work with complex nested state structures', async () => {
     const userReducer = (state = { name: '', age: 0 }, action: any) => {
       switch (action.type) {
