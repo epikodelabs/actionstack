@@ -1,13 +1,13 @@
 
-import { Component } from '@angular/core';
 import type { OnDestroy, OnInit } from '@angular/core';
+import { Component } from '@angular/core';
 
+import { registerModule, unregisterModule } from '@epikodelabs/actionstack';
+import type { Subscription } from '@epikodelabs/streamix';
+import { store } from '../app.module';
 import type { Hero } from '../hero';
 import { HeroService } from './../hero.service';
 import { heroesModule } from './heroes.slice';
-import { store } from '../app.module';
-import type { Subscription } from '@epikodelabs/streamix';
-import { registerModule, unregisterModule } from '@epikodelabs/actionstack';
 
 @Component({
   selector: 'app-heroes',

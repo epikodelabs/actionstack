@@ -1,8 +1,8 @@
 import {
-  selector,
-  selectorAsync,
-  selectStream,
-  selectStreamAsync
+    selector,
+    selectorAsync,
+    selectStream,
+    selectStreamAsync
 } from '@epikodelabs/actionstack';
 import { createBehaviorSubject } from '@epikodelabs/streamix';
 

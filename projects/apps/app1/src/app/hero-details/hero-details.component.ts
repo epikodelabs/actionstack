@@ -1,16 +1,15 @@
 import { Location } from '@angular/common';
-import { Component } from '@angular/core';
 import type { OnInit } from '@angular/core';
+import { Component } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 
-import type { Hero } from '../hero';
-import { loadHero, heroDetailsModule } from './hero-details.slice';
-import type { heroSelector } from './hero-details.slice';
-import { store } from '../app.module';
 import type { Stream } from '@epikodelabs/streamix';
-import { map, tap } from 'rxjs';
-import type { Subscription } from 'rxjs';
 import { registerModule } from 'projects/libraries/actionstack/src/lib/module';
+import type { Subscription } from 'rxjs';
+import { map, tap } from 'rxjs';
+import { store } from '../app.module';
+import type { Hero } from '../hero';
+import { heroDetailsModule, loadHero } from './hero-details.slice';
 
 @Component({
   selector: 'app-hero-details',

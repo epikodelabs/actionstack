@@ -1,7 +1,7 @@
 // utils.spec.ts - Jasmine Tests
 
-import { applyMiddleware, combineEnhancers, combineReducers, deepMerge, getProperty, setProperty } from '@epikodelabs/actionstack';
 import type { StoreCreator, StoreEnhancer } from '@epikodelabs/actionstack';
+import { applyMiddleware, combineEnhancers, combineReducers, deepMerge, getProperty, setProperty } from '@epikodelabs/actionstack';
 import { createBehaviorSubject } from '@epikodelabs/streamix';
 
 describe('getProperty', () => {
