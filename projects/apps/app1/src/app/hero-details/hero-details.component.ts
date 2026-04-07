@@ -4,7 +4,7 @@ import { Component } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 
 import type { Stream } from '@epikodelabs/streamix';
-import { registerModule } from 'projects/libraries/actionstack/src/lib/module';
+import { registerModule } from '@epikodelabs/actionstack';
 import type { Subscription } from 'rxjs';
 import { map, tap } from 'rxjs';
 import { store } from '../app.module';

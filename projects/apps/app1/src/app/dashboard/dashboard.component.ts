@@ -7,7 +7,7 @@ import type { Hero } from '../hero';
 import { dashboardModule} from './dashboard.slice';
 import { store } from '../app.module';
 import type { Stream } from '@epikodelabs/streamix';
-import { registerModule } from 'projects/libraries/actionstack/src/lib/module';
+import { registerModule } from '@epikodelabs/actionstack';
 
 @Component({
   selector: 'app-dashboard',
