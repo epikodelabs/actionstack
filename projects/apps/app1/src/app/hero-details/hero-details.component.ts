@@ -3,8 +3,8 @@ import type { OnInit } from '@angular/core';
 import { Component } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 
-import type { Stream } from '@epikodelabs/streamix';
 import { registerModule } from '@epikodelabs/actionstack';
+import type { Stream } from '@epikodelabs/streamix';
 import type { Subscription } from 'rxjs';
 import { map, tap } from 'rxjs';
 import { store } from '../app.module';

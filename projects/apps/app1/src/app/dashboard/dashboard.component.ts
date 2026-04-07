@@ -1,13 +1,13 @@
 
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
 import type { OnInit } from '@angular/core';
+import { Component } from '@angular/core';
 import { RouterModule } from '@angular/router';
-import type { Hero } from '../hero';
-import { dashboardModule} from './dashboard.slice';
-import { store } from '../app.module';
-import type { Stream } from '@epikodelabs/streamix';
 import { registerModule } from '@epikodelabs/actionstack';
+import type { Stream } from '@epikodelabs/streamix';
+import { store } from '../app.module';
+import type { Hero } from '../hero';
+import { dashboardModule } from './dashboard.slice';
 
 @Component({
   selector: 'app-dashboard',
