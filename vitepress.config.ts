@@ -53,8 +53,17 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },
+      { text: 'Pricing', link: '/PRICING' },
       { text: 'Changelog', link: '/CHANGELOG' },
       { text: 'API Reference', link: '/api/' },
+      {
+        text: 'Legal',
+        items: [
+          { text: 'Terms of Service', link: '/TERMS-OF-SERVICE' },
+          { text: 'Privacy Policy', link: '/PRIVACY-POLICY' },
+          { text: 'Refund Policy', link: '/REFUND-POLICY' }
+        ]
+      },
       { text: 'GitHub', link: 'https://github.com/epikodelabs/actionstack' }
     ],
 
@@ -80,9 +89,18 @@ export default defineConfig({
             { text: 'Changelog', link: '/CHANGELOG' },
             { text: 'Middleware', link: '/MIDDLEWARE' },
             { text: 'Modules', link: '/MODULES' },
+            { text: 'Pricing', link: '/PRICING' },
             { text: 'Starter', link: '/STARTER' },
             { text: 'React', link: '/REACT' },
             { text: 'Why', link: '/WHY' }
+          ]
+        },
+        {
+          text: 'Legal',
+          items: [
+            { text: 'Terms of Service', link: '/TERMS-OF-SERVICE' },
+            { text: 'Privacy Policy', link: '/PRIVACY-POLICY' },
+            { text: 'Refund Policy', link: '/REFUND-POLICY' }
           ]
         },
         {
@@ -99,8 +117,8 @@ export default defineConfig({
     ],
 
     footer: {
-      message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2026 epikodelabs'
+      message: 'Released under the GNU AGPL v3.',
+      copyright: 'Copyright (c) 2026 epikodelabs'
     },
 
     search: {

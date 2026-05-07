@@ -7,7 +7,7 @@
   "peerDependencies": {
     "@epikodelabs/streamix": "^2.0.37"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "homepage": "https://epikodelabs.github.io/actionstack",
   "repository": {
     "type": "git",

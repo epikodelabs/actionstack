@@ -238,6 +238,15 @@ The combination of Streamix's `query()` method and actionstack's thunks creates 
 - **[Community support](https://github.com/epikodelabs/actionstack/discussions)**
 - **[Streamix: Reactive foundation](https://www.npmjs.com/package/@epikodelabs/streamix)**
 
+## Licensing and Legal
+- **[License: GNU AGPL v3](https://github.com/epikodelabs/actionstack/blob/main/LICENSE)**
+- **[Pricing](/PRICING)**
+- **[Terms of Service](/TERMS-OF-SERVICE)**
+- **[Privacy Policy](/PRIVACY-POLICY)**
+- **[Refund Policy](/REFUND-POLICY)**
+
+actionstack is available at no charge under the GNU Affero General Public License v3. Optional paid support, consulting, and custom delivery are available by separate written agreement.
+
 ---
 
 <p align="center">

@@ -18,7 +18,7 @@ Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="n
     <img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Version">
   </a>
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
-    <img src="https://img.shields.io/npm/dm/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Downloads">
+    <img src="https://img.shields.io/npm/dt/@epikodelabs/actionstack.svg?style=flat-square" alt="Total Downloads">
   </a>
   <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
     <img src="https://raw.githubusercontent.com/epikodelabs/actionstack/main/projects/libraries/actionstack/bundle-size.svg" alt="Bundle Size">
@@ -237,6 +237,15 @@ The combination of Streamix's `query()` method and actionstack's thunks creates 
 - **[GitHub Repository](https://github.com/epikodelabs/actionstack)**
 - **[Community support](https://github.com/epikodelabs/actionstack/discussions)**
 - **[Streamix: Reactive foundation](https://www.npmjs.com/package/@epikodelabs/streamix)**
+
+## Licensing and Legal
+- **[License: GNU AGPL v3](https://github.com/epikodelabs/actionstack/blob/main/LICENSE)**
+- **[Pricing](https://epikodelabs.github.io/actionstack/PRICING)**
+- **[Terms of Service](https://epikodelabs.github.io/actionstack/TERMS-OF-SERVICE)**
+- **[Privacy Policy](https://epikodelabs.github.io/actionstack/PRIVACY-POLICY)**
+- **[Refund Policy](https://epikodelabs.github.io/actionstack/REFUND-POLICY)**
+
+actionstack is available at no charge under the GNU Affero General Public License v3. Optional paid support, consulting, and custom delivery are available by separate written agreement.
 
 ---
 
