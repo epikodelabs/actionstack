@@ -50,7 +50,7 @@ describe("createLogger", () => {
   });
 
   it("skips logging when logger option is 'undefined'", async () => {
-    const mw = createLogger({ logger: "undefined" } as any);
+    const mw = createLogger({ logger: undefined } as any);
     const next = jasmine.createSpy("next").and.resolveTo("OK");
 
     const out = await (mw as any)({ getState: () => ({}) })(next)({ type: "X" });
