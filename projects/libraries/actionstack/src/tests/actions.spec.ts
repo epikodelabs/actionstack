@@ -2,6 +2,7 @@ import {
   bindActionCreator,
   bindActionCreators,
   createAction,
+  createActionRegistry,
   createThunk,
   getActionHandlers,
   getRegisteredThunks,
@@ -135,12 +136,17 @@ describe("actions", () => {
 
   describe("registries", () => {
     const modulesToCleanup: any[] = [];
+    let registry = createActionRegistry();
+
+    beforeEach(() => {
+      registry = createActionRegistry();
+    });
 
     afterEach(() => {
       while (modulesToCleanup.length) {
         const m = modulesToCleanup.pop();
-        unregisterActionHandlers(m);
-        unregisterThunks(m);
+        unregisterActionHandlers(m, registry);
+        unregisterThunks(m, registry);
       }
     });
 
@@ -150,11 +156,11 @@ describe("actions", () => {
       const mod = { actions: { a } } as any;
       modulesToCleanup.push(mod);
 
-      registerActionHandlers(mod);
-      expect(getActionHandlers("TEST/REG_ACTION")).toBe(handler);
+      registerActionHandlers(mod, registry);
+      expect(getActionHandlers("TEST/REG_ACTION", registry)).toBe(handler);
 
-      unregisterActionHandlers(mod);
-      expect(getActionHandlers("TEST/REG_ACTION")).toBeUndefined();
+      unregisterActionHandlers(mod, registry);
+      expect(getActionHandlers("TEST/REG_ACTION", registry)).toBeUndefined();
     });
 
     it("warns when registering a duplicate action handler", () => {
@@ -164,8 +170,8 @@ describe("actions", () => {
       const mod2 = { actions: { a2 } } as any;
       modulesToCleanup.push(mod1, mod2);
 
-      registerActionHandlers(mod1);
-      registerActionHandlers(mod2);
+      registerActionHandlers(mod1, registry);
+      registerActionHandlers(mod2, registry);
 
       expect((console.warn as any).calls.any()).toBeTrue();
     });
@@ -178,15 +184,15 @@ describe("actions", () => {
       const mod2 = { actions: { t2 } } as any;
       modulesToCleanup.push(mod1, mod2);
 
-      registerThunks(mod1);
-      expect(getRegisteredThunks().some((x: any) => x.type === "TEST/REG_THUNK")).toBeTrue();
+      registerThunks(mod1, registry);
+      expect(getRegisteredThunks(registry).some((x: any) => x.type === "TEST/REG_THUNK")).toBeTrue();
 
       (console.warn as any).calls.reset();
-      registerThunks(mod2);
+      registerThunks(mod2, registry);
       expect((console.warn as any).calls.any()).toBeTrue();
 
-      unregisterThunks(mod1);
-      expect(getRegisteredThunks().some((x: any) => x.type === "TEST/REG_THUNK")).toBeFalse();
+      unregisterThunks(mod1, registry);
+      expect(getRegisteredThunks(registry).some((x: any) => x.type === "TEST/REG_THUNK")).toBeFalse();
     });
   });
 });

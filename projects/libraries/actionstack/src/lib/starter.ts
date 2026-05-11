@@ -1,6 +1,6 @@
 import { getRegisteredThunks } from './actions';
 import { createQueue, type ActionQueue } from './queue';
-import type { Action, AsyncAction } from './types';
+import type { Action, ActionRegistry, AsyncAction } from './types';
 
 /**
  * @template TState - The overall type of your application's state.
@@ -15,6 +15,7 @@ export interface MiddlewareConfig<TState = any, TDependencies extends Record<str
   getState: () => TState;
   dependencies: () => TDependencies;
   queue: ActionQueue;
+  registry: ActionRegistry;
 }
 
 /**
@@ -167,7 +168,7 @@ export const createStarter = () => {
           await handler(action as any, next, true);
 
           // sequentially trigger matching thunks
-          for (const thunk of getRegisteredThunks()) {
+          for (const thunk of getRegisteredThunks(config.registry)) {
             if (matchesAction(thunk, action as any)) {
               const runnableThunk = resolveThunk(thunk);
               if (runnableThunk) {
@@ -222,7 +223,7 @@ export const createStarter = () => {
           }
 
           // find matching thunks
-          const matching = getRegisteredThunks()
+          const matching = getRegisteredThunks(config.registry)
             .filter(thunk => matchesAction(thunk, action));
 
           // run thunks concurrently, but handle errors individually

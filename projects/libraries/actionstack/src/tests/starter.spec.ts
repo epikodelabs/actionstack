@@ -1,6 +1,7 @@
 import type { Action } from '@epikodelabs/actionstack';
 import {
   createActionHandler,
+  createActionRegistry,
   createQueue,
   createStarter,
   registerThunks,
@@ -28,6 +29,8 @@ type HarnessOptions = {
   nextHook?: (action: Action) => Promise<void> | void;
 };
 
+let currentRegistry = createActionRegistry();
+
 function createHarness(strategyName: string, opts: HarnessOptions = {}) {
   const queue = createQueue();
   const starterMw = createStarter();
@@ -52,6 +55,7 @@ function createHarness(strategyName: string, opts: HarnessOptions = {}) {
     dependencies: () => ({}),
     queue,
     strategy: () => strategyName,
+    registry: currentRegistry,
   } as any)(next);
 
   return { dispatch, received, overlaps };
@@ -60,16 +64,20 @@ function createHarness(strategyName: string, opts: HarnessOptions = {}) {
 describe('starter', () => {
   const cleanupModules: any[] = [];
 
+  beforeEach(() => {
+    currentRegistry = createActionRegistry();
+  });
+
   const registerTestModule = (actions: Record<string, any>) => {
     const module = { actions } as any;
-    registerThunks(module);
+    registerThunks(module, currentRegistry);
     cleanupModules.push(module);
     return module;
   };
 
   afterEach(() => {
     while (cleanupModules.length) {
-      unregisterThunks(cleanupModules.pop());
+      unregisterThunks(cleanupModules.pop(), currentRegistry);
     }
   });
 

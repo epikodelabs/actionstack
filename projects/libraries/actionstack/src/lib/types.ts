@@ -158,6 +158,15 @@ export type ActionHandler<State = any, Payload = any> =
   (state: State, payload: Payload) => State | Promise<State>;
 
 /**
+ * Per-store registry for action handlers and thunks.
+ * Keeping these isolated prevents collisions when multiple stores exist.
+ */
+export interface ActionRegistry {
+  actionHandlers: Map<string, ActionHandler>;
+  registeredThunks: Map<string, ThunkCreator>;
+}
+
+/**
  * A function that takes the current state and an action, and returns
  * the updated state (excluding promises).
  */
@@ -192,6 +201,7 @@ export type MiddlewareAPI<TState = any, TDependencies = any> = {
   dependencies: () => TDependencies;
   strategy: () => ProcessingStrategy;
   queue: ActionQueue;
+  registry: ActionRegistry;
 }
 
 /**

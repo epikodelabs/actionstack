@@ -7,7 +7,7 @@ import {
     firstValueFrom,
     pipeSourceThrough,
 } from '@epikodelabs/streamix';
-import { action, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
+import { action, createActionRegistry, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
 import { createModule, registerModule } from './module';
 import { createQueue } from './queue';
 import { starter } from './starter';
@@ -165,6 +165,7 @@ export function createStore<T = any>(
   let modules: FeatureModule[] = [];
   let sysActions = systemModule.actions;
   let reducers: (Reducer | AsyncReducer)[] = [];
+  const registry = createActionRegistry();
 
   // Determine if the second argument is storeSettings or enhancer
   let settings: StoreSettings;
@@ -208,7 +209,7 @@ export function createStore<T = any>(
     let newState = state; // start with current state
 
 
-    const handler = getActionHandlers(action.type);
+    const handler = getActionHandlers(action.type, registry);
 
     if (handler) {
       const slicePath = action.type.split('/').slice(0, -1); // handles 'foo/bar/ACTION'
@@ -340,8 +341,8 @@ export function createStore<T = any>(
           modules = [...modules, module];
 
           // Register action handlers
-          registerActionHandlers(module);
-          registerThunks(module);
+          registerActionHandlers(module, registry);
+          registerThunks(module, registry);
 
           // Inject dependencies
           injectDependencies();
@@ -394,8 +395,8 @@ export function createStore<T = any>(
       // Register the module
       modules = [...modules, module];
 
-      registerActionHandlers(module);
-      registerThunks(module);
+      registerActionHandlers(module, registry);
+      registerThunks(module, registry);
 
       // Inject dependencies
       injectDependencies();
@@ -433,8 +434,8 @@ export function createStore<T = any>(
       // Remove the module from the internal state
       modules.splice(moduleIndex, 1);
 
-      unregisterActionHandlers(module);
-      unregisterThunks(module);
+      unregisterActionHandlers(module, registry);
+      unregisterThunks(module, registry);
 
       // Eject dependencies
       ejectDependencies(module);
@@ -478,6 +479,7 @@ export function createStore<T = any>(
     dependencies: () => pipeline.dependencies,
     strategy: () => pipeline.strategy,
     queue,
+    registry,
   } as MiddlewareAPI;
 
   /**
