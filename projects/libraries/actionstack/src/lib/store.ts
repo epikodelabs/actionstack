@@ -363,12 +363,7 @@ export function createStore<T = any>(
           console.warn(`Failed to load module ${module.slice}:`, error);
 
           // Clean up on failure
-          const moduleIndex = modules.findIndex(
-            (m) => m.slice === module.slice
-          );
-          if (moduleIndex !== -1) {
-            modules.splice(moduleIndex, 1);
-          }
+          modules = modules.filter((m) => m.slice !== module.slice);
 
           // Signal error on loaded$ subject
           module.loaded$.error(error);
@@ -407,7 +402,6 @@ export function createStore<T = any>(
       }
 
       sysActions.moduleLoaded(module);
-      module.loaded$.next();
       currentState.next(state);
     });
   };
@@ -492,7 +486,7 @@ export function createStore<T = any>(
   ): Promise<void> => {
     return queue.enqueue(async () => {
       const path = slice === '*' ? '*' : normalizePath(slice);
-      const stateRead = (await getProperty(state, path as any)) as any;
+      const stateRead = getProperty(state, path as any) as any;
       await callback(stateRead);
     });
   };

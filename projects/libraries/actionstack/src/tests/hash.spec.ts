@@ -1,4 +1,4 @@
-import { hash, isValidSignature, salt, signature } from "@epikodelabs/actionstack";
+import { generateToken, hash, isValidToken, salt } from "@epikodelabs/actionstack";
 
 describe("hash", () => {
   it("salt() returns a fixed-length base36 string", () => {
@@ -13,7 +13,7 @@ describe("hash", () => {
     expect(hash("abc").length).toBe(3);
   });
 
-  it("signature() produces a valid signature and isValidSignature() validates it", () => {
+  it("generateToken() produces a valid token and isValidToken() validates it", () => {
     // Temporarily suppress console and page-level errors for this test
     const origLog = console.log;
     const origError = console.error;
@@ -27,12 +27,12 @@ describe("hash", () => {
     (window as any).onerror = () => true;
     (window as any).onunhandledrejection = () => true;
 
-    const sig = signature();
-    expect(sig.split(".")).toHaveSize(10);
-    expect(isValidSignature(sig)).toBeTrue();
+    const token = generateToken();
+    expect(token.split(".")).toHaveSize(10);
+    expect(isValidToken(token)).toBeTrue();
 
-    const tampered = sig.replace(/\./g, "").slice(0, 9) + "x";
-    expect(isValidSignature(tampered)).toBeFalse();
+    const tampered = token.replace(/\./g, "").slice(0, 9) + "x";
+    expect(isValidToken(tampered)).toBeFalse();
 
     // restore
     (window as any).onerror = origOnError;

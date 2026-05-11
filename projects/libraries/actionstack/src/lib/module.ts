@@ -51,8 +51,8 @@ function createModule<
   }
 
   let configured = false;
-  const loaded$ = createReplaySubject<void>();
-  const destroyed$ = createSubject<void>();
+  let loaded$ = createReplaySubject<void>();
+  let destroyed$ = createSubject<void>();
 
   const processedActions = processActions(config.actions ?? {}, slice, config.dependencies);
   let processedSelectors: any = {};
@@ -77,36 +77,43 @@ function createModule<
       if (configured) return this;
       configured = true;
       store = storeInstance;
-      
+
+      // Recreate subjects to support module reuse after destroy
+      loaded$ = createReplaySubject<void>();
+      destroyed$ = createSubject<void>();
+      (this as any).loaded$ = loaded$;
+      (this as any).destroyed$ = destroyed$;
+
       processedSelectors = processSelectors(
         config.selectors ?? {},
         selectSlice
       );
-      
+
       // Update the module's selectors
       this.selectors = processedSelectors;
-      
+
       // Initialize data$ streams and actions with the store
       initializeDataStreams(this, processedSelectors, loaded$, destroyed$, () => store);
       initializeActions(this, processedActions, slice, () => store);
-      
+
       // Mark module as loaded
       loaded$.next();
-      
+
       return this;
     },
 
     destroy(clearState?: boolean) {
       destroyed$.next();
       destroyed$.complete();
-      
+      loaded$.complete();
+
       if (store && clearState !== false) {
         store.unloadModule(this, true);
       }
-      
+
       configured = false;
       store = undefined;
-      
+
       return this;
     }
   };

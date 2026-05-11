@@ -26,21 +26,21 @@ export function hash(str: string) {
 }
 
 /**
- * Generates a signature by combining a random salt and a 3-character hash of the salt, separated by dots.
+ * Generates a self-checking token by combining a random salt and a 3-character hash of the salt, separated by dots.
  *
  * @returns {string} - A string containing the salt and its hash separated by dots (e.g., "abc.def").
  */
-export function signature() {
+export function generateToken() {
   let payload = salt(7), hashstr = hash(payload);
   return payload.concat(hashstr).split('').join('.');
 }
 
 /**
- * Validates a provided signature string based on its format and internal hash check.
+ * Validates a provided token string based on its format and internal hash check.
  *
- * @param {string} sign  - The signature string to be validated.
- * @returns {boolean}    - True if the signature is a valid format and the internal hash check passes, false otherwise.
+ * @param {string} token  - The token string to be validated.
+ * @returns {boolean}     - True if the token is a valid format and the internal hash check passes, false otherwise.
  */
-export function isValidSignature(sign: string) {
-  return typeof sign === 'string' && (sign = sign.replace(/\./g, '')).length === 10 && hash(sign.slice(0, 7)) === sign.slice(7, 10);
+export function isValidToken(token: string) {
+  return typeof token === 'string' && (token = token.replace(/\./g, '')).length === 10 && hash(token.slice(0, 7)) === token.slice(7, 10);
 }

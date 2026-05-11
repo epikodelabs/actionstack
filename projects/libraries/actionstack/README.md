@@ -4,7 +4,7 @@ Next-generation state management for reactive applications.
 Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="noopener">streamix</a> for ultimate performance and simplicity.
 
 <p align="center">
-  <img src="https://github.com/epikodelabs/actionstack/blob/main/LOGO.png?raw=true" alt="actionstack logo" width="500">
+  <img src="https://epikodelabs.github.io/actionstack/LOGO.png?raw=true" alt="actionstack logo" width="500">
 </p>
 
 <div

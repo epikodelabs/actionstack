@@ -367,7 +367,6 @@ export interface FeatureModule<
   readonly data$: Streams<Selectors>;
   readonly actions: Actions;
   readonly selectors: Selectors;
-  readonly [key: string]: any;
   init: (store: Store<any>) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
   configure: (store: Store<State>) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
   destroy: (clearState?: boolean) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;

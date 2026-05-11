@@ -62,11 +62,6 @@ export function createActionHandler(
           dependencies()
         );
 
-      if (lockThunks && !isNestedDispatch) {
-        await runThunk();
-        return;
-      }
-
       await runThunk();
       return;
     } else {
@@ -294,7 +289,7 @@ export const createStarter = () => {
   const defaultStrategy = 'concurrent';
 
   // Create a method to select the strategy
-  const selectStrategy = ({ dispatch, getState, dependencies, strategy, queue, stack }: any) => (next: Function) => {
+  const selectStrategy = ({ dispatch, getState, dependencies, strategy, queue, stack, registry }: any) => (next: Function) => {
     let strategyName: string;
     try {
       strategyName = String(strategy?.());
@@ -308,7 +303,7 @@ export const createStarter = () => {
       strategyFunc = strategies[defaultStrategy];
     }
 
-    return strategyFunc({ dispatch, getState, dependencies, queue, stack })(next);
+    return strategyFunc({ dispatch, getState, dependencies, queue, stack, registry })(next);
   };
 
   selectStrategy.signature = 'i.p.5.j.7.0.2.1.8.b';
