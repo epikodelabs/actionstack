@@ -11,9 +11,6 @@ Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="n
   align="center"
   style="display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap;"
 >
-  <a href="https://github.com/epikodelabs/actionstack/actions/workflows/build.yml">
-    <img src="https://github.com/epikodelabs/actionstack/actions/workflows/build.yml/badge.svg?branch=main" alt="Build Status">
-  </a>
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
     <img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Version">
   </a>
@@ -22,9 +19,6 @@ Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="n
   </a>
   <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
     <img src="https://raw.githubusercontent.com/epikodelabs/actionstack/main/projects/libraries/actionstack/bundle-size.svg" alt="Bundle Size">
-  </a>
-  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
-    <img src="https://img.shields.io/badge/AI-Powered-blue" alt="AI-Powered">
   </a>
 </div>
 

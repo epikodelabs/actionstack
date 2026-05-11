@@ -52,7 +52,7 @@ copyFile(readmePath, indexPath);
 
 if (fs.existsSync(docsRoot)) {
   for (const fileName of listMarkdownFiles(docsRoot)) {
-    if (fileName.toLowerCase() === 'readme.md') {
+    if (fileName.toLowerCase() === 'readme.md' || fileName.toLowerCase() === 'introduction.md') {
       continue;
     }
     copyFile(path.join(docsRoot, fileName), path.join(distRoot, fileName));

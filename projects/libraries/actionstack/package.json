@@ -1,6 +1,6 @@
 {
   "name": "@epikodelabs/actionstack",
-  "version": "3.0.20",
+  "version": "3.0.21",
   "dependencies": {
     "tslib": "^2.8.1"
   },
@@ -8,10 +8,10 @@
     "@epikodelabs/streamix": "^2.0.37"
   },
   "license": "AGPL-3.0-only",
-  "homepage": "https://epikodelabs.github.io/actionstack",
+  "homepage": "https://epikodelabs.github.io",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/epikodelabs/actionstack.git"
+    "url": "https://github.com/epikodelabs/epikodelabs.github.io"
   },
   "author": "Oleksii Shepel",
   "email": "oleksii.shepel@outlook.com",

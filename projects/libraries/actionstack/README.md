@@ -11,20 +11,14 @@ Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="n
   align="center"
   style="display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap;"
 >
-  <a href="https://github.com/epikodelabs/actionstack/actions/workflows/build.yml">
-    <img src="https://github.com/epikodelabs/actionstack/actions/workflows/build.yml/badge.svg?branch=main" alt="Build Status">
-  </a>
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
     <img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Version">
   </a>
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
-    <img src="https://img.shields.io/npm/dt/@epikodelabs/actionstack.svg?style=flat-square" alt="Total Downloads">
+    <img src="https://img.shields.io/npm/dm/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Downloads">
   </a>
   <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
     <img src="https://raw.githubusercontent.com/epikodelabs/actionstack/main/projects/libraries/actionstack/bundle-size.svg" alt="Bundle Size">
-  </a>
-  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
-    <img src="https://img.shields.io/badge/AI-Powered-blue" alt="AI-Powered">
   </a>
 </div>
 
@@ -240,10 +234,10 @@ The combination of Streamix's `query()` method and actionstack's thunks creates 
 
 ## Licensing and Legal
 - **[License: GNU AGPL v3](https://github.com/epikodelabs/actionstack/blob/main/LICENSE)**
-- **[Pricing](https://epikodelabs.github.io/actionstack/PRICING)**
-- **[Terms of Service](https://epikodelabs.github.io/actionstack/TERMS-OF-SERVICE)**
-- **[Privacy Policy](https://epikodelabs.github.io/actionstack/PRIVACY-POLICY)**
-- **[Refund Policy](https://epikodelabs.github.io/actionstack/REFUND-POLICY)**
+- **[Pricing](/PRICING)**
+- **[Terms of Service](/TERMS-OF-SERVICE)**
+- **[Privacy Policy](/PRIVACY-POLICY)**
+- **[Refund Policy](/REFUND-POLICY)**
 
 actionstack is available at no charge under the GNU Affero General Public License v3. Optional paid support, consulting, and custom delivery are available by separate written agreement.
 
