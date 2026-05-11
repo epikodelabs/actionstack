@@ -4,7 +4,7 @@ Next-generation state management for reactive applications.
 Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="noopener">streamix</a> for ultimate performance and simplicity.
 
 <p align="center">
-  <img src="https://epikodelabs.github.io/actionstack/LOGO.png?raw=true" alt="actionstack logo" width="500">
+  <img src="https://epikodelabs.github.io/actionstack/LOGO.png" alt="actionstack logo" width="500">
 </p>
 
 <div
@@ -246,5 +246,5 @@ actionstack is available at no charge under the GNU Affero General Public Licens
 <p align="center">
   <strong>Ready for next-gen state management?</strong><br>
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">Install from NPM</a>
-  <a href="https://epikodelabs.github.io/">View on GitHub</a>
+  <a href="https://github.com/epikodelabs/actionstack">View on GitHub</a>
 </p>
