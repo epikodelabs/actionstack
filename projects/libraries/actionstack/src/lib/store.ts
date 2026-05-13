@@ -1,32 +1,32 @@
 import type { Stream } from '@epikodelabs/streamix';
 import {
-    createAsyncIterator,
-    createBehaviorSubject,
-    createReceiver,
-    createSubscription,
-    firstValueFrom,
-    pipeSourceThrough,
+  createAsyncIterator,
+  createBehaviorSubject,
+  createReceiver,
+  createSubscription,
+  firstValueFrom,
+  pipeSourceThrough,
 } from '@epikodelabs/streamix';
 import { action, createActionRegistry, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
 import { createModule, registerModule } from './module';
 import { createQueue } from './queue';
 import { starter } from './starter';
 import type {
-    Action,
-    AsyncAction,
-    AsyncReducer,
-    Dispatch,
-    FeatureModule,
-    Middleware,
-    MiddlewareAPI,
-    Reducer,
-    StoreEnhancer,
-    Tracker,
+  Action,
+  AsyncAction,
+  AsyncReducer,
+  Dispatch,
+  FeatureModule,
+  Middleware,
+  MiddlewareAPI,
+  Reducer,
+  StoreEnhancer,
+  Tracker,
 } from './types';
 import {
-    combineEnhancers,
-    getProperty,
-    setProperty,
+  combineEnhancers,
+  getProperty,
+  setProperty,
 } from './utils';
 
 /**
