@@ -7,7 +7,6 @@ import {
   isSystemActionType,
   thunk,
 } from '@epikodelabs/actionstack';
-import { withTracker } from '@epikodelabs/actionstack/tracking';
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -419,15 +418,20 @@ describe('store', () => {
     );
   });
 
-  it('awaitStatePropagation waits on tracker when enabled', async () => {
-    const enhancer = withTracker();
-
-    const store: any = createStore({ awaitStatePropagation: true }, enhancer as any);
-    spyOn(store.tracker, 'waitAll').and.resolveTo();
+  it('awaitStatePropagation waits for browser idle when enabled', async () => {
+    const store: any = createStore({ awaitStatePropagation: true });
     await flush(store);
 
+    const scope = globalThis as typeof globalThis & {
+      requestIdleCallback?: jasmine.Spy;
+    };
+    scope.requestIdleCallback = jasmine.createSpy('requestIdleCallback').and.callFake((callback: () => void) => {
+      callback();
+      return 1;
+    });
+
     await store.dispatch({ type: 'TEST/AWAIT' });
-    expect(store.tracker.waitAll).toHaveBeenCalled();
+    expect(scope.requestIdleCallback).toHaveBeenCalled();
   });
 
   it('populate skips already loaded modules and warns', async () => {
@@ -605,9 +609,8 @@ describe('store', () => {
   });
 
   describe('edge cases', () => {
-    it('select with tracker - handles complete and unsubscribe properly', async () => {
-      const enhancer = withTracker();
-      const store: any = createStore({ awaitStatePropagation: true }, enhancer);
+    it('select handles complete and unsubscribe properly', async () => {
+      const store: any = createStore({ awaitStatePropagation: true });
       await flush(store);
 
       const stream = store.select((s: any) => s?.system?._ready, false);
@@ -623,10 +626,7 @@ describe('store', () => {
       // Wait for the async emission
       await new Promise(resolve => setTimeout(resolve, 50));
       
-      // Verify tracking
       expect(observer.next).toHaveBeenCalled();
-      
-      // Unsubscribe should call tracker.complete
       subscription.unsubscribe();
     });
 
@@ -701,18 +701,28 @@ describe('store', () => {
       expect(result).toBeUndefined();
     });
 
-    it('dispatch with tracker.reset() and waitAll() when awaitStatePropagation is true', async () => {
-      const enhancer = withTracker();
-      const store: any = createStore({ awaitStatePropagation: true }, enhancer);
-      
-      spyOn(store.tracker, 'reset').and.callThrough();
-      spyOn(store.tracker, 'waitAll').and.resolveTo();
+    it('dispatch waits for browser idle when awaitStatePropagation is true', async () => {
+      const store: any = createStore({ awaitStatePropagation: true });
       await flush(store);
 
-      await store.dispatch({ type: 'TEST/TRACKED' });
-      
-      expect(store.tracker.reset).toHaveBeenCalled();
-      expect(store.tracker.waitAll).toHaveBeenCalled();
+      const originalSetTimeout = globalThis.setTimeout;
+      const setTimeoutSpy = jasmine.createSpy('setTimeout').and.callFake(((callback: TimerHandler, _delay?: number, ...args: any[]) => {
+        if (typeof callback === 'function') {
+          callback(...args);
+        }
+        return 0 as any;
+      }) as typeof setTimeout);
+      (globalThis as any).requestIdleCallback = undefined;
+      (globalThis as any).requestAnimationFrame = undefined;
+      (globalThis as any).setTimeout = setTimeoutSpy;
+
+      try {
+        await store.dispatch({ type: 'TEST/TRACKED' });
+      } finally {
+        (globalThis as any).setTimeout = originalSetTimeout;
+      }
+
+      expect(setTimeoutSpy).toHaveBeenCalled();
     });
 
     it('dispatch handles async thunks properly', async () => {
@@ -875,8 +885,7 @@ describe('store', () => {
     });
 
     it('select handles observer error callback', async () => {
-      const enhancer = withTracker();
-      const store: any = createStore({ awaitStatePropagation: true }, enhancer);
+      const store: any = createStore({ awaitStatePropagation: true });
       await flush(store);
 
       const stream = store.select((s: any) => s?.system?._ready);
@@ -955,9 +964,8 @@ describe('store', () => {
       expect(systemState.customProp).toBe('test');
     });
 
-    it('select with tracker handles observer complete callback', async () => {
-      const enhancer = withTracker();
-      const store: any = createStore({ awaitStatePropagation: true }, enhancer);
+    it('select handles observer complete callback', async () => {
+      const store: any = createStore({ awaitStatePropagation: true });
       await flush(store);
 
       const stream = store.select((s: any) => s?.system?._ready);

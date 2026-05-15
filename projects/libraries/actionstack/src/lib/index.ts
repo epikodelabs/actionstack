@@ -1,5 +1,6 @@
 export * from "./actions";
 export * from "./hash";
+export * from "./idle";
 export * from "./module";
 export * from "./queue";
 export * from "./selectors";
