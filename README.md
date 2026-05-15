@@ -246,5 +246,5 @@ actionstack is available at no charge under the GNU Affero General Public Licens
 <p align="center">
   <strong>Ready for next-gen state management?</strong><br>
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">Install from NPM</a>
-  <a href="https://github.com/epikodelabs/actionstack">View on GitHub</a>
+  <a href="https://epikodelabs.github.io">View on GitHub</a>
 </p>
