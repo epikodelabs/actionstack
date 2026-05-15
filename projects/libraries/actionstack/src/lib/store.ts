@@ -8,6 +8,7 @@ import {
   pipeSourceThrough,
 } from '@epikodelabs/streamix';
 import { action, createActionRegistry, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
+import { waitForBrowserIdle } from './idle';
 import { createModule, registerModule } from './module';
 import { createQueue } from './queue';
 import { starter } from './starter';
@@ -21,7 +22,6 @@ import type {
   MiddlewareAPI,
   Reducer,
   StoreEnhancer,
-  Tracker,
 } from './types';
 import {
   combineEnhancers,
@@ -77,7 +77,6 @@ export type Store<TState = any, TDependencies = any> = {
 
     middlewareAPI: MiddlewareAPI;
     starter: Middleware;
-    tracker?: Tracker;
 };
 
 interface SystemState {
@@ -505,79 +504,63 @@ export function createStore<T = any>(
   ): Stream<R> => {
     const subscribe = (callbackOrReceiver?: ((value: R) => any) | any) => {
       const receiver = createReceiver<R>(callbackOrReceiver);
-      const tracker = store.tracker;
+
       let hasValue = false;
       let lastValue = defaultValue as R;
+      let stopped = false;
       let sourceSubscription: any;
 
-      const subscription = createSubscription(async () => {
-        tracker?.complete(subscription as any);
-        await sourceSubscription?.unsubscribe?.();
-      });
+      const resolveSelected = async (state: T): Promise<R> => {
+        if (state == null) {
+          return defaultValue as R;
+        }
 
-      tracker?.track(subscription as any);
+        try {
+          const value = await selector(state);
+          return value === undefined ? (defaultValue as R) : value;
+        } catch (err: any) {
+          console.warn(`Error in selector: ${err?.message ?? err}`);
+          return defaultValue as R;
+        }
+      };
 
       sourceSubscription = currentState.subscribe({
         next: async (state: T) => {
-          if (subscription.unsubscribed || receiver.completed) {
+          if (stopped || receiver.completed) {
             return;
           }
 
-          tracker?.start(subscription as any);
+          const selected = await resolveSelected(state);
+
+          if (hasValue && Object.is(lastValue, selected)) {
+            return;
+          }
+
+          hasValue = true;
+          lastValue = selected;
 
           try {
-            let selected = defaultValue as R;
-            if (state != null) {
-              try {
-                const value = await selector(state);
-                selected = value === undefined ? (defaultValue as R) : value;
-              } catch (err: any) {
-                console.warn(`Error in selector: ${err?.message ?? err}`);
-              }
-            }
-
-            if (hasValue && Object.is(lastValue, selected)) {
-              tracker?.finish(subscription as any);
-              return;
-            }
-
-            hasValue = true;
-            lastValue = selected;
-
-            try {
-              await receiver.next(selected);
-              tracker?.finish(subscription as any);
-            } catch (err) {
-              tracker?.finish(subscription as any);
-              try {
-                await receiver.error(err);
-              } finally {
-                tracker?.complete(subscription as any);
-                await sourceSubscription?.unsubscribe?.();
-              }
-            }
+            await receiver.next(selected);
           } catch (err) {
-            tracker?.finish(subscription as any);
-            throw err;
+            try {
+              await receiver.error(err);
+            } finally {
+              await sourceSubscription?.unsubscribe?.();
+            }
           }
         },
         error: async (err: any) => {
-          try {
-            await receiver.error(err);
-          } finally {
-            tracker?.complete(subscription as any);
-          }
+          await receiver.error(err);
         },
         complete: async () => {
-          try {
-            await receiver.complete();
-          } finally {
-            tracker?.complete(subscription as any);
-          }
+          await receiver.complete();
         },
       });
 
-      return subscription;
+      return createSubscription(async () => {
+        stopped = true;
+        await sourceSubscription?.unsubscribe?.();
+      });
     };
 
     let stream!: Stream<R>;
@@ -662,20 +645,18 @@ export function createStore<T = any>(
   let originalDispatch = store.dispatch;
   store.dispatch = (action) => {
     // Fast path: avoid creating closures/promises if no tracking is needed
-    if (!settings.awaitStatePropagation || !store.tracker) {
+    if (!settings.awaitStatePropagation) {
       return originalDispatch(action);
     }
 
     let result: any;
-
-    store.tracker!.reset();
 
     // Preserve dispatch return value
     result = originalDispatch(action);
 
     // Support async dispatch (thunks, effects, etc.)
     return Promise.resolve(result).then(async () => {
-      await store.tracker!.waitAll();
+      await waitForBrowserIdle();
       return result;
     });
   };
@@ -683,4 +664,3 @@ export function createStore<T = any>(
   initializeStore(store);
   return store;
 }
-
