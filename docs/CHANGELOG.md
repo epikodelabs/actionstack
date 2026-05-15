@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.23
+
+Replaced the tracker-based `awaitStatePropagation` mechanism with a lightweight `waitForBrowserIdle()` helper that uses `requestIdleCallback`, `requestAnimationFrame`, or `setTimeout` as fallback. Simplified the select subscription flow by removing tracker integration, using a `stopped` flag instead of `subscription.unsubscribed`, and extracting a `resolveSelected` helper for cleaner error handling. Added `jasmine` and `jasmine:coverage` npm scripts for headless browser testing. Removed the `withTracker` enhancer usage from the demo app and eliminated the `tracker` property from the Store type.
+
 ## 3.0.20
 
 Verified full API compatibility with `@epikodelabs/streamix` 2.0.38.
