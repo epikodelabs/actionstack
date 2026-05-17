@@ -15,7 +15,7 @@ Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="n
     <img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Version">
   </a>
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
-    <img src="https://img.shields.io/npm/dm/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Downloads">
+    <img src="https://img.shields.io/npm/dt/@epikodelabs/actionstack.svg?style=flat-square" alt="Total Downloads">
   </a>
   <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
     <img src="https://epikodelabs.github.io/actionstack/bundle-size.svg" alt="Bundle Size">
