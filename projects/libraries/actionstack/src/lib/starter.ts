@@ -26,13 +26,17 @@ export interface MiddlewareConfig<TState = any, TDependencies extends Record<str
  */
 export function createActionHandler(
   config: MiddlewareConfig,
-  options: { lockThunks?: boolean } = {}
+  options: {
+    lockThunks?: boolean;
+    afterAction?: (action: Action, next: Function, isNestedDispatch: boolean) => Promise<void>;
+  } = {}
 ) {
   const getState = config.getState;
   const dependencies = config.dependencies;
   const queue = config.queue ?? { enqueue: async (operation: () => Promise<void> | void) => operation() };
   const lockThunks = options.lockThunks ?? false;
   const nestedQueue = lockThunks ? createQueue() : null;
+  const afterAction = options.afterAction;
 
   /**
    * Handles the given action, processing it either synchronously or asynchronously.
@@ -75,6 +79,11 @@ export function createActionHandler(
       } else {
         await run();
       }
+
+      if (afterAction) {
+        await afterAction(action, next, isNestedDispatch);
+      }
+
       return;
     }
   };
@@ -153,32 +162,44 @@ export const createStarter = () => {
    * @returns Function - The actual middleware function that handles actions.
    */
   const exclusive = (config: MiddlewareConfig) => {
-    const handler = createActionHandler(config, { lockThunks: true });
     const queue = config.queue ?? { enqueue: async (operation: () => Promise<void> | void) => operation() };
     const onError = console.warn;
+    let handler!: ReturnType<typeof createActionHandler>;
+
+    const runTriggeredThunks = async (action: Action, next: Function) => {
+      for (const thunk of getRegisteredThunks(config.registry)) {
+        if (!matchesAction(thunk, action)) {
+          continue;
+        }
+
+        const runnableThunk = resolveThunk(thunk);
+        if (!runnableThunk) {
+          continue;
+        }
+
+        try {
+          await handler(runnableThunk, next, true);
+        } catch (err: any) {
+          const msg =
+            err instanceof Error ? err.message : String(err ?? 'unknown');
+          onError(
+            `[starter] [exclusive] Thunk error while processing action "${action?.type ?? 'unknown'}": ${msg}`
+          );
+        }
+      }
+    };
+
+    handler = createActionHandler(config, {
+      lockThunks: true,
+      afterAction: async (action, next) => {
+        await runTriggeredThunks(action, next);
+      },
+    });
 
     return (next: Function) => async (action: { type: string }) => {
       return queue.enqueue(async () => {
         try {
           await handler(action as any, next, true);
-
-          // sequentially trigger matching thunks
-          for (const thunk of getRegisteredThunks(config.registry)) {
-            if (matchesAction(thunk, action as any)) {
-              const runnableThunk = resolveThunk(thunk);
-              if (runnableThunk) {
-                try {
-                  await handler(runnableThunk, next, true);
-                } catch (err: any) {
-                  const msg =
-                    err instanceof Error ? err.message : String(err ?? 'unknown');
-                  onError(
-                    `[starter] [exclusive] Thunk error while processing action "${action?.type ?? 'unknown'}": ${msg}`
-                  );
-                }
-              }
-            }
-          }
         } catch (err: any) {
           onError(`[starter] [exclusive] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${err.message}`);
         }
@@ -196,9 +217,40 @@ export const createStarter = () => {
    * @returns Function - The actual middleware function that handles actions.
    */
   const concurrent = (config: MiddlewareConfig) => {
-    const handler = createActionHandler(config, { lockThunks: false });
     const inflight = new Set<Promise<void>>();
     const onError = console.warn;
+    let handler!: ReturnType<typeof createActionHandler>;
+
+    const runTriggeredThunks = async (action: Action, next: Function) => {
+      const matching = getRegisteredThunks(config.registry)
+        .filter((thunk) => matchesAction(thunk, action));
+
+      const results = await Promise.allSettled(
+        matching
+          .map(resolveThunk)
+          .filter(Boolean)
+          .map((thunk) => handler(thunk as AsyncAction, next, true))
+      );
+
+      for (const r of results) {
+        if (r.status === 'rejected') {
+          const msg =
+            r.reason instanceof Error
+              ? r.reason.message
+              : String(r.reason ?? 'unknown');
+          onError(
+            `[starter] [concurrent] Thunk error while processing action "${action?.type ?? 'unknown'}": ${msg}`
+          );
+        }
+      }
+    };
+
+    handler = createActionHandler(config, {
+      lockThunks: false,
+      afterAction: async (action, next) => {
+        await runTriggeredThunks(action, next);
+      },
+    });
 
     // Attach small control surface for diagnostics/teardown
     const middleware = (next: Function) => {
@@ -217,29 +269,6 @@ export const createStarter = () => {
             return;
           }
 
-          // find matching thunks
-          const matching = getRegisteredThunks(config.registry)
-            .filter(thunk => matchesAction(thunk, action));
-
-          // run thunks concurrently, but handle errors individually
-          const results = await Promise.allSettled(
-            matching
-              .map(resolveThunk)
-              .filter(Boolean)
-              .map(thunk => handler(thunk as AsyncAction, next))
-          );
-
-          for (const r of results) {
-            if (r.status === 'rejected') {
-              const msg =
-                r.reason instanceof Error
-                  ? r.reason.message
-                  : String(r.reason ?? 'unknown');
-              onError(
-                `[starter] [concurrent] Thunk error while processing action "${action?.type ?? 'unknown'}": ${msg}`
-              );
-            }
-          }
         })();
 
         inflight.add(p);

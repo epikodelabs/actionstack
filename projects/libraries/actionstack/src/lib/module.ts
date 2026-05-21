@@ -18,14 +18,14 @@ import type { ActionCreator, FeatureModule, Store, Streams, AsyncAction, Selecto
  * @template State The type of the module's state slice.
  * @template ActionTypes The union type of action string constants for this module.
  * @template Actions The shape of the module's action creators and/or thunks.
- * @template Selectors The shape of the module's selector factories.
+ * @template Selectors The shape of the module's selectors.
  * @template Dependencies The shape of any dependencies injected into the module.
  *
  * @param {object} config Module configuration.
  * @param {string} config.slice The unique path identifying this module in the store state.
  * @param {State} config.initialState The initial state of the module slice.
  * @param {Actions} [config.actions] Optional set of action creators or thunks.
- * @param {Selectors} [config.selectors] Optional set of selector factories for derived data.
+ * @param {Selectors} [config.selectors] Optional set of selectors for derived data.
  * @param {Dependencies} [config.dependencies] Optional dependency objects to inject into thunks.
  * @returns {FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>} A fully configured module instance.
  */
@@ -204,8 +204,8 @@ function processActions<Actions extends Record<string, any>>(
  * Processes slice-level selectors and transforms them into root-level selectors.
  *
  * @template SliceState The module state type.
- * @template Selectors The shape of the selector factories.
- * @param {Selectors} selectors Original slice-level selector functions.
+ * @template Selectors The shape of the selectors.
+ * @param {Selectors} selectors Original slice-level selectors.
  * @param {(rootState: any) => SliceState} selectSlice Function to extract the module slice from the root state.
  * @returns {Selectors} The processed selectors bound to the module slice.
  */
@@ -221,6 +221,12 @@ function processSelectors<
   for (const [name, sliceSelector] of Object.entries(selectors)) {
     if (typeof sliceSelector !== 'function') {
       throw new Error(`Selector "${name}" must be a function.`);
+    }
+
+    if (sliceSelector.length === 0) {
+      throw new Error(
+        `Selector "${name}" must accept slice state directly. Selector factories are not supported.`
+      );
     }
 
     const rootSelector = (rootState: any) =>
@@ -241,7 +247,7 @@ function processSelectors<
  * @template State Module state type.
  * @template Selectors Shape of the processed selectors.
  * @param {any} moduleInstance The module object being initialized.
- * @param {Selectors} processedSelectors Processed selector factories.
+ * @param {Selectors} processedSelectors Processed selectors.
  * @param {import('@epikodelabs/streamix').ReplaySubject<void>} loaded$ Emits when the module is fully loaded.
  * @param {import('@epikodelabs/streamix').Subject<void>} destroyed$ Emits when the module is destroyed.
  * @param {() => Store<State> | undefined} getStore Function that returns the store instance.
@@ -428,4 +434,3 @@ function populateStore<
 }
 
 export { createModule, registerModule, unregisterModule, populateStore };
-

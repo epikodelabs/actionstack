@@ -448,6 +448,25 @@ describe('store', () => {
     );
   });
 
+  it('populate configures modules so bound actions and handlers work', async () => {
+    const store = createStore();
+    const mod = createModule({
+      slice: 'batched',
+      initialState: 0,
+      actions: {
+        inc: action('INC', (state: number = 0) => state + 1),
+      },
+    });
+
+    await store.populate(mod);
+    await flush(store);
+
+    mod.actions.inc();
+    await flush(store);
+
+    expect(await readState(store, 'batched')).toBe(1);
+  });
+
   it('populate cleans up and reports errors when a module fails to load', async () => {
     const store = createStore();
     await flush(store);
@@ -1001,22 +1020,53 @@ describe('store', () => {
       expect(events).toEqual(['thunk-executed']);
     });
 
+    it('direct thunk dispatch routes nested actions through starter triggers', async () => {
+      const store = createStore();
+      const events: string[] = [];
+
+      const mod = createModule({
+        slice: 'direct-thunk',
+        initialState: { count: 0 },
+        actions: {
+          bump: action('BUMP', (state: any) => ({ count: (state?.count ?? 0) + 1 })),
+          follow: thunk(
+            'FOLLOW',
+            () => async () => {
+              events.push('follow');
+            },
+            ['BUMP']
+          ),
+        },
+      });
+
+      await store.loadModule(mod);
+      await flush(store);
+
+      await store.dispatch(async (dispatch) => {
+        await dispatch({ type: 'direct-thunk/BUMP' });
+      });
+
+      expect((await readState<any>(store, 'direct-thunk')).count).toBe(1);
+      expect(events).toEqual(['follow']);
+    });
+
     it('system selectors work correctly', async () => {
       const store = createStore();
       await flush(store);
 
-      // Test that selectors are available and work
       const mod = createModule({
         slice: 'selector-test',
         initialState: {},
         selectors: {
-          getValue: () => (state: any) => state?.value || 'default',
+          getValue: (state: any) => state?.value || 'default',
         },
         actions: {},
       });
 
       await store.loadModule(mod);
       await flush(store);
+
+      expect(mod.selectors.getValue({ 'selector-test': { value: 'test' } } as any)).toBe('test');
 
       const systemState = await readState<any>(store, 'system');
       expect(systemState._initialized).toBeTrue();

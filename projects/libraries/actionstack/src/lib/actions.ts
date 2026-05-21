@@ -38,7 +38,7 @@ export const getActionHandlers = (type: string, registry: ActionRegistry) => reg
  *
  * This function iterates over the module's actions and adds their handlers to the
  * registry used for dispatching. If a handler is already registered for the same action type,
- * a warning is logged and the existing handler is overwritten.
+ * a warning is logged and the existing handler is preserved.
  *
  * @param module - The feature module containing actions with associated handlers.
  * @param registry - The store's action registry.
@@ -47,7 +47,7 @@ export const registerActionHandlers = (module: FeatureModule, registry: ActionRe
   Object.values(module.actions).forEach((action: any) => {
     if (action.type && registry.actionHandlers.has(action.type)) {
       console.warn(
-        `Action handler for "${action.type}" already registered - overwriting`
+        `Action handler for "${action.type}" already registered - preserving existing handler`
       );
     } else if (action.type) {
       registry.actionHandlers.set(action.type, action.handler);
@@ -79,7 +79,7 @@ export const unregisterActionHandlers = (module: FeatureModule, registry: Action
  * when their `triggers` match a dispatched action.
  *
  * If a thunk is already registered under the same type, a warning is logged and the
- * existing thunk is overwritten.
+ * existing thunk is preserved.
  *
  * @param module - The feature module containing thunks to be registered.
  * @param registry - The store's action registry.
@@ -90,7 +90,7 @@ export const registerThunks = (module: FeatureModule, registry: ActionRegistry) 
     if (thunk.isThunk && thunk.type) {
       if (registry.registeredThunks.has(thunk.type)) {
         console.warn(
-          `Thunk "${thunk.type}" already registered - overwriting`
+          `Thunk "${thunk.type}" already registered - preserving existing thunk`
         );
         return;
       }

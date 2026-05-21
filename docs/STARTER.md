@@ -54,8 +54,8 @@ const userModule = createModule({
     }
   },
   selectors: {
-    getUser: () => (state) => state.data,
-    isLoading: () => (state) => state.loading
+    getUser: (state) => state.data,
+    isLoading: (state) => state.loading
   },
   actions: {
     setLoading: action('setLoading', (state, loading) => ({ ...state, loading })),

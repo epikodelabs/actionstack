@@ -141,9 +141,9 @@ function createSystemModule() {
       ),
     },
     selectors: {
-      isInitialized: () => (state: SystemState) => state._initialized,
-      isReady: () => (state: SystemState) => state._ready,
-      loadedModules: () => (state: SystemState) => state._modules,
+      isInitialized: (state: SystemState) => state._initialized,
+      isReady: (state: SystemState) => state._ready,
+      loadedModules: (state: SystemState) => state._modules,
     },
     dependencies: {},
   });
@@ -196,7 +196,11 @@ export function createStore<T = any>(
    */
   let dispatch: Dispatch<T, any> = async (action) => {
     if (typeof action === 'function') {
-      await (action as AsyncAction<T, any>)(dispatch, () => state, pipeline.dependencies);
+      await (action as AsyncAction<T, any>)(
+        (nestedAction) => store.dispatch(nestedAction as any),
+        () => state,
+        pipeline.dependencies
+      );
       return;
     }
 
@@ -336,6 +340,10 @@ export function createStore<T = any>(
         }
 
         try {
+          if (typeof module.configure === 'function') {
+            module.configure(store);
+          }
+
           // Register the module first
           modules = [...modules, module];
 

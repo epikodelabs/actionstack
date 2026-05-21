@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.24
+
+Simplified module selectors to plain state-accepting functions and removed selector factory support. Fixed batched module population so modules are configured before registration, ensured nested dispatches from directly dispatched thunks still flow through starter trigger handling, and clarified duplicate registration warnings to reflect that existing handlers and thunks are preserved. Also made the hash spec Node-safe and added package-local TypeScript configs so library tests resolve `jasmine` and `node` globals correctly in editors.
+
 ## 3.0.23
 
 Replaced the tracker-based `awaitStatePropagation` mechanism with a lightweight `waitForBrowserIdle()` helper that uses `requestIdleCallback`, `requestAnimationFrame`, or `setTimeout` as fallback. Simplified the select subscription flow by removing tracker integration, using a `stopped` flag instead of `subscription.unsubscribed`, and extracting a `resolveSelected` helper for cleaner error handling. Added `jasmine` and `jasmine:coverage` npm scripts for headless browser testing. Removed the `withTracker` enhancer usage from the demo app and eliminated the `tracker` property from the Store type.

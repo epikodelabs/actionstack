@@ -164,8 +164,10 @@ describe("actions", () => {
     });
 
     it("warns when registering a duplicate action handler", () => {
-      const a1 = createAction("TEST/DUP_ACTION", (() => 0) as any);
-      const a2 = createAction("TEST/DUP_ACTION", (() => 1) as any);
+      const h1 = (() => 0) as any;
+      const h2 = (() => 1) as any;
+      const a1 = createAction("TEST/DUP_ACTION", h1);
+      const a2 = createAction("TEST/DUP_ACTION", h2);
       const mod1 = { actions: { a1 } } as any;
       const mod2 = { actions: { a2 } } as any;
       modulesToCleanup.push(mod1, mod2);
@@ -174,6 +176,10 @@ describe("actions", () => {
       registerActionHandlers(mod2, registry);
 
       expect((console.warn as any).calls.any()).toBeTrue();
+      expect(getActionHandlers("TEST/DUP_ACTION", registry)).toBe(h1);
+      expect(String((console.warn as any).calls.mostRecent().args[0])).toContain(
+        "preserving existing handler"
+      );
     });
 
     it("registers/unregisters thunks and warns on duplicate thunk type", () => {
@@ -190,10 +196,13 @@ describe("actions", () => {
       (console.warn as any).calls.reset();
       registerThunks(mod2, registry);
       expect((console.warn as any).calls.any()).toBeTrue();
+      expect(getRegisteredThunks(registry).filter((x: any) => x.type === "TEST/REG_THUNK")).toHaveSize(1);
+      expect(String((console.warn as any).calls.mostRecent().args[0])).toContain(
+        "preserving existing thunk"
+      );
 
       unregisterThunks(mod1, registry);
       expect(getRegisteredThunks(registry).some((x: any) => x.type === "TEST/REG_THUNK")).toBeFalse();
     });
   });
 });
-

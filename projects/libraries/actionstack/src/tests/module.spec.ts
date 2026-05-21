@@ -234,6 +234,25 @@ describe("module", () => {
       await store.dispatch({ type: "nest/child/SET", payload: 5 });
       expect(await nextValue<number>(stream)).toBe(5);
     });
+
+    it("exposes module.selectors as plain root selectors", async () => {
+      const store = createStore<any>();
+
+      const mod = createModule({
+        slice: "selectors/plain",
+        initialState: { value: 3 },
+        selectors: {
+          value: selector((s: any) => s.value),
+        },
+        actions: {},
+      });
+
+      await store.loadModule(mod);
+      await store.dispatch({ type: "TEST/FLUSH" });
+
+      expect((mod.selectors as any).value({ selectors: { plain: { value: 3 } } })).toBe(3);
+    });
+
   });
 
   describe("errors", () => {
@@ -256,6 +275,27 @@ describe("module", () => {
       });
 
       expect(() => mod.configure(store)).toThrowError(/must be a function/i);
+    });
+
+    it("throws when a selector is declared as a zero-arg factory", () => {
+      const store: any = {
+        dispatch: () => {},
+        select: () => {
+          throw new Error("select not used");
+        },
+        unloadModule: async () => {},
+      };
+
+      const mod = createModule({
+        slice: "legacy-selector",
+        initialState: {},
+        actions: {},
+        selectors: {
+          bad: (() => (_state: any) => "x") as any,
+        },
+      });
+
+      expect(() => mod.configure(store)).toThrowError(/selector factories are not supported/i);
     });
 
     it("throws from data$ streams when store becomes unavailable", async () => {
