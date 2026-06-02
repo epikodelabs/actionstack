@@ -1,0 +1,4 @@
+{
+  "module": "../fesm2022/epikodelabs-actionstack-tools.mjs",
+  "typings": "../types/epikodelabs-actionstack-tools.d.ts"
+}

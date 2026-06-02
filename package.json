@@ -1,0 +1,43 @@
+{
+  "name": "@epikodelabs/actionstack",
+  "version": "3.0.24",
+  "dependencies": {
+    "tslib": "^2.8.1"
+  },
+  "peerDependencies": {
+    "@epikodelabs/streamix": "^2.0.37"
+  },
+  "license": "AGPL-3.0-only",
+  "homepage": "https://epikodelabs.github.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/epikodelabs/epikodelabs.github.io"
+  },
+  "author": "Oleksii Shepel",
+  "email": "oleksii.shepel@outlook.com",
+  "keywords": [
+    "ActionStack",
+    "Streamix",
+    "Redux",
+    "state management",
+    "asynchronous store",
+    "reactive state"
+  ],
+  "type": "module",
+  "module": "fesm2022/epikodelabs-actionstack.mjs",
+  "typings": "types/epikodelabs-actionstack.d.ts",
+  "exports": {
+    "./package.json": {
+      "default": "./package.json"
+    },
+    ".": {
+      "types": "./types/epikodelabs-actionstack.d.ts",
+      "default": "./fesm2022/epikodelabs-actionstack.mjs"
+    },
+    "./tools": {
+      "types": "./types/epikodelabs-actionstack-tools.d.ts",
+      "default": "./fesm2022/epikodelabs-actionstack-tools.mjs"
+    }
+  },
+  "sideEffects": false
+}
