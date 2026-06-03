@@ -179,8 +179,8 @@ function generateKeywords(content, title, customKeywords = []) {
   if (content.includes('JavaScript')) keywords.add('javascript');
 
   // Add general library keywords
-  keywords.add('streamix');
-  keywords.add('reactive library');
+  keywords.add('actionstack');
+  keywords.add('state management');
 
   return Array.from(keywords).slice(0, 8);
 }
@@ -229,11 +229,10 @@ function createFrontmatter(filename, content, pageTitle, pageDescription, pageKe
   }
   yaml += 'head:\n';
   for (const [tag, attrs] of metadata.head) {
-    yaml += `  - [${tag}`;
-    for (const [key, value] of Object.entries(attrs)) {
-      yaml += `, { ${key}: "${escapeYaml(value)}" }`;
-    }
-    yaml += ']\n';
+    const attrEntries = Object.entries(attrs)
+      .map(([key, value]) => `${key}: "${escapeYaml(value)}"`)
+      .join(', ');
+    yaml += `  - [${tag}, { ${attrEntries} }]\n`;
   }
   yaml += '---\n\n';
 
