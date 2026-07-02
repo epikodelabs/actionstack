@@ -6,13 +6,13 @@ This Privacy Policy explains how `epikodelabs` handles personal information in c
 
 ## 1. Information We Collect
 
-We may collect:
+We collect minimal information:
 
 - Contact information you voluntarily provide, such as your name, email address, or the contents of messages you send
 - Public profile and communication data you submit through platforms such as GitHub issues, pull requests, or discussions
-- Technical data that may be collected by hosting or delivery providers, such as IP address, browser type, device information, referrer, timestamps, and basic request logs
+- Basic technical data that may be collected by hosting or delivery providers, such as IP address, browser type, device information, referrer, timestamps, and request logs
 
-The documentation site does not currently require user accounts and does not currently use first-party analytics or advertising trackers.
+The documentation site does not require user accounts and does not use first-party analytics or advertising trackers.
 
 ## 2. How We Use Information
 
@@ -27,7 +27,7 @@ We may use information to:
 
 ## 3. Cookies and Similar Technologies
 
-`actionstack` does not currently use first-party advertising cookies or first-party analytics cookies on the documentation site. Third-party hosts or platforms may still use their own cookies or logging technologies when you access their services.
+`actionstack` does not use first-party advertising cookies or first-party analytics cookies on the documentation site. Third-party hosts or platforms may still use their own cookies or logging technologies when you access their services.
 
 ## 4. Sharing of Information
 
@@ -38,7 +38,7 @@ We may share information:
 - To protect rights, safety, security, or prevent abuse
 - In connection with a business transfer involving the project or related assets
 
-We do not sell personal information.
+We do not sell personal information. We do not track you across external sites.
 
 ## 5. Data Retention
 
