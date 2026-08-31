@@ -1,11 +1,12 @@
 import type { Stream } from '@epikodelabs/streamix';
 import {
-  createAsyncIterator,
-  createBehaviorSubject,
-  createReceiver,
-  createSubscription,
-  firstValueFrom,
-  pipeSourceThrough,
+    createAsyncIterator,
+    createBehaviorSubject,
+    createReceiver,
+    createSubscription,
+    firstValueFrom,
+    pipeSourceThrough,
+    streamToArray,
 } from '@epikodelabs/streamix';
 import { action, createActionRegistry, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
 import { waitForBrowserIdle } from './idle';
@@ -13,20 +14,20 @@ import { createModule, registerModule } from './module';
 import { createQueue } from './queue';
 import { starter } from './starter';
 import type {
-  Action,
-  AsyncAction,
-  AsyncReducer,
-  Dispatch,
-  FeatureModule,
-  Middleware,
-  MiddlewareAPI,
-  Reducer,
-  StoreEnhancer,
+    Action,
+    AsyncAction,
+    AsyncReducer,
+    Dispatch,
+    FeatureModule,
+    Middleware,
+    MiddlewareAPI,
+    Reducer,
+    StoreEnhancer,
 } from './types';
 import {
-  combineEnhancers,
-  getProperty,
-  setProperty,
+    combineEnhancers,
+    getProperty,
+    setProperty,
 } from './utils';
 
 /**
@@ -362,10 +363,10 @@ export function createStore<T = any>(
           
           // Dispatch system action
           sysActions.moduleLoaded(module);
-          // Signal that module is loaded (this should be the last step)
-          module.loaded$.next();
           // Update current state
           currentState.next(state);
+          // Signal that module state and selector streams are ready
+          module.loaded$.next();
         } catch (error) {
           console.warn(`Failed to load module ${module.slice}:`, error);
 
@@ -410,6 +411,7 @@ export function createStore<T = any>(
 
       sysActions.moduleLoaded(module);
       currentState.next(state);
+      module.loaded$.next();
     });
   };
 
@@ -578,6 +580,7 @@ export function createStore<T = any>(
       pipe: ((...ops: any[]) => pipeSourceThrough(stream as any, ops)) as any,
       subscribe,
       query: () => firstValueFrom(stream),
+      toArray: () => streamToArray(stream),
       [Symbol.asyncIterator]: () => {
         const factory = createAsyncIterator<R>({
           register: (receiver) => subscribe(receiver),
@@ -632,7 +635,7 @@ export function createStore<T = any>(
     sysActions.initializeState();
 
     console.log(
-      '%cYou are using ActionStack. Happy coding! 🎉',
+      '%cYou are using Actionstack. Happy coding! 🎉',
       'font-weight: bold;'
     );
 

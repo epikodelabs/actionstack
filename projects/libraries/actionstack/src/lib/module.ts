@@ -1,6 +1,12 @@
 import {
+  createAsyncIterator,
+  createReceiver,
   createReplaySubject,
+  createSubscription,
   createSubject,
+  firstValueFrom,
+  pipeSourceThrough,
+  streamToArray,
   switchMap,
   takeUntil
 } from '@epikodelabs/streamix';
@@ -53,9 +59,13 @@ function createModule<
   let configured = false;
   let loaded$ = createReplaySubject<void>();
   let destroyed$ = createSubject<void>();
+  let destroyed = false;
 
   const processedActions = processActions(config.actions ?? {}, slice, config.dependencies);
-  let processedSelectors: any = {};
+  const processedSelectors = processSelectors(
+    config.selectors ?? {},
+    selectSlice
+  );
   let store: Store<any> | undefined;
 
   const module = {
@@ -67,7 +77,7 @@ function createModule<
     destroyed$,
     data$: {} as Streams<Selectors>,
     actions: {} as Actions,
-    selectors: {} as any,
+    selectors: processedSelectors as any,
 
     init(storeInstance: Store<any>) {
       return this.configure(storeInstance);
@@ -76,33 +86,17 @@ function createModule<
     configure(storeInstance: Store<any>) {
       if (configured) return this;
       configured = true;
+      destroyed = false;
       store = storeInstance;
 
-      // Recreate subjects to support module reuse after destroy
-      loaded$ = createReplaySubject<void>();
-      destroyed$ = createSubject<void>();
-      (this as any).loaded$ = loaded$;
-      (this as any).destroyed$ = destroyed$;
-
-      processedSelectors = processSelectors(
-        config.selectors ?? {},
-        selectSlice
-      );
-
-      // Update the module's selectors
-      this.selectors = processedSelectors;
-
       // Initialize data$ streams and actions with the store
-      initializeDataStreams(this, processedSelectors, loaded$, destroyed$, () => store);
       initializeActions(this, processedActions, slice, () => store);
-
-      // Mark module as loaded
-      loaded$.next();
 
       return this;
     },
 
     destroy(clearState?: boolean) {
+      destroyed = true;
       destroyed$.next();
       destroyed$.complete();
       loaded$.complete();
@@ -113,10 +107,16 @@ function createModule<
 
       configured = false;
       store = undefined;
+      loaded$ = createReplaySubject<void>();
+      destroyed$ = createSubject<void>();
+      (this as any).loaded$ = loaded$;
+      (this as any).destroyed$ = destroyed$;
 
       return this;
     }
   };
+
+  initializeDataStreams(module, processedSelectors, () => loaded$, () => destroyed$, () => destroyed, () => store);
 
   return module as FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
 }
@@ -241,15 +241,17 @@ function processSelectors<
 /**
  * Initializes reactive data streams (`data$`) for all module selectors.
  *
- * Streams are deferred until the module's `loaded$` emits, and automatically stop
- * when `destroyed$` emits. Each stream uses the store's `.select()` method at runtime.
+ * Streams are available as soon as the module is created. When the module has not
+ * been configured yet, each selector stream waits for `loaded$` before attaching
+ * to the store, and automatically stops when `destroyed$` emits.
  *
  * @template State Module state type.
  * @template Selectors Shape of the processed selectors.
  * @param {any} moduleInstance The module object being initialized.
  * @param {Selectors} processedSelectors Processed selectors.
- * @param {import('@epikodelabs/streamix').ReplaySubject<void>} loaded$ Emits when the module is fully loaded.
- * @param {import('@epikodelabs/streamix').Subject<void>} destroyed$ Emits when the module is destroyed.
+ * @param {() => import('@epikodelabs/streamix').ReplaySubject<void>} getLoaded$ Returns the current loaded stream.
+ * @param {() => import('@epikodelabs/streamix').Subject<void>} getDestroyed$ Returns the current destroyed stream.
+ * @param {() => boolean} isDestroyed Returns whether the module has been destroyed.
  * @param {() => Store<State> | undefined} getStore Function that returns the store instance.
  */
 function initializeDataStreams<
@@ -258,31 +260,76 @@ function initializeDataStreams<
 >(
   moduleInstance: any,
   processedSelectors: Selectors,
-  loaded$: any,
-  destroyed$: any,
+  getLoaded$: () => any,
+  getDestroyed$: () => any,
+  isDestroyed: () => boolean,
   getStore: () => Store<State> | undefined
 ) {
   for (const key in processedSelectors) {
     const selectorFn = processedSelectors[key];
 
+    const unavailableStream = () =>
+      createErrorStream(
+        new Error(
+          `Module "${moduleInstance.slice}" store not available for data$ streams`
+        )
+      );
+
     // ✅ data$.key() — zero args
     (moduleInstance.data$ as any)[key] = () => {
+      const store = getStore();
+      const destroyed$ = getDestroyed$();
+
+      if (!store && isDestroyed()) {
+        return unavailableStream();
+      }
+
+      if (store) {
+        return store.select(selectorFn).pipe(
+          takeUntil(destroyed$)
+        );
+      }
+
+      const loaded$ = getLoaded$();
       return loaded$.pipe(
         switchMap(() => {
-          const store = getStore();
-          if (!store) {
-            throw new Error(
-              `Module "${moduleInstance.slice}" store not available for data$ streams`
-            );
+          const nextStore = getStore();
+          if (!nextStore) {
+            return unavailableStream();
           }
 
-          // ✅ selectorFn is already (rootState) => value
-          return store.select(selectorFn);
+          return nextStore.select(selectorFn);
         }),
         takeUntil(destroyed$)
       );
     };
   }
+}
+
+function createErrorStream(error: unknown): any {
+  const subscribe = (callbackOrReceiver?: any) => {
+    const receiver = createReceiver(callbackOrReceiver);
+    void receiver.error(error);
+    return createSubscription();
+  };
+
+  let stream: any;
+  stream = {
+    type: 'stream',
+    name: 'error',
+    pipe: ((...ops: any[]) => pipeSourceThrough(stream, ops)) as any,
+    subscribe,
+    query: () => firstValueFrom(stream),
+    toArray: () => streamToArray(stream),
+    [Symbol.asyncIterator]: () => {
+      const factory = createAsyncIterator<any>({
+        register: (receiver) => subscribe(receiver),
+      });
+      return factory();
+    },
+  };
+
+  return stream;
 }
 
 /**

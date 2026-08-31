@@ -1,11 +1,7 @@
 {
   "extends": "../../../tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
-    "types": [
-      "jasmine",
-      "node"
-    ]
+    "rootDir": "."
   },
   "include": [
     "src/**/*.ts",

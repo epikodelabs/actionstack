@@ -164,9 +164,12 @@ describe("module", () => {
   describe("data", () => {
     function nextValue<T>(stream: any): Promise<T> {
       return new Promise<T>((resolve) => {
-        const sub = stream.subscribe({
+        let sub: any;
+        sub = stream.subscribe({
           next: (v: T) => {
-            sub.unsubscribe();
+            queueMicrotask(() => {
+              sub.unsubscribe();
+            });
             resolve(v);
           },
         });
@@ -190,11 +193,11 @@ describe("module", () => {
       await store.loadModule(mod);
       await store.dispatch({ type: "TEST/FLUSH" });
 
-      const stream = mod.data$.count();
-
-      expect(await nextValue<number>(stream)).toBe(0);
+      expect(await nextValue<number>(mod.data$.count())).toBe(0);
       await store.dispatch({ type: "mdata/INC" });
-      expect(await nextValue<number>(stream)).toBe(1);
+      expect(await nextValue<number>(mod.data$.count())).toBe(1);
+
+      const stream = mod.data$.count();
 
       let completed = false;
       const sub = stream.subscribe({
@@ -209,6 +212,31 @@ describe("module", () => {
 
       expect(completed).toBeTrue();
       sub.unsubscribe();
+    });
+
+    it("exposes data$ selector factories before the module is configured", async () => {
+      const store = createStore<any>();
+
+      const mod = createModule({
+        slice: "preconfigured",
+        initialState: { count: 2 },
+        actions: {
+          inc: action("INC", (state: any) => ({ count: (state?.count ?? 0) + 1 })),
+        },
+        selectors: {
+          count: selector((s: any) => s.count),
+        },
+      });
+
+      const stream = mod.data$.count();
+      const firstValue = nextValue<number>(stream);
+
+      await store.loadModule(mod);
+      await store.dispatch({ type: "TEST/FLUSH" });
+
+      expect(await firstValue).toBe(2);
+      await store.dispatch({ type: "preconfigured/INC" });
+      expect(await nextValue<number>(stream)).toBe(3);
     });
 
     it("selects nested slices for data streams", async () => {
@@ -228,11 +256,10 @@ describe("module", () => {
       await store.loadModule(mod);
       await store.dispatch({ type: "TEST/FLUSH" });
 
-      const stream = mod.data$.value();
-      expect(await nextValue<number>(stream)).toBe(1);
+      expect(await nextValue<number>(mod.data$.value())).toBe(1);
 
       await store.dispatch({ type: "nest/child/SET", payload: 5 });
-      expect(await nextValue<number>(stream)).toBe(5);
+      expect(await nextValue<number>(mod.data$.value())).toBe(5);
     });
 
     it("exposes module.selectors as plain root selectors", async () => {
@@ -257,45 +284,29 @@ describe("module", () => {
 
   describe("errors", () => {
     it("throws when a selector is not a function", () => {
-      const store: any = {
-        dispatch: () => {},
-        select: () => {
-          throw new Error("select not used");
-        },
-        unloadModule: async () => {},
-      };
-
-      const mod = createModule({
-        slice: "badsel",
-        initialState: {},
-        actions: {},
-        selectors: {
-          bad: 123 as any,
-        },
-      });
-
-      expect(() => mod.configure(store)).toThrowError(/must be a function/i);
+      expect(() =>
+        createModule({
+          slice: "badsel",
+          initialState: {},
+          actions: {},
+          selectors: {
+            bad: 123 as any,
+          },
+        })
+      ).toThrowError(/must be a function/i);
     });
 
     it("throws when a selector is declared as a zero-arg factory", () => {
-      const store: any = {
-        dispatch: () => {},
-        select: () => {
-          throw new Error("select not used");
-        },
-        unloadModule: async () => {},
-      };
-
-      const mod = createModule({
-        slice: "legacy-selector",
-        initialState: {},
-        actions: {},
-        selectors: {
-          bad: (() => (_state: any) => "x") as any,
-        },
-      });
-
-      expect(() => mod.configure(store)).toThrowError(/selector factories are not supported/i);
+      expect(() =>
+        createModule({
+          slice: "legacy-selector",
+          initialState: {},
+          actions: {},
+          selectors: {
+            bad: (() => (_state: any) => "x") as any,
+          },
+        })
+      ).toThrowError(/selector factories are not supported/i);
     });
 
     it("throws from data$ streams when store becomes unavailable", async () => {
