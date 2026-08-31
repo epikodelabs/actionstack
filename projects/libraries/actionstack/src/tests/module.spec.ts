@@ -103,6 +103,35 @@ describe("module", () => {
     expect(unloadModule).not.toHaveBeenCalled();
   });
 
+  it("blocks reconfigure while destroy is still in progress", async () => {
+    let finishUnload!: () => void;
+    const unloadModule = jasmine
+      .createSpy("unloadModule")
+      .and.callFake(
+        () =>
+          new Promise<void>((resolve) => {
+            finishUnload = resolve;
+          })
+      );
+    const store: any = { dispatch: () => {}, select: () => ({}), unloadModule };
+
+    const mod = createModule({
+      slice: "pending-destroy",
+      initialState: {},
+      actions: {},
+    });
+
+    mod.configure(store);
+    mod.destroy();
+
+    expect(() => mod.configure(store)).toThrowError(/destruction is in progress/i);
+
+    finishUnload();
+    await Promise.resolve();
+
+    expect(() => mod.configure(store)).not.toThrow();
+  });
+
   it("registerModule chooses loadModule vs populate", () => {
     const loadModule = jasmine.createSpy("loadModule").and.resolveTo();
     const populate = jasmine.createSpy("populate").and.resolveTo();

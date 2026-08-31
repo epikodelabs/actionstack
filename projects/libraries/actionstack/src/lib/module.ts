@@ -59,6 +59,7 @@ function createModule<
   let configured = false;
   let loaded$ = createReplaySubject<void>();
   let destroyed$ = createSubject<void>();
+  let destroying = false;
   let destroyed = false;
   let lifecycleId = 0;
 
@@ -69,11 +70,32 @@ function createModule<
   );
   let store: Store<any> | undefined;
 
+  const recreateLifecycleStreams = (moduleInstance: any) => {
+    loaded$ = createReplaySubject<void>();
+    destroyed$ = createSubject<void>();
+    moduleInstance.loaded$ = loaded$;
+    moduleInstance.destroyed$ = destroyed$;
+  };
+
+  const finalizeDestroy = () => {
+    configured = false;
+    destroying = false;
+    destroyed = true;
+    lifecycleId += 1;
+    store = undefined;
+  };
+
   const module = {
     slice,
     initialState: config.initialState,
     dependencies: config.dependencies,
     __rawActions: processedActions,
+    get destroying() {
+      return destroying;
+    },
+    get destroyed() {
+      return destroyed;
+    },
     loaded$,
     destroyed$,
     data$: {} as Streams<Selectors>,
@@ -85,12 +107,14 @@ function createModule<
     },
 
     configure(storeInstance: Store<any>) {
+      if (destroying) {
+        throw new Error(
+          `Module "${slice}" cannot be configured while destruction is in progress.`
+        );
+      }
       if (configured) return this;
       if (destroyed) {
-        loaded$ = createReplaySubject<void>();
-        destroyed$ = createSubject<void>();
-        (this as any).loaded$ = loaded$;
-        (this as any).destroyed$ = destroyed$;
+        recreateLifecycleStreams(this);
       }
 
       configured = true;
@@ -104,18 +128,23 @@ function createModule<
     },
 
     destroy(clearState?: boolean) {
+      if (destroying) return this;
+
+      destroying = true;
       destroyed = true;
       destroyed$.next();
       destroyed$.complete();
       loaded$.complete();
 
       if (store && clearState !== false) {
-        store.unloadModule(this, true);
+        void Promise.resolve(store.unloadModule(this, true)).finally(() => {
+          if (destroying) {
+            finalizeDestroy();
+          }
+        });
+      } else {
+        finalizeDestroy();
       }
-
-      configured = false;
-      lifecycleId += 1;
-      store = undefined;
 
       return this;
     }
@@ -126,6 +155,7 @@ function createModule<
     processedSelectors,
     () => loaded$,
     () => destroyed$,
+    () => destroying,
     () => destroyed,
     () => lifecycleId,
     () => store
@@ -264,6 +294,7 @@ function processSelectors<
  * @param {Selectors} processedSelectors Processed selectors.
  * @param {() => import('@epikodelabs/streamix').ReplaySubject<void>} getLoaded$ Returns the current loaded stream.
  * @param {() => import('@epikodelabs/streamix').Subject<void>} getDestroyed$ Returns the current destroyed stream.
+ * @param {() => boolean} isDestroying Returns whether module destruction is in progress.
  * @param {() => boolean} isDestroyed Returns whether the module has been destroyed.
  * @param {() => Store<State> | undefined} getStore Function that returns the store instance.
  */
@@ -275,6 +306,7 @@ function initializeDataStreams<
   processedSelectors: Selectors,
   getLoaded$: () => any,
   getDestroyed$: () => any,
+  isDestroying: () => boolean,
   isDestroyed: () => boolean,
   getLifecycleId: () => number,
   getStore: () => Store<State> | undefined
@@ -303,7 +335,7 @@ function initializeDataStreams<
       const destroyed$ = getDestroyed$();
       let stream: any;
 
-      if (!store && isDestroyed()) {
+      if (isDestroying() || (!store && isDestroyed())) {
         stream = unavailableStream();
       } else if (store) {
         stream = store.select(selectorFn).pipe(
@@ -380,7 +412,7 @@ function initializeActions<Actions extends Record<string, any>>(
     (moduleInstance.actions as any)[key] = (...args: any[]) => {
       // Access store via getter at runtime
       const store = getStore();
-      if (!store) {
+      if (!store || moduleInstance.destroying || moduleInstance.destroyed) {
         throw new Error(
           `Module "${slice}" actions cannot be dispatched before configuration. ` +
           `Call module.configure(store) first.`
