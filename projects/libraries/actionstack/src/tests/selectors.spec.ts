@@ -1,10 +1,10 @@
 import {
-    selector,
-    selectorAsync,
-    selectStream,
-    selectStreamAsync
+  selector,
+  selectorAsync,
+  selectStream,
+  selectStreamAsync
 } from '@epikodelabs/actionstack';
-import { createBehaviorSubject } from '@epikodelabs/streamix';
+import { atom } from '@epikodelabs/streamix';
 
 interface TestState {
   user: {
@@ -144,7 +144,6 @@ describe('selectorAsync', () => {
     const selectUserDetails = selectorAsync(
       (state: TestState) => state.user,
       async (user) => {
-        // Simulate async operation
         await new Promise(resolve => setTimeout(resolve, 10));
         return `${user.name} (${user.age})`;
       }
@@ -177,17 +176,12 @@ describe('selectorAsync', () => {
   it('should handle errors in async projector', async () => {
     const selectWithError = selectorAsync(
       (state: TestState) => state.user,
-      async (user) => {
+      async () => {
         throw new Error('Async error');
       }
     );
-    
-    try {
-      await selectWithError(mockState);
-      fail('Should have thrown an error');
-    } catch (error: any) {
-      expect(error.message).toBe('Async error');
-    }
+
+    await expectAsync(selectWithError(mockState)).toBeRejectedWithError('Async error');
   });
 
   it('should return undefined when any input selector returns nullish (async projector not called)', async () => {
@@ -207,14 +201,14 @@ describe('selectorAsync', () => {
 });
 
 describe('selectStream', () => {
-  let stateSubject: ReturnType<typeof createBehaviorSubject<TestState>>;
+  let stateSubject: ReturnType<typeof atom<TestState>>;
 
   beforeEach(() => {
-    stateSubject = createBehaviorSubject<TestState>(mockState);
+    stateSubject = atom<TestState>(mockState);
   });
 
   afterEach(() => {
-    stateSubject.complete();
+    stateSubject.dispose();
   });
 
   it('should emit derived values when state changes', (done) => {
@@ -222,15 +216,14 @@ describe('selectStream', () => {
     const stream = selectStream(selectCount, stateSubject);
 
     const values: number[] = [];
-    const subscription = stream.subscribe({
-      next: (value: number) => {
-        values.push(value);
-        if (values.length === 2) {
-          expect(values).toEqual([5, 10]);
-          subscription.unsubscribe();
-          done();
-        }
-      },
+    let subscription = () => {};
+    subscription = stream.subscribe((value: number) => {
+      values.push(value);
+      if (values.length === 2) {
+        expect(values).toEqual([5, 10]);
+        queueMicrotask(() => subscription());
+        done();
+      }
     });
 
     setTimeout(() => {
@@ -246,15 +239,14 @@ describe('selectStream', () => {
     const stream = selectStream(selectUserName, stateSubject);
 
     const values: string[] = [];
-    const subscription = stream.subscribe({
-      next: (value: string) => {
-        values.push(value);
-        if (values.length === 3) {
-          expect(values).toEqual(['John Doe', 'John Doe', 'Jane Doe']);
-          subscription.unsubscribe();
-          done();
-        }
-      },
+    let subscription = () => {};
+    subscription = stream.subscribe((value: string) => {
+      values.push(value);
+      if (values.length === 3) {
+        expect(values).toEqual(['John Doe', 'John Doe', 'Jane Doe']);
+        queueMicrotask(() => subscription());
+        done();
+      }
     });
 
     setTimeout(() => stateSubject.next(mockState), 10);
@@ -270,14 +262,14 @@ describe('selectStream', () => {
 });
 
 describe('selectStreamAsync', () => {
-  let stateSubject: ReturnType<typeof createBehaviorSubject<TestState>>;
+  let stateSubject: ReturnType<typeof atom<TestState>>;
 
   beforeEach(() => {
-    stateSubject = createBehaviorSubject<TestState>(mockState);
+    stateSubject = atom<TestState>(mockState);
   });
 
   afterEach(() => {
-    stateSubject.complete();
+    stateSubject.dispose();
   });
 
   it('should emit derived values from async selectors', (done) => {
@@ -291,19 +283,14 @@ describe('selectStreamAsync', () => {
     const stream = selectStreamAsync(selectAsync, stateSubject);
 
     const values: number[] = [];
-    const subscription = stream.subscribe({
-      next: (value: number) => {
-        values.push(value);
-        if (values.length === 2) {
-          expect(values).toEqual([10, 20]);
-          subscription.unsubscribe();
-          done();
-        }
-      },
-      error: (err) => {
-        subscription.unsubscribe();
-        fail(err);
-      },
+    let subscription = () => {};
+    subscription = stream.subscribe((value: number) => {
+      values.push(value);
+      if (values.length === 2) {
+        expect(values).toEqual([10, 20]);
+        queueMicrotask(() => subscription());
+        done();
+      }
     });
 
     setTimeout(() => {
@@ -311,7 +298,8 @@ describe('selectStreamAsync', () => {
     }, 50);
   });
 
-  it('should propagate async errors', (done) => {
+  it('should warn and emit undefined for async errors', (done) => {
+    const warnSpy = spyOn(console, 'warn').and.stub();
     const selectWithError = selectorAsync(
       (state: TestState) => state.count,
       async () => {
@@ -320,12 +308,15 @@ describe('selectStreamAsync', () => {
     );
     const stream = selectStreamAsync(selectWithError, stateSubject);
 
-    stream.subscribe({
-      next: () => fail('Should not emit next'),
-      error: (err: any) => {
-        expect(err.message).toBe('Async stream error');
+    let subscription = () => {};
+    subscription = stream.subscribe((value: number | undefined) => {
+      try {
+        expect(value).toBeUndefined();
+        expect(warnSpy).toHaveBeenCalled();
+      } finally {
+        queueMicrotask(() => subscription());
         done();
-      },
+      }
     });
   });
 });
@@ -338,10 +329,7 @@ describe('selectors integration', () => {
 
     const rootState: RootState = { feature: mockState };
 
-    // Slice selector (operates on slice state)
     const selectCountFromSlice = selector((state: TestState) => state.count);
-
-    // Root selector (wraps slice selector)
     const selectCount = (rootState: RootState) =>
       selectCountFromSlice(rootState.feature);
 
@@ -349,4 +337,3 @@ describe('selectors integration', () => {
     expect(result).toBe(5);
   });
 });
-

@@ -1,12 +1,10 @@
 import { Location } from '@angular/common';
-import type { OnInit } from '@angular/core';
+import type { OnDestroy, OnInit } from '@angular/core';
 import { Component } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 
-import { registerModule } from '@epikodelabs/actionstack';
-import type { Stream } from '@epikodelabs/streamix';
-import type { Subscription } from 'rxjs';
-import { map, tap } from 'rxjs';
+import { unregisterModule } from '@epikodelabs/actionstack';
+import type { Atom } from '@epikodelabs/streamix';
 import { store } from '../app.module';
 import type { Hero } from '../hero';
 import { heroDetailsModule, loadHero } from './hero-details.slice';
@@ -17,26 +15,19 @@ import { heroDetailsModule, loadHero } from './hero-details.slice';
   styleUrls: [ './hero-details.component.css' ],
   standalone: false
 })
-export class HeroDetailsComponent implements OnInit {
-  hero$!: Stream<Hero | undefined>;
-  subscription: Subscription | undefined;
+export class HeroDetailsComponent implements OnInit, OnDestroy {
+  hero: Atom<Hero | undefined> = heroDetailsModule.data$.heroSelector();
 
   constructor(
     private route: ActivatedRoute,
     private location: Location
-  ) {
-    registerModule(store, heroDetailsModule);
-  }
+  ) {}
 
-    async ngOnInit() {
-      this.hero$ = heroDetailsModule.data$.heroSelector();
+  async ngOnInit() {
+      await store.loadModule(heroDetailsModule);
 
-      this.subscription = this.route.paramMap
-        .pipe(
-          map((params) => Number(params.get('id'))),
-          tap((id) => store.dispatch(loadHero(id)))
-        )
-        .subscribe();
+      const id = Number(this.route.snapshot.paramMap.get('id'));
+      store.dispatch(loadHero(id));
   }
 
   goBack(): void {
@@ -44,9 +35,6 @@ export class HeroDetailsComponent implements OnInit {
   }
 
   ngOnDestroy() {
-    if(this.subscription) {
-      this.subscription.unsubscribe();
-    }
+    void store.unloadModule(heroDetailsModule, true);
   }
 }
-

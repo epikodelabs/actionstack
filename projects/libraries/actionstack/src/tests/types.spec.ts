@@ -1,15 +1,16 @@
 import {
   isAction,
   isAsync,
+  isAtom,
   isBoxed,
   isPlainObject,
   isPromise,
-  isStream,
   kindOf,
 } from "@epikodelabs/actionstack";
+import { atom } from '@epikodelabs/streamix';
 
 describe("kindOf", () => {
-  const stream = { type: "stream", subscribe: () => ({ unsubscribe() {} }) };
+  const stream = atom(1);
 
   const cases: Array<[string, any, string]> = [
     ["undefined", undefined, "undefined"],
@@ -23,7 +24,7 @@ describe("kindOf", () => {
     ["array", [1, 2], "array"],
     ["date", new Date(), "date"],
     ["error", new Error("x"), "error"],
-    ["stream", stream, "Stream"],
+    ["stream", stream, "Atom"],
     ["promise", Promise.resolve(1), "promise"],
     ["map", new Map(), "Map"],
     ["set", new Set(), "Set"],
@@ -123,19 +124,19 @@ describe("isPromise", () => {
   }
 });
 
-describe("isStream", () => {
+describe("isAtom", () => {
   const cases: Array<[string, any, boolean]> = [
-    ["valid", { type: "stream", subscribe: () => ({ unsubscribe() {} }) }, true],
-    ["missingSubscribe", { type: "stream" }, false],
-    ["subscribeNotFn", { type: "stream", subscribe: 123 }, false],
-    ["wrongType", { type: "Stream", subscribe: () => ({ unsubscribe() {} }) }, false],
+    ["valid", { type: "atom" }, true],
+    ["subscribeNotChecked", { type: "atom", subscribe: 123 }, true],
+    ["wrongType", { type: "stream", subscribe: () => ({ unsubscribe() {} }) }, false],
+    ["wrongCase", { type: "Atom" }, false],
     ["null", null, false],
     ["undefined", undefined, false],
   ];
 
   for (const [name, value, expected] of cases) {
     it(`${name} => ${expected}`, () => {
-      expect(isStream(value)).toBe(expected);
+      expect(isAtom(value)).toBe(expected);
     });
   }
 });

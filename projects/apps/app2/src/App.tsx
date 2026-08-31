@@ -6,7 +6,6 @@ function useStore<T>(selector: (s: any) => T): T | undefined {
   const [state, setState] = useState<T | undefined>(undefined);
 
   useEffect(() => {
-    // Subscribe to changes
     const subscription = store
       .select(selector, 0 as any)
       .subscribe((newValue: T) => {
@@ -14,7 +13,7 @@ function useStore<T>(selector: (s: any) => T): T | undefined {
       });
 
     return () => {
-      subscription.unsubscribe();
+      subscription();
     };
   }, [selector]);
 

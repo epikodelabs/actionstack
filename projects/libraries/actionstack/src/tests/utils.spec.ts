@@ -2,7 +2,7 @@
 
 import type { StoreCreator, StoreEnhancer } from '@epikodelabs/actionstack';
 import { applyMiddleware, combineEnhancers, combineReducers, deepMerge, getProperty, setProperty } from '@epikodelabs/actionstack';
-import { createBehaviorSubject } from '@epikodelabs/streamix';
+import { atom } from '@epikodelabs/streamix';
 
 describe('getProperty', () => {
   it('should retrieve top-level properties', () => {
@@ -466,7 +466,7 @@ describe('combineEnhancers', () => {
           await callback({} as any);
         },
         select: <R = any>(_selector: (state: any) => R | Promise<R>, defaultValue?: R) =>
-          createBehaviorSubject(defaultValue as R),
+          atom(defaultValue as R),
         populate: async () => {},
         loadModule: async () => {},
         unloadModule: async () => {},

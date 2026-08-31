@@ -29,11 +29,7 @@ This tight cycle lets you follow the signal from user intent to workflow executi
 ## ✨ Pattern: React hooks + Streamix + ActionStack
 
 ```tsx
-import { fromEvent, map, filter, debounce, switchMap, tap } from '@epikodelabs/streamix';
-import { useLayoutEffect, useRef, useState } from 'react';
-import { ActionStackClient } from '@streamix/actionstack'; // hypothetic
-
-import { fromEvent, map, filter, debounce } from '@epikodelabs/streamix';
+import { addListener, debounce, filter, map, pipe } from '@epikodelabs/streamix';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { searchModule } from '../modules/search';
 
@@ -45,8 +41,9 @@ function SearchComponent() {
   useLayoutEffect(() => {
     if (!inputRef.current) return;
 
-    const stream = fromEvent(inputRef.current, 'input').pipe(
-      map(ev => ev.target.value.trim()),
+    const stream = pipe(
+      addListener(inputRef.current, 'input'),
+      map((ev: Event) => (ev.target as HTMLInputElement).value.trim()),
       filter(query => query.length >= 3),
       debounce(250)
     );
@@ -69,8 +66,8 @@ function SearchComponent() {
     })();
 
     return () => {
-      resultsSub.unsubscribe();
-      loadingSub.unsubscribe();
+      resultsSub();
+      loadingSub();
     };
   }, []);
 
@@ -104,7 +101,7 @@ src/
     └── api.ts                   # ✨ Shared API utilities (optional)
 ```
 
-Keep the action definitions (ActionStack) isolated from the React components; hand them a small payload and let the stack orchestrate retries, compensations, and downstream events. Streamix sits between them, shaping the signal with `map`, `filter`, `tap`, `debounce`, and `switchMap`.
+Keep the action definitions (ActionStack) isolated from the React components; hand them a small payload and let the stack orchestrate retries, compensations, and downstream events. Streamix sits between them, shaping the signal with `map`, `filter`, `tap`, `debounce`, and `pipe`.
 
 ---
 
@@ -117,4 +114,3 @@ Consumption-based async logic makes tests and traces deterministic: you consume 
 ## ✨ Final thoughts
 
 React, Streamix, and ActionStack is a trio built for clarity. React never grabs a `Promise` it shouldn't, Streamix choreographs the asynchronous dance, and ActionStack runs repeatable business workflows. When you wire them consciously, you get a resilient feedback loop that stays fun, even as the app scales.
-

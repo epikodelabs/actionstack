@@ -1,22 +1,23 @@
 {
   "name": "@epikodelabs/actionstack",
-  "version": "3.0.24",
+  "version": "4.0.1",
   "dependencies": {
     "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "@epikodelabs/streamix": "^2.0.37"
+    "@angular/core": "^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^20.0.0 || ^21.0.0",
+    "@epikodelabs/streamix": "^3.0.1"
   },
   "license": "AGPL-3.0-only",
   "homepage": "https://epikodelabs.github.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/epikodelabs/epikodelabs.github.io"
+    "url": "https://github.com/epikodelabs/actionstack"
   },
   "author": "Oleksii Shepel",
   "email": "oleksii.shepel@outlook.com",
   "keywords": [
-    "ActionStack",
+    "Actionstack",
     "Streamix",
     "Redux",
     "state management",
@@ -25,4 +26,3 @@
   ],
   "type": "module"
 }
-

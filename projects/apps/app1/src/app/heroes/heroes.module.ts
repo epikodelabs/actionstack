@@ -3,6 +3,7 @@ import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import type { Routes } from '@angular/router';
+import { AtomDirective } from '../atomDirective';
 import { HeroesComponent } from './heroes.component';
 
 const routes: Routes = [
@@ -10,7 +11,7 @@ const routes: Routes = [
 ];
 
 @NgModule({
-  imports: [CommonModule, FormsModule, RouterModule.forChild(routes)],
+  imports: [CommonModule, FormsModule, RouterModule.forChild(routes), AtomDirective],
   declarations: [
     HeroesComponent,
   ],

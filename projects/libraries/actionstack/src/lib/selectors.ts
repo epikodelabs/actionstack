@@ -1,5 +1,5 @@
-import { map, mergeMap } from '@epikodelabs/streamix';
-import type { Stream } from '@epikodelabs/streamix';
+import { createSharedSource } from '@epikodelabs/streamix';
+import type { Atom } from '@epikodelabs/streamix';
 
 /**
  * A selector extracts a value from state.
@@ -226,28 +226,64 @@ export function selectorAsync(...fns: any[]): any {
 
 
 /**
- * Creates a stream from a selector and a state stream.
+ * Creates an atom from a selector and a state atom.
+ *
+ * The returned atom emits the selector applied to the current state when the
+ * first subscriber attaches, then re-emits whenever the state atom changes.
  *
  * @param selector - A selector function used to derive a value from the state.
- * @param stateStream - The source stream of state values.
+ * @param stateAtom - The source atom of state values.
  */
 export function selectStream<T, R>(
   selector: Selector<T, R>,
-  stateStream: Stream<T>
-): Stream<R> {
-  return stateStream.pipe(map((state) => selector(state)));
+  stateAtom: Atom<T>
+): Atom<R> {
+  return createSharedSource<R>(async (push) => {
+    await push(selector(stateAtom.value));
+
+    const sourceSubscription = stateAtom.subscribe((state: T) => {
+      void push(selector(state));
+    });
+
+    return () => {
+      sourceSubscription();
+    };
+  });
 }
 
 /**
- * Creates a stream from an async selector and a state stream.
+ * Creates an atom from an async selector and a state atom.
+ *
+ * The returned atom emits the awaited selector result for the current state
+ * when the first subscriber attaches, then follows state changes. Selector
+ * rejections are logged as warnings and resolve to `undefined`.
  *
  * @param selector - An async selector function.
- * @param stateStream - The source stream of state values.
+ * @param stateAtom - The source atom of state values.
  */
 export function selectStreamAsync<T, R>(
   selector: (state: T) => Promise<R>,
-  stateStream: Stream<T>
-): Stream<R> {
-  return stateStream.pipe(mergeMap((state) => selector(state)));
+  stateAtom: Atom<T>
+): Atom<R> {
+  const resolve = async (state: T): Promise<R | undefined> => {
+    try {
+      return await selector(state);
+    } catch (err: any) {
+      console.warn(`Error in async selector: ${err?.message ?? err}`);
+      return undefined;
+    }
+  };
+
+  return createSharedSource<R>(async (push) => {
+    await push((await resolve(stateAtom.value)) as R);
+
+    const sourceSubscription = stateAtom.subscribe((state: T) => {
+      void resolve(state).then((value) => push(value as R));
+    });
+
+    return () => {
+      sourceSubscription();
+    };
+  });
 }
 

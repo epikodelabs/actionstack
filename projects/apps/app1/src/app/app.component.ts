@@ -1,7 +1,6 @@
 import type { OnDestroy, OnInit } from '@angular/core';
 import { Component } from '@angular/core';
 import { RouterModule } from '@angular/router';
-import type { Subscription } from 'rxjs/internal/Subscription';
 
 import { MessagesModule } from './messages/messages.module';
 
@@ -14,13 +13,10 @@ import { MessagesModule } from './messages/messages.module';
 })
 export class AppComponent implements OnInit, OnDestroy {
   title = 'Tour of Heroes';
-  subscription!: Subscription;
-  constructor() {
-  }
+  constructor() {}
 
   ngOnInit() {
   }
 
-  ngOnDestroy() {
-  }
+  ngOnDestroy() {}
 }

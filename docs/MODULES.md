@@ -9,13 +9,13 @@ This article dives into the central role of modules, showing why they’re the f
 A module isn’t just a boring data box—it’s a dynamic, self-contained powerhouse that keeps your app’s domains in check. Think of it as a Swiss Army knife for a specific slice of your app, packing everything you need into one neat package. Here’s how it saves the day:
 
 ### 1. State and Data Management: The Command Center
-Modules hold the **initialState** like a vault, guarding the starting point for your app’s data. They also auto-generate **data$** streams for each selector, making your state as observable as a superhero soaring through the sky. Using `ReplaySubject` and `switchMap`, these streams ensure data only flows once the module’s loaded and always points to the right store instance. No more “where’s my data?” panic attacks! 😎
+Modules hold the **initialState** like a vault, guarding the starting point for your app’s data. They also auto-generate **data$** atoms for each selector, making your state as observable as a superhero soaring through the sky. Using Streamix atoms plus `switchMap` and `takeUntil`, these signals stay aligned with the active store instance and shut down cleanly when a module is destroyed. No more “where’s my data?” panic attacks! 😎
 
 ### 2. Action and Thunk Orchestration: The Mission Coordinator
 Modules are like mission control, handling **actions** and **thunks** with style. Every action or thunk gets a fancy namespace (e.g., `user/loginUser`), preventing naming collisions in your bustling app city. Thunks are tagged with `isThunk: true`, giving the starter middleware a heads-up to treat them like VIPs. It’s like giving each action its own codename to avoid mix-ups in the heat of battle.
 
 ### 3. Lifecycle Management: The Time Traveler
-Modules have a lifecycle smoother than a superhero’s time-travel gadget. With `init`, `configure`, and `destroy` methods, you can dynamically load or unload modules as needed—perfect for features that don’t need to stick around forever. The `loaded$` and `destroyed$` streams keep everything in sync, ensuring data and actions don’t go rogue when a module retires.
+Modules have a lifecycle smoother than a superhero’s time-travel gadget. With `init`, `configure`, and `destroy` methods, you can dynamically load or unload modules as needed—perfect for features that don’t need to stick around forever. The `loaded$` and `destroyed$` atoms keep everything in sync, ensuring data and actions don’t go rogue when a module retires.
 
 ### 4. Dependency Injection: The Sidekick Supplier
 The `createModule` function lets you inject a **dependencies** object, like handing your superhero a trusty sidekick (e.g., `userAPI`). These dependencies flow into thunks, keeping business logic separate from external services. This makes your code testable, maintainable, and ready to save the day without breaking a sweat.

@@ -2,7 +2,6 @@ import { messagesModule } from './../messages/messages.slice';
 import { createModule, thunk } from '@epikodelabs/actionstack';
 import { action, selector } from '@epikodelabs/actionstack';
 import type { Hero } from '../hero';
-import { firstValueFrom } from '@epikodelabs/streamix';
 import { HeroService } from '../hero.service';
 
 export const slice = "heroDetails";
@@ -50,7 +49,7 @@ export const loadHeroFailure = action(
 export const loadHero = thunk("LOAD_HEROES", (id: number) => async (dispatch: any, getState: any, { heroService }: any) => {
     heroDetailsModule.actions.loadHeroRequest();
     try {
-      const hero = await firstValueFrom(heroService.getHero(id)) as Hero;
+      const hero = await heroService.getHero(id) as Hero;
       messagesModule.actions.addMessage(`HeroService: fetched hero id=${id}`);
       heroDetailsModule.actions.loadHeroSuccess({ hero });
     } catch (error: any) {

@@ -1,9 +1,6 @@
 import { Component } from '@angular/core';
-import { registerModule } from '@epikodelabs/actionstack';
-import type { Stream } from '@epikodelabs/streamix';
-import { store } from '../app.module';
+import type { Atom } from '@epikodelabs/streamix';
 import { messagesModule } from './messages.slice';
-
 @Component({
   selector: 'app-messages',
   templateUrl: './messages.component.html',
@@ -11,15 +8,11 @@ import { messagesModule } from './messages.slice';
   standalone: false
 })
 export class MessagesComponent {
-  messages$!: Stream<any>;
+  messages: Atom<string[]> = messagesModule.data$.selectMessages();
 
-  constructor() {
-    registerModule(store, messagesModule);
-  }
+  constructor() {}
 
-  async ngOnInit() {
-    this.messages$ = messagesModule.data$.selectMessages();
-  }
+  async ngOnInit() {}
 
   addMessage(message: string) {
     messagesModule.actions.addMessage(message);
@@ -28,5 +21,6 @@ export class MessagesComponent {
   clearMessages() {
     messagesModule.actions.clearMessages();
   }
-}
 
+  ngOnDestroy() {}
+}

@@ -7,6 +7,7 @@ import {
   isSystemActionType,
   thunk,
 } from '@epikodelabs/actionstack';
+import { firstValueFrom } from '@epikodelabs/streamix';
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -126,7 +127,7 @@ describe('store', () => {
       throw new Error('selector boom');
     }, 'DEFAULT');
 
-    expect(await stream.query()).toBe('DEFAULT');
+    expect(await firstValueFrom(stream)).toBe('DEFAULT');
     expect((console.warn as any).calls.any()).toBeTrue();
     expect(String((console.warn as any).calls.mostRecent().args[0])).toContain(
       'Error in selector:'
@@ -252,10 +253,10 @@ describe('store', () => {
     await flush(store);
 
     const stream = store.select((state: any) => state.sel, -1);
-    expect(await stream.query()).toBe(0);
+    expect(await firstValueFrom(stream)).toBe(0);
 
     await store.dispatch({ type: 'sel/INC' });
-    expect(await stream.query()).toBe(1);
+    expect(await firstValueFrom(stream)).toBe(1);
   });
 
   it('select supports async selectors and applies defaultValue when resolved value is undefined', async () => {
@@ -270,7 +271,7 @@ describe('store', () => {
       'DEFAULT'
     );
 
-    expect(await stream.query()).toBe('DEFAULT');
+    expect(await firstValueFrom(stream)).toBe('DEFAULT');
   });
 
   it('exposes MiddlewareAPI dependencies, and injected module dependencies are available to thunks', async () => {
@@ -471,7 +472,7 @@ describe('store', () => {
     const store = createStore();
     await flush(store);
 
-    const onError = jasmine.createSpy('loaded$.error');
+    const onFail = jasmine.createSpy('loaded$.fail');
     const badModule: any = {
       slice: 'badmod',
       initialState: {},
@@ -481,13 +482,13 @@ describe('store', () => {
         next: () => {
           throw new Error('boom');
         },
-        error: onError,
+        fail: onFail,
       },
-      destroyed$: { next: () => {}, complete: () => {} },
+      destroyed$: { next: () => {} },
     };
 
     await expectAsync(store.populate(badModule)).toBeRejectedWithError('boom');
-    expect(onError).toHaveBeenCalled();
+    expect(onFail).toHaveBeenCalled();
   });
 
   it('select emits defaultValue when root state becomes null', async () => {
@@ -501,7 +502,7 @@ describe('store', () => {
     const stream = store.select((s: any) => s?.anything, 'DEFAULT');
 
     await store.dispatch({ type: 'TEST/NULL_STATE' });
-    expect(await stream.query()).toBe('DEFAULT');
+    expect(await firstValueFrom(stream)).toBe('DEFAULT');
   });
 
   it('unloadModule(clearState=false) preserves slice state and allows reloading without resetting', async () => {
@@ -634,19 +635,16 @@ describe('store', () => {
 
       const stream = store.select((s: any) => s?.system?._ready, false);
       
-      const observer = {
-        next: jasmine.createSpy('next'),
-        error: jasmine.createSpy('error'),
-        complete: jasmine.createSpy('complete'),
-      };
-
-      const subscription = stream.subscribe(observer);
+      const nextSpy = jasmine.createSpy('next');
+      const subscription = stream.subscribe((value: boolean) => {
+        nextSpy(value);
+      });
       
       // Wait for the async emission
       await new Promise(resolve => setTimeout(resolve, 50));
       
-      expect(observer.next).toHaveBeenCalled();
-      subscription.unsubscribe();
+      expect(nextSpy).toHaveBeenCalled();
+      subscription();
     });
 
     it('dispatch handles async reducer that returns undefined', async () => {
@@ -725,6 +723,8 @@ describe('store', () => {
       await flush(store);
 
       const originalSetTimeout = globalThis.setTimeout;
+      const originalRequestIdleCallback = (globalThis as any).requestIdleCallback;
+      const originalRequestAnimationFrame = (globalThis as any).requestAnimationFrame;
       const setTimeoutSpy = jasmine.createSpy('setTimeout').and.callFake(((callback: TimerHandler, _delay?: number, ...args: any[]) => {
         if (typeof callback === 'function') {
           callback(...args);
@@ -738,6 +738,8 @@ describe('store', () => {
       try {
         await store.dispatch({ type: 'TEST/TRACKED' });
       } finally {
+        (globalThis as any).requestIdleCallback = originalRequestIdleCallback;
+        (globalThis as any).requestAnimationFrame = originalRequestAnimationFrame;
         (globalThis as any).setTimeout = originalSetTimeout;
       }
 
@@ -853,8 +855,8 @@ describe('store', () => {
         initialState: {},
         actions: {},
         dependencies: {},
-        loaded$: { next: loaded, error: () => {} },
-        destroyed$: { next: () => {}, complete: () => {} },
+        loaded$: { next: loaded, fail: () => {} },
+        destroyed$: { next: () => {} },
         configure: () => {},
       };
 
@@ -872,8 +874,8 @@ describe('store', () => {
         initialState: {},
         actions: {},
         dependencies: {},
-        loaded$: { next: () => {}, error: () => {} },
-        destroyed$: { next: destroyed, complete: () => {} },
+        loaded$: { next: () => {}, fail: () => {} },
+        destroyed$: { next: destroyed },
         configure: () => {},
       };
 
@@ -894,8 +896,8 @@ describe('store', () => {
         initialState: {},
         actions: {},
         dependencies: {},
-        loaded$: { next: () => {}, error: () => {} },
-        destroyed$: { next: () => {}, complete: () => {} },
+        loaded$: { next: () => {}, fail: () => {} },
+        destroyed$: { next: () => {} },
         configure,
       };
 
@@ -909,19 +911,11 @@ describe('store', () => {
 
       const stream = store.select((s: any) => s?.system?._ready);
       
-      const errorSpy = jasmine.createSpy('error');
-      const observer = {
-        next: () => {},
-        error: errorSpy,
-      };
-
-      const subscription: any = stream.subscribe(observer);
-      
-      // Simulate an error (though in practice errors would come from the source)
-      // For coverage, we ensure the wrapped observer handles it
-      if (subscription.observers && subscription.observers[0]) {
-        subscription.observers[0].error(new Error('test error'));
-      }
+      const onError = jasmine.createSpy('onError');
+      const subscription = stream.subscribe(() => {});
+      stream.onError(onError);
+      subscription();
+      expect(onError).not.toHaveBeenCalled();
     });
 
     it('normalizePath handles string and array paths', async () => {
@@ -989,21 +983,13 @@ describe('store', () => {
 
       const stream = store.select((s: any) => s?.system?._ready);
       
-      const completeSpy = jasmine.createSpy('complete');
-      const observer = {
-        next: () => {},
-        complete: completeSpy,
-      };
-
-      const subscription: any = stream.subscribe(observer);
+      const subscription = stream.subscribe(() => {});
       
       // Wait for initial emission
       await new Promise(resolve => setTimeout(resolve, 50));
       
-      // Trigger complete
-      if (subscription.observers && subscription.observers[0]) {
-        subscription.observers[0].complete();
-      }
+      subscription();
+      expect(stream.disposed).toBeFalse();
     });
 
     it('dispatch function action (thunk) directly', async () => {
@@ -1089,7 +1075,7 @@ describe('store', () => {
       await store.dispatch({ type: 'NULLIFY' });
       
       // Should use default value when state is null
-      const value = await stream.query();
+      const value = await firstValueFrom(stream);
       expect(value).toBe('fallback');
     });
 

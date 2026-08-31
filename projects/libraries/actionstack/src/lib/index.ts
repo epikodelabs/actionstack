@@ -1,3 +1,4 @@
+export * from "./angular";
 export * from "./actions";
 export * from "./hash";
 export * from "./idle";

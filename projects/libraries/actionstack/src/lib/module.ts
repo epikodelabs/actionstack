@@ -1,11 +1,12 @@
 import {
-  createReplaySubject,
-  createSubject,
-  switchMap,
+  atom,
+  createSharedSource,
+  hasAtomEmitted,
+  pipe,
   takeUntil
 } from '@epikodelabs/streamix';
 import { isAction } from '../lib';
-import type { ActionCreator, FeatureModule, Store, Streams, AsyncAction, Selector } from '../lib';
+import type { ActionCreator, FeatureModule, Store, Streams, Selector } from '../lib';
 
 /**
  * Creates a feature module that encapsulates a slice of state, its actions, selectors,
@@ -51,11 +52,15 @@ function createModule<
   }
 
   let configured = false;
-  let loaded$ = createReplaySubject<void>();
-  let destroyed$ = createSubject<void>();
+  let loaded$ = atom<void>();
+  let destroyed$ = atom<void>();
+  let destroyed = false;
 
   const processedActions = processActions(config.actions ?? {}, slice, config.dependencies);
-  let processedSelectors: any = {};
+  const processedSelectors = processSelectors(
+    config.selectors ?? {},
+    selectSlice
+  );
   let store: Store<any> | undefined;
 
   const module = {
@@ -67,7 +72,7 @@ function createModule<
     destroyed$,
     data$: {} as Streams<Selectors>,
     actions: {} as Actions,
-    selectors: {} as any,
+    selectors: processedSelectors as any,
 
     init(storeInstance: Store<any>) {
       return this.configure(storeInstance);
@@ -76,36 +81,20 @@ function createModule<
     configure(storeInstance: Store<any>) {
       if (configured) return this;
       configured = true;
+      destroyed = false;
       store = storeInstance;
 
-      // Recreate subjects to support module reuse after destroy
-      loaded$ = createReplaySubject<void>();
-      destroyed$ = createSubject<void>();
-      (this as any).loaded$ = loaded$;
-      (this as any).destroyed$ = destroyed$;
-
-      processedSelectors = processSelectors(
-        config.selectors ?? {},
-        selectSlice
-      );
-
-      // Update the module's selectors
-      this.selectors = processedSelectors;
-
       // Initialize data$ streams and actions with the store
-      initializeDataStreams(this, processedSelectors, loaded$, destroyed$, () => store);
       initializeActions(this, processedActions, slice, () => store);
-
-      // Mark module as loaded
-      loaded$.next();
 
       return this;
     },
 
     destroy(clearState?: boolean) {
+      destroyed = true;
       destroyed$.next();
-      destroyed$.complete();
-      loaded$.complete();
+      destroyed$.dispose();
+      loaded$.dispose();
 
       if (store && clearState !== false) {
         store.unloadModule(this, true);
@@ -113,10 +102,23 @@ function createModule<
 
       configured = false;
       store = undefined;
+      loaded$ = atom<void>();
+      destroyed$ = atom<void>();
+      (this as any).loaded$ = loaded$;
+      (this as any).destroyed$ = destroyed$;
 
       return this;
     }
   };
+
+  initializeDataStreams(
+    module,
+    processedSelectors,
+    () => loaded$,
+    () => destroyed$,
+    () => destroyed,
+    () => store
+  );
 
   return module as FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
 }
@@ -239,17 +241,19 @@ function processSelectors<
 }
 
 /**
- * Initializes reactive data streams (`data$`) for all module selectors.
+ * Initializes reactive data atoms (`data$`) for all module selectors.
  *
- * Streams are deferred until the module's `loaded$` emits, and automatically stop
- * when `destroyed$` emits. Each stream uses the store's `.select()` method at runtime.
+ * Atoms are available as soon as the module is created. When the module has not
+ * been configured yet, each selector atom waits for `loaded$` before attaching
+ * to the store, and automatically completes when `destroyed$` emits.
  *
  * @template State Module state type.
  * @template Selectors Shape of the processed selectors.
  * @param {any} moduleInstance The module object being initialized.
  * @param {Selectors} processedSelectors Processed selectors.
- * @param {import('@epikodelabs/streamix').ReplaySubject<void>} loaded$ Emits when the module is fully loaded.
- * @param {import('@epikodelabs/streamix').Subject<void>} destroyed$ Emits when the module is destroyed.
+ * @param {() => import('@epikodelabs/streamix').Writable<void>} getLoaded$ Returns the current loaded atom.
+ * @param {() => import('@epikodelabs/streamix').Writable<void>} getDestroyed$ Returns the current destroyed atom.
+ * @param {() => boolean} isDestroyed Returns whether the module has been destroyed.
  * @param {() => Store<State> | undefined} getStore Function that returns the store instance.
  */
 function initializeDataStreams<
@@ -258,27 +262,71 @@ function initializeDataStreams<
 >(
   moduleInstance: any,
   processedSelectors: Selectors,
-  loaded$: any,
-  destroyed$: any,
+  getLoaded$: () => any,
+  getDestroyed$: () => any,
+  isDestroyed: () => boolean,
   getStore: () => Store<State> | undefined
 ) {
   for (const key in processedSelectors) {
     const selectorFn = processedSelectors[key];
 
+    const unavailableAtom = () => {
+      const failed = atom<any>();
+      failed.fail(
+        new Error(
+          `Module "${moduleInstance.slice}" store not available for data$ streams`
+        )
+      );
+      return failed;
+    };
+
     // ✅ data$.key() — zero args
     (moduleInstance.data$ as any)[key] = () => {
-      return loaded$.pipe(
-        switchMap(() => {
-          const store = getStore();
-          if (!store) {
-            throw new Error(
-              `Module "${moduleInstance.slice}" store not available for data$ streams`
-            );
-          }
+      const store = getStore();
+      const destroyed$ = getDestroyed$();
 
-          // ✅ selectorFn is already (rootState) => value
-          return store.select(selectorFn);
-        }),
+      // Module was destroyed after configuration — surface the error directly
+      if (!store && isDestroyed()) {
+        return unavailableAtom();
+      }
+
+      // Module is not configured yet — wait for `loaded$` before projecting
+      if (!store) {
+        return createSharedSource<any>(async (push) => {
+          let selectorSubscription: any;
+          let loadedSubscription: any;
+
+          const connectToStore = () => {
+            const nextStore = getStore();
+            if (!nextStore || selectorSubscription) {
+              return false;
+            }
+
+            selectorSubscription = nextStore
+              .select(selectorFn)
+              .subscribe((value: any) => push(value));
+
+            return true;
+          };
+
+          loadedSubscription = getLoaded$().subscribe(() => {
+            if (connectToStore()) {
+              loadedSubscription?.();
+              loadedSubscription = undefined;
+            }
+          });
+
+          connectToStore();
+
+          return () => {
+            loadedSubscription?.();
+            selectorSubscription?.();
+          };
+        });
+      }
+
+      return pipe(
+        store.select(selectorFn),
         takeUntil(destroyed$)
       );
     };

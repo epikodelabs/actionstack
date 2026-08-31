@@ -84,9 +84,7 @@ const store = createStore({ exclusiveActionProcessing: false });
 await store.populate(userModule);
 
 // Subscribe to state changes
-userModule.data$.getUser().subscribe({
-  next: (state) => console.log('User state:', state)
-});
+userModule.data$.getUser().subscribe((state) => console.log('User state:', state));
 
 // Call thunk method
 try {

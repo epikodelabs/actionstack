@@ -304,18 +304,15 @@ const combineReducers = (reducers: Tree<Reducer | AsyncReducer>): AsyncReducer =
       if (action?.type === '@@INIT') return state;
     }
 
-    let hasChanged = false;
     const modified: any = {}; // To track the modifications
 
     // Process each reducer in the flattened reducer map
     for (const { reducer, path } of reducerMap.values()) {
-      const key = path[path.length - 1];
-      const currentState = path.reduce((acc, key) => acc[key], state);
+      const currentState = path.reduce((acc, segment) => acc[segment], state);
 
       try {
         const updatedState = await reducer(currentState, action);
         if (currentState !== updatedState) {
-          hasChanged = true;
           // Apply the change to the state using applyChange
           state = await applyChange(state, path, updatedState, modified);
         }

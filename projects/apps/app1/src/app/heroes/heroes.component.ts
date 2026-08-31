@@ -1,12 +1,10 @@
-
 import type { OnDestroy, OnInit } from '@angular/core';
 import { Component } from '@angular/core';
 
-import { registerModule, unregisterModule } from '@epikodelabs/actionstack';
-import type { Subscription } from '@epikodelabs/streamix';
+import { unregisterModule } from '@epikodelabs/actionstack';
+import type { Atom } from '@epikodelabs/streamix';
 import { store } from '../app.module';
 import type { Hero } from '../hero';
-import { HeroService } from './../hero.service';
 import { heroesModule } from './heroes.slice';
 
 @Component({
@@ -16,29 +14,21 @@ import { heroesModule } from './heroes.slice';
   standalone: false
 })
 export class HeroesComponent implements OnInit, OnDestroy {
-  heroes: Hero[] = [];
-  subscription!: Subscription;
+  heroes: Atom<Hero[]> = heroesModule.data$.selectHeroes();
 
-
-  constructor(private heroService: HeroService) {
-    registerModule(store, heroesModule);
-  }
+  constructor() {}
 
   async ngOnInit() {
-
-    heroesModule.data$.selectHeroes().subscribe(value => {
-      this.heroes = value;
-    });
+    await store.loadModule(heroesModule);
 
     this.getHeroes();
   }
 
   getHeroes(): void {
-    heroesModule.actions.getHeroesRequest({ heroes: this.heroes });
+    heroesModule.actions.getHeroesRequest({ heroes: [] });
   }
 
   ngOnDestroy(): void {
     unregisterModule(store, heroesModule, true);
   }
 }
-

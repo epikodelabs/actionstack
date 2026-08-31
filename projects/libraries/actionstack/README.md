@@ -171,14 +171,15 @@ unregisterModule(store, featureModule, true);
 
 ### Stream Composition
 ```typescript
-import { combineLatest, map, filter, eachValueFrom } from '@epikodelabs/streamix';
+import { combineLatest, map, pipe } from '@epikodelabs/streamix';
 
 // Combine data from multiple modules
-const dashboardData$ = combineLatest(
-  userModule.data$.selectCurrentUser(),
-  todoModule.data$.selectActiveTodos(),
-  notificationModule.data$.selectUnread()
-).pipe(
+const dashboardData$ = pipe(
+  combineLatest(
+    userModule.data$.selectCurrentUser(),
+    todoModule.data$.selectActiveTodos(),
+    notificationModule.data$.selectUnread()
+  ),
   map(([user, todos, notifications]) => ({
     user,
     todoCount: todos.length,
@@ -187,7 +188,7 @@ const dashboardData$ = combineLatest(
 );
 
 // React to combined state changes
-for await (const data of eachValueFrom(dashboardData$)) {
+for await (const data of dashboardData$) {
   updateDashboard(data);
 }
 ```
@@ -203,14 +204,14 @@ const store = createStore({
 
 ---
 
-## Why Query + Thunks = Perfect Match
-The combination of Streamix's `query()` method and actionstack's thunks creates a uniquely powerful and streamlined approach:
+## Why Atoms + Thunks = Perfect Match
+The combination of Streamix atoms and actionstack's thunks creates a streamlined reactive workflow:
 
-- **Reactive by default** - Subscribe to streams for UI updates
-- **Imperative when needed** - Use query() for instant access in business logic
+- **Reactive by default** - Subscribe to atoms for UI updates
+- **Imperative when needed** - Use `firstValueFrom(atom)` for one-time reads
 - **Consistent API** - Same selectors work for both reactive and imperative use
 - **Type-safe** - Full TypeScript inference across reactive and sync access patterns
-- **Performance optimized** - Query avoids subscription overhead for one-time reads
+- **Performance optimized** - Shared sources avoid duplicate selector work
 
 ---
 

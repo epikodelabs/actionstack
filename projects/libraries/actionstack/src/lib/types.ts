@@ -1,4 +1,5 @@
-import type { Stream, Subject, Subscription } from '@epikodelabs/streamix';
+import type { Atom, Writable } from '@epikodelabs/streamix';
+import { isAtom } from '@epikodelabs/streamix';
 import type { ActionQueue, Store, StoreSettings } from '../lib';
 
 /**
@@ -14,7 +15,7 @@ export type CancelablePromise<T = any> = Promise<T> & {
 /**
  * Describes a standard action object used to signal state changes.
  *
- * Actions are dispatched to update the state in ActionStack-like stores.
+ * Actions are dispatched to update the state in Actionstack-like stores.
  *
  * @template T - Type of the action payload. Defaults to `any`.
  */
@@ -207,7 +208,7 @@ export type MiddlewareAPI<TState = any, TDependencies = any> = {
 /**
  * Interface defining the structure of a middleware function.
  *
- * Middleware functions are used to intercept, handle, and potentially modify the dispatching process in ActionStack-like stores.
+ * Middleware functions are used to intercept, handle, and potentially modify the dispatching process in Actionstack-like stores.
  * This interface defines the expected behavior for a middleware function.
  *
  * @property (api: Store) => (next: Function) => (action: any) => Promise<any> | any
@@ -228,40 +229,6 @@ export interface Middleware {
 }
 
 /**
- * Represents an observer that receives notifications of values from an Stream.
- * @interface
- * @template T The type of the value being observed.
- */
-export interface Observer<T> {
-  next: (value: T) => void;
-  error: (err: any) => void;
-  complete: () => void;
-}
-
-/**
- * Represents an asynchronous observer that receives notifications of values from an Stream.
- * @interface
- * @template T The type of the value being observed.
- */
-export interface AsyncObserver<T> {
-  next: (value: T) => Promise<void>;
-  error: (err: any) => Promise<void>;
-  complete: () => Promise<void>;
-}
-
-/**
- * Interface representing an operator function for transforming streams.
- *
- * An operator function takes an input `Stream<T>` and returns an output `Stream<R>`.
- *
- * @typeParam T - The type of the input elements.
- * @typeParam R - The type of the output elements.
- */
-export interface OperatorFunction<T, R> {
-  (source: Stream<T>): Stream<R>
-}
-
-/**
  * Type alias for any function that takes any number of arguments and returns anything.
  *
  * This type is used to represent a generic function without specifying a specific argument or return type.
@@ -272,7 +239,7 @@ export type AnyFn = (...args: any[]) => any;
 /**
  * Interface defining the structure of a selector function.
  *
- * Selectors are functions that extract specific data or derived values from the ActionStack store's state.
+ * Selectors are functions that extract specific data or derived values from the Actionstack store's state.
  *
  * @param state - The current state of the application.
  * @param props - Optional props object that can be used by the selector for additional logic.
@@ -325,10 +292,10 @@ export type ProcessingStrategy = "exclusive" | "concurrent";
 export type SliceStrategy = "persistent" | "temporary";
 
 /**
- * Maps selector definitions to stream factory functions.
+ * Maps selector definitions to atom factory functions.
  */
 export type Streams<S extends Record<string, (state: any) => any>> = {
-  [K in keyof S]: () => Stream<ReturnType<S[K]>>;
+  [K in keyof S]: () => Atom<ReturnType<S[K]>>;
 };
 
 /**
@@ -362,8 +329,8 @@ export interface FeatureModule<
   readonly slice: string;
   readonly initialState: State;
   readonly dependencies?: Dependencies;
-  readonly loaded$: Subject<void>;
-  readonly destroyed$: Subject<void>;
+  readonly loaded$: Writable<void>;
+  readonly destroyed$: Writable<void>;
   readonly data$: Streams<Selectors>;
   readonly actions: Actions;
   readonly selectors: Selectors;
@@ -430,8 +397,8 @@ function kindOf(val: any): string {
   if (isError(val))
     return "error";
 
-  if (isStream(val))
-    return "Stream";
+  if (isAtom(val))
+    return "Atom";
 
   if (isPromise(val))
     return "promise";
@@ -520,12 +487,12 @@ function isPromise(value: any) {
 }
 
 /**
- * Checks if a value is a valid ActionStack action object.
+ * Checks if a value is a valid Actionstack action object.
  *
  * This function determines if the provided value is a valid action object
- * used in ActionStack for dispatching state changes.
+ * used in Actionstack for dispatching state changes.
  *
- * @param action - The value to check if it's a ActionStack action.
+ * @param action - The value to check if it's a Actionstack action.
  * @returns boolean - True if the value is a plain object with a string property named "type", false otherwise.
  */
 function isAction(action: any): action is Action<any> {
@@ -566,16 +533,6 @@ function isPlainObject(obj: any): boolean {
   return Object.getPrototypeOf(obj) === proto;
 }
 
-/**
- * Tests to see if the object is a streamix Stream
- * @param obj the object to test
- */
-function isStream(obj: any): obj is Stream<unknown> {
-  // The !! is to ensure that this publicly exposed function returns
-  // `false` if something like `null` or `0` is passed.
-  return !!obj && obj.type === 'stream' && typeof obj.subscribe === 'function';
-}
-
-export { isAction, isAsync, isBoxed, isPlainObject, isPromise, isStream, kindOf };
+export { isAction, isAsync, isAtom, isBoxed, isPlainObject, isPromise, kindOf };
 
 

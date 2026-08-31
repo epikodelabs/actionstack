@@ -1,34 +1,32 @@
-
 import { CommonModule } from '@angular/common';
-import type { OnInit } from '@angular/core';
+import type { OnDestroy, OnInit } from '@angular/core';
 import { Component } from '@angular/core';
 import { RouterModule } from '@angular/router';
-import { registerModule } from '@epikodelabs/actionstack';
-import type { Stream } from '@epikodelabs/streamix';
+import type { Atom } from '@epikodelabs/streamix';
+import { AtomDirective } from '../atomDirective';
+import { dashboardModule } from './dashboard.slice';
 import { store } from '../app.module';
 import type { Hero } from '../hero';
-import { dashboardModule } from './dashboard.slice';
 
 @Component({
   selector: 'app-dashboard',
   templateUrl: './dashboard.component.html',
   styleUrls: [ './dashboard.component.css' ],
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, AtomDirective],
 })
-export class DashboardComponent implements OnInit {
-  heroes$!: Stream<Hero[]>;
+export class DashboardComponent implements OnInit, OnDestroy {
+  heroes: Atom<Hero[]> = dashboardModule.data$.selectTopHeroes();
 
-  constructor() {
-    registerModule(store, dashboardModule);
-  }
+  constructor() {}
 
   async ngOnInit() {
-    this.heroes$ = dashboardModule.data$.selectTopHeroes();
+    await store.loadModule(dashboardModule);
+
     dashboardModule.actions.loadHeroes();
   }
 
   ngOnDestroy(): void {
+    void store.unloadModule(dashboardModule, true);
   }
 }
-

@@ -1,7 +1,6 @@
 <h2>Top Heroes</h2>
-<div class="heroes-menu" *ngIf="heroes$ | async as heroes">
-  <a *ngFor="let hero of heroes"
-    routerLink="/details/{{hero.id}}">
+<div class="heroes-menu">
+  <a *atom="let hero of heroes" routerLink="/details/{{hero.id}}">
     {{hero.name}}
   </a>
 </div>

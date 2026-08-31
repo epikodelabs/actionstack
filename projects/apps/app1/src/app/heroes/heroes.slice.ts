@@ -1,6 +1,5 @@
 import { messagesModule } from './../messages/messages.slice';
 import { action, createModule, createThunk, selector } from '@epikodelabs/actionstack';
-import { firstValueFrom } from '@epikodelabs/streamix';
 
 import type { Hero } from '../hero';
 import type { Action } from '@epikodelabs/actionstack';
@@ -43,7 +42,7 @@ export const selectHeroes = selector((state) => state.heroes);
 export const loadHeroes = createThunk(
   "LOAD_HEROES",
   () => async (dispatch, getState, { heroService }) => {
-    const heroes: Hero[] = await firstValueFrom(heroService.getHeroes());
+    const heroes: Hero[] = await heroService.getHeroes();
 
     heroesModule.actions.getHeroesSuccess(heroes);
     messagesModule.actions.addMessage('HeroService: fetched heroes');

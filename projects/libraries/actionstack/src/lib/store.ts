@@ -1,32 +1,25 @@
-import type { Stream } from '@epikodelabs/streamix';
-import {
-  createAsyncIterator,
-  createBehaviorSubject,
-  createReceiver,
-  createSubscription,
-  firstValueFrom,
-  pipeSourceThrough,
-} from '@epikodelabs/streamix';
+import type { Atom } from '@epikodelabs/streamix';
+import { atom, createSharedSource } from '@epikodelabs/streamix';
 import { action, createActionRegistry, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
 import { waitForBrowserIdle } from './idle';
 import { createModule, registerModule } from './module';
 import { createQueue } from './queue';
 import { starter } from './starter';
 import type {
-  Action,
-  AsyncAction,
-  AsyncReducer,
-  Dispatch,
-  FeatureModule,
-  Middleware,
-  MiddlewareAPI,
-  Reducer,
-  StoreEnhancer,
+    Action,
+    AsyncAction,
+    AsyncReducer,
+    Dispatch,
+    FeatureModule,
+    Middleware,
+    MiddlewareAPI,
+    Reducer,
+    StoreEnhancer,
 } from './types';
 import {
-  combineEnhancers,
-  getProperty,
-  setProperty,
+    combineEnhancers,
+    getProperty,
+    setProperty,
 } from './utils';
 
 /**
@@ -65,8 +58,8 @@ export type Store<TState = any, TDependencies = any> = {
     };
 
     select: {
-        <R = any>(selector: (state: Readonly<TState>) => R, defaultValue?: R): Stream<R>;
-        <R = any>(selector: (state: Readonly<TState>) => Promise<R>, defaultValue?: R): Stream<R>;
+        <R = any>(selector: (state: Readonly<TState>) => R, defaultValue?: R): Atom<R>;
+        <R = any>(selector: (state: Readonly<TState>) => Promise<R>, defaultValue?: R): Atom<R>;
     };
 
     populate: (...modules: FeatureModule[]) => Promise<void>;
@@ -184,7 +177,7 @@ export function createStore<T = any>(
   };
 
   let state = {} as T;
-  let currentState = createBehaviorSubject<T>(state as T);
+  const currentState = atom<T>(state as T);
   const queue = createQueue();
 
   /**
@@ -362,18 +355,18 @@ export function createStore<T = any>(
           
           // Dispatch system action
           sysActions.moduleLoaded(module);
-          // Signal that module is loaded (this should be the last step)
-          module.loaded$.next();
           // Update current state
           currentState.next(state);
+          // Signal that module state and selectors are ready
+          module.loaded$.next();
         } catch (error) {
           console.warn(`Failed to load module ${module.slice}:`, error);
 
           // Clean up on failure
           modules = modules.filter((m) => m.slice !== module.slice);
 
-          // Signal error on loaded$ subject
-          module.loaded$.error(error);
+          // Signal error on loaded$ atom
+          module.loaded$.fail(error);
 
           throw error; // Re-throw to let caller handle
         }
@@ -410,6 +403,7 @@ export function createStore<T = any>(
 
       sysActions.moduleLoaded(module);
       currentState.next(state);
+      module.loaded$.next();
     });
   };
 
@@ -501,92 +495,60 @@ export function createStore<T = any>(
   /**
    * Selects and derives a value from the store's current state using the provided selector.
    *
+   * The returned atom emits the selected current value when the first subscriber
+   * attaches, then follows state changes. Selector errors and `undefined` results
+   * fall back to `defaultValue`.
+   *
    * @template R The type of the derived value.
    * @param {(state: T) => R | Promise<R>} selector - A function that selects or derives a value from the current state.
    * @param {R} [defaultValue] - A fallback value to emit when the selected value is `undefined`.
-   * @returns {Stream<R>} A stream emitting selected values.
+   * @returns {Atom<R>} An atom emitting selected values.
    */
   const select = <R = any>(
     selector: (state: Readonly<T>) => R | Promise<R>,
     defaultValue?: R
-  ): Stream<R> => {
-    const subscribe = (callbackOrReceiver?: ((value: R) => any) | any) => {
-      const receiver = createReceiver<R>(callbackOrReceiver);
+  ): Atom<R> => {
+    const resolveSelected = async (state: T): Promise<R> => {
+      if (state == null) {
+        return defaultValue as R;
+      }
 
+      try {
+        const value = await selector(state);
+        return value === undefined ? (defaultValue as R) : value;
+      } catch (err: any) {
+        console.warn(`Error in selector: ${err?.message ?? err}`);
+        return defaultValue as R;
+      }
+    };
+
+    return createSharedSource<R>(async (push) => {
       let hasValue = false;
       let lastValue = defaultValue as R;
-      let stopped = false;
-      let sourceSubscription: any;
 
-      const resolveSelected = async (state: T): Promise<R> => {
-        if (state == null) {
-          return defaultValue as R;
+      const emit = async (state: T): Promise<void> => {
+        const selected = await resolveSelected(state);
+
+        if (hasValue && Object.is(lastValue, selected)) {
+          return;
         }
 
-        try {
-          const value = await selector(state);
-          return value === undefined ? (defaultValue as R) : value;
-        } catch (err: any) {
-          console.warn(`Error in selector: ${err?.message ?? err}`);
-          return defaultValue as R;
-        }
+        hasValue = true;
+        lastValue = selected;
+        await push(selected);
       };
 
-      sourceSubscription = currentState.subscribe({
-        next: async (state: T) => {
-          if (stopped || receiver.completed) {
-            return;
-          }
+      // Emit the selected current value as soon as the source connects
+      await emit(state);
 
-          const selected = await resolveSelected(state);
-
-          if (hasValue && Object.is(lastValue, selected)) {
-            return;
-          }
-
-          hasValue = true;
-          lastValue = selected;
-
-          try {
-            await receiver.next(selected);
-          } catch (err) {
-            try {
-              await receiver.error(err);
-            } finally {
-              await sourceSubscription?.unsubscribe?.();
-            }
-          }
-        },
-        error: async (err: any) => {
-          await receiver.error(err);
-        },
-        complete: async () => {
-          await receiver.complete();
-        },
+      const sourceSubscription = currentState.subscribe((nextState: T) => {
+        void emit(nextState);
       });
 
-      return createSubscription(async () => {
-        stopped = true;
-        await sourceSubscription?.unsubscribe?.();
-      });
-    };
-
-    let stream!: Stream<R>;
-    stream = {
-      type: 'stream',
-      name: 'select',
-      pipe: ((...ops: any[]) => pipeSourceThrough(stream as any, ops)) as any,
-      subscribe,
-      query: () => firstValueFrom(stream),
-      [Symbol.asyncIterator]: () => {
-        const factory = createAsyncIterator<R>({
-          register: (receiver) => subscribe(receiver),
-        });
-        return factory();
-      },
-    };
-
-    return stream;
+      return () => {
+        sourceSubscription();
+      };
+    });
   };
 
   /**
@@ -632,7 +594,7 @@ export function createStore<T = any>(
     sysActions.initializeState();
 
     console.log(
-      '%cYou are using ActionStack. Happy coding! 🎉',
+      '%cYou are using Actionstack. Happy coding! 🎉',
       'font-weight: bold;'
     );
 
