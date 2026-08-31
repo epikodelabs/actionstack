@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+Added `module.attachView(...)` and `module.detachView(...)` so framework adapters can explicitly hook view updates into `data$` subscriptions without coupling the core store to Angular. For Angular, this gives the same recommended manual-subscription path in both `v3` and `v4`: prefer the `async` pipe first, and use `attachView(cdr)` when imperative subscription is required.
+
 ## 3.0.24
 
 Simplified module selectors to plain state-accepting functions and removed selector factory support. Fixed batched module population so modules are configured before registration, ensured nested dispatches from directly dispatched thunks still flow through starter trigger handling, and clarified duplicate registration warnings to reflect that existing handlers and thunks are preserved. Also made the hash spec Node-safe and added package-local TypeScript configs so library tests resolve `jasmine` and `node` globals correctly in editors.

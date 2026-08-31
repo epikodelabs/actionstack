@@ -232,6 +232,10 @@ The combination of Streamix's `query()` method and actionstack's thunks creates 
 - **[Community support](https://github.com/epikodelabs/actionstack/discussions)**
 - **[Streamix: Reactive foundation](https://www.npmjs.com/package/@epikodelabs/streamix)**
 
+## Angular Notes
+
+For Angular, prefer binding `module.data$` with the `async` pipe. If you need a manual subscription, attach a view notifier explicitly with `module.attachView(cdr)` and remove it with `module.detachView(cdr)` on teardown. This keeps Angular change detection support explicit while preserving a framework-agnostic store core across both `v3` and `v4` lifecycle patterns.
+
 ## Licensing and Legal
 - **[License: GNU AGPL v3](https://github.com/epikodelabs/actionstack/blob/main/LICENSE)**
 - **[Pricing](/PRICING)**

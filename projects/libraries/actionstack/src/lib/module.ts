@@ -11,7 +11,7 @@ import {
   takeUntil
 } from '@epikodelabs/streamix';
 import { isAction } from '../lib';
-import type { ActionCreator, FeatureModule, Store, Streams, AsyncAction, Selector } from '../lib';
+import type { ActionCreator, FeatureModule, Store, Streams, AsyncAction, Selector, ViewAttachment } from '../lib';
 
 /**
  * Creates a feature module that encapsulates a slice of state, its actions, selectors,
@@ -62,6 +62,7 @@ function createModule<
   let destroying = false;
   let destroyed = false;
   let lifecycleId = 0;
+  const attachedViews = new Set<ViewAttachment>();
 
   const processedActions = processActions(config.actions ?? {}, slice, config.dependencies);
   const processedSelectors = processSelectors(
@@ -101,6 +102,14 @@ function createModule<
     data$: {} as Streams<Selectors>,
     actions: {} as Actions,
     selectors: processedSelectors as any,
+    attachView(view: ViewAttachment) {
+      attachedViews.add(view);
+      return this;
+    },
+    detachView(view: ViewAttachment) {
+      attachedViews.delete(view);
+      return this;
+    },
 
     init(storeInstance: Store<any>) {
       return this.configure(storeInstance);
@@ -158,6 +167,7 @@ function createModule<
     () => destroying,
     () => destroyed,
     () => lifecycleId,
+    () => attachedViews,
     () => store
   );
 
@@ -309,6 +319,7 @@ function initializeDataStreams<
   isDestroying: () => boolean,
   isDestroyed: () => boolean,
   getLifecycleId: () => number,
+  getAttachedViews: () => Set<ViewAttachment>,
   getStore: () => Store<State> | undefined
 ) {
   const streamCache = new Map<string, { lifecycleId: number; stream: any }>();
@@ -338,21 +349,25 @@ function initializeDataStreams<
       if (isDestroying() || (!store && isDestroyed())) {
         stream = unavailableStream();
       } else if (store) {
-        stream = store.select(selectorFn).pipe(
-          takeUntil(destroyed$)
+        stream = bindViewNotifications(
+          store.select(selectorFn).pipe(takeUntil(destroyed$)),
+          getAttachedViews
         );
       } else {
         const loaded$ = getLoaded$();
-        stream = loaded$.pipe(
-          switchMap(() => {
-            const nextStore = getStore();
-            if (!nextStore) {
-              return unavailableStream();
-            }
+        stream = bindViewNotifications(
+          loaded$.pipe(
+            switchMap(() => {
+              const nextStore = getStore();
+              if (!nextStore) {
+                return unavailableStream();
+              }
 
-            return nextStore.select(selectorFn);
-          }),
-          takeUntil(destroyed$)
+              return nextStore.select(selectorFn);
+            }),
+            takeUntil(destroyed$)
+          ),
+          getAttachedViews
         );
       }
 
@@ -377,6 +392,59 @@ function createErrorStream(error: unknown): any {
     subscribe,
     query: () => firstValueFrom(stream),
     toArray: () => streamToArray(stream),
+    [Symbol.asyncIterator]: () => {
+      const factory = createAsyncIterator<any>({
+        register: (receiver) => subscribe(receiver),
+      });
+      return factory();
+    },
+  };
+
+  return stream;
+}
+
+function bindViewNotifications(
+  source: any,
+  getAttachedViews: () => Set<ViewAttachment>
+): any {
+  const notifyViews = () => {
+    for (const view of getAttachedViews()) {
+      if (typeof view === 'function') {
+        view();
+        continue;
+      }
+
+      if (typeof view.markForCheck === 'function') {
+        view.markForCheck();
+        continue;
+      }
+
+      if (typeof view.detectChanges === 'function') {
+        view.detectChanges();
+      }
+    }
+  };
+
+  const subscribe = (callbackOrReceiver?: any) => {
+    const receiver = createReceiver(callbackOrReceiver);
+    return source.subscribe({
+      next: async (value: unknown) => {
+        await receiver.next(value);
+        notifyViews();
+      },
+      error: (error: unknown) => receiver.error(error),
+      complete: () => receiver.complete(),
+    });
+  };
+
+  let stream: any;
+  stream = {
+    ...source,
+    subscribe,
+    pipe: ((...ops: any[]) =>
+      bindViewNotifications(source.pipe(...ops), getAttachedViews)) as any,
+    query: () => source.query(),
+    toArray: () => source.toArray(),
     [Symbol.asyncIterator]: () => {
       const factory = createAsyncIterator<any>({
         register: (receiver) => subscribe(receiver),

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+Added `module.attachView(...)` and `module.detachView(...)` so framework adapters can explicitly hook view updates into `data$` subscriptions without coupling the core store to Angular. For Angular, this gives the same recommended manual-subscription path in both `v3` and `v4`: prefer the `async` pipe first, and use `attachView(cdr)` when imperative subscription is required.
+
 ## 3.0.25
 
 Made `module.data$` selector factories available immediately at `createModule(...)` time, while keeping the underlying selector streams deferred until the module is configured and loaded. This fixes early field-initializer usage such as `module.data$.selectTopHeroes()` before `store.loadModule(module)`, updates module load ordering so selector streams attach only after state is published, aligns custom streams with the Streamix 2.0.53 `Stream` contract by adding `toArray()`, and moves `jasmine`/`node` typings into the spec tsconfig so library builds no longer require test-only type definitions.

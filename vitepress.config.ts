@@ -45,6 +45,7 @@ export default defineConfig({
           items: [
             { text: 'Getting Started', link: '/' },
             { text: 'Changelog', link: '/CHANGELOG' },
+            { text: 'Angular', link: '/ANGULAR' },
             { text: 'Middleware', link: '/MIDDLEWARE' },
             { text: 'Modules', link: '/MODULES' },
             { text: 'Pricing', link: '/PRICING' },
