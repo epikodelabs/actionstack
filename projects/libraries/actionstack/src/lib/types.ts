@@ -299,6 +299,18 @@ export type Streams<S extends Record<string, (state: any) => any>> = {
 };
 
 /**
+ * A lightweight view notifier contract for framework adapters.
+ *
+ * It intentionally matches Angular's `ChangeDetectorRef` shape without importing Angular.
+ */
+export type ViewAttachment =
+  | (() => void)
+  | {
+      markForCheck?: () => void;
+      detectChanges?: () => void;
+    };
+
+/**
  * Represents a feature module that organizes state, logic, and dependencies
  * for a specific part of an application.
  *
@@ -334,6 +346,8 @@ export interface FeatureModule<
   readonly data$: Streams<Selectors>;
   readonly actions: Actions;
   readonly selectors: Selectors;
+  attachView: (view: ViewAttachment) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
+  detachView: (view: ViewAttachment) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
   init: (store: Store<any>) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
   configure: (store: Store<State>) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
   destroy: (clearState?: boolean) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;

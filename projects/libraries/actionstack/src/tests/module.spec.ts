@@ -314,6 +314,60 @@ describe("module", () => {
       expect(await nextValue<number>(mod.data$.value())).toBe(5);
     });
 
+    it("notifies attached views after selector emissions", async () => {
+      const store = createStore<any>();
+      const cdr = {
+        markForCheck: jasmine.createSpy("markForCheck"),
+      };
+
+      const mod = createModule({
+        slice: "view-bound",
+        initialState: { count: 0 },
+        actions: {
+          inc: action("INC", (state: any) => ({ count: (state?.count ?? 0) + 1 })),
+        },
+        selectors: {
+          count: selector((s: any) => s.count),
+        },
+      });
+
+      mod.attachView(cdr);
+      await store.loadModule(mod);
+      await store.dispatch({ type: "TEST/FLUSH" });
+
+      const stream = mod.data$.count();
+      expect(await nextValue<number>(stream)).toBe(0);
+      expect(cdr.markForCheck).toHaveBeenCalledTimes(1);
+
+      await store.dispatch({ type: "view-bound/INC" });
+      expect(await nextValue<number>(stream)).toBe(1);
+      expect(cdr.markForCheck).toHaveBeenCalledTimes(2);
+    });
+
+    it("stops notifying detached views", async () => {
+      const store = createStore<any>();
+      const cdr = {
+        markForCheck: jasmine.createSpy("markForCheck"),
+      };
+
+      const mod = createModule({
+        slice: "detached-view",
+        initialState: { count: 1 },
+        actions: {},
+        selectors: {
+          count: selector((s: any) => s.count),
+        },
+      });
+
+      mod.attachView(cdr);
+      mod.detachView(cdr);
+      await store.loadModule(mod);
+      await store.dispatch({ type: "TEST/FLUSH" });
+
+      expect(await nextValue<number>(mod.data$.count())).toBe(1);
+      expect(cdr.markForCheck).not.toHaveBeenCalled();
+    });
+
     it("exposes module.selectors as plain root selectors", async () => {
       const store = createStore<any>();
 

@@ -6,7 +6,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "ng build actionstack",
     "test": "npx testify",
     "react:serve": "vite --config projects/apps/app2/vite.config.ts",
     "react:build": "vite build --config projects/apps/app2/vite.config.ts",

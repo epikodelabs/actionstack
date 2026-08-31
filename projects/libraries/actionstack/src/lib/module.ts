@@ -1,12 +1,11 @@
 import {
   atom,
   createSharedSource,
-  hasAtomEmitted,
   pipe,
   takeUntil
 } from '@epikodelabs/streamix';
 import { isAction } from '../lib';
-import type { ActionCreator, FeatureModule, Store, Streams, Selector } from '../lib';
+import type { ActionCreator, FeatureModule, Store, Streams, Selector, ViewAttachment } from '../lib';
 
 /**
  * Creates a feature module that encapsulates a slice of state, its actions, selectors,
@@ -56,6 +55,7 @@ function createModule<
   let destroyed$ = atom<void>();
   let destroying = false;
   let destroyed = false;
+  const attachedViews = new Set<ViewAttachment>();
 
   const processedActions = processActions(config.actions ?? {}, slice, config.dependencies);
   const processedSelectors = processSelectors(
@@ -94,6 +94,14 @@ function createModule<
     data$: {} as Streams<Selectors>,
     actions: {} as Actions,
     selectors: processedSelectors as any,
+    attachView(view: ViewAttachment) {
+      attachedViews.add(view);
+      return this;
+    },
+    detachView(view: ViewAttachment) {
+      attachedViews.delete(view);
+      return this;
+    },
 
     init(storeInstance: Store<any>) {
       return this.configure(storeInstance);
@@ -150,6 +158,7 @@ function createModule<
     () => destroyed$,
     () => destroying,
     () => destroyed,
+    () => attachedViews,
     () => store
   );
 
@@ -300,6 +309,7 @@ function initializeDataStreams<
   getDestroyed$: () => any,
   isDestroying: () => boolean,
   isDestroyed: () => boolean,
+  getAttachedViews: () => Set<ViewAttachment>,
   getStore: () => Store<State> | undefined
 ) {
   for (const key in processedSelectors) {
@@ -326,7 +336,7 @@ function initializeDataStreams<
       }
 
       if (!store) {
-        return createSharedSource<any>(async (push) => {
+        return bindViewNotifications(createSharedSource<any>(async (push) => {
           let selectorSubscription: any;
           let loadedSubscription: any;
 
@@ -356,15 +366,71 @@ function initializeDataStreams<
             loadedSubscription?.();
             selectorSubscription?.();
           };
-        });
+        }), getAttachedViews);
       }
 
-      return pipe(
+      return bindViewNotifications(pipe(
         store.select(selectorFn),
         takeUntil(destroyed$)
-      );
+      ), getAttachedViews);
     };
   }
+}
+
+function bindViewNotifications<T>(
+  source: T,
+  getAttachedViews: () => Set<ViewAttachment>
+): T {
+  const notifyViews = () => {
+    for (const view of getAttachedViews()) {
+      if (typeof view === 'function') {
+        view();
+        continue;
+      }
+
+      if (typeof view.markForCheck === 'function') {
+        view.markForCheck();
+        continue;
+      }
+
+      if (typeof view.detectChanges === 'function') {
+        view.detectChanges();
+      }
+    }
+  };
+
+  const wrapped = Object.create(source as object);
+
+  wrapped.subscribe = (nextOrObserver: any) =>
+    (source as any).subscribe((value: unknown) => {
+      const next =
+        typeof nextOrObserver === 'function'
+          ? nextOrObserver
+          : typeof nextOrObserver?.next === 'function'
+            ? (nextValue: unknown) => nextOrObserver.next(nextValue)
+            : undefined;
+
+      if (!next) {
+        notifyViews();
+        return;
+      }
+
+      const result = next(value);
+      if (result && typeof result.then === 'function') {
+        void Promise.resolve(result).finally(notifyViews);
+        return result;
+      }
+
+      notifyViews();
+      return result;
+    });
+
+  if (typeof (source as any).pipe === 'function') {
+    wrapped.pipe = (...ops: any[]) =>
+      bindViewNotifications((source as any).pipe(...ops), getAttachedViews);
+  }
+
+  return wrapped as T;
 }
 
 /**
