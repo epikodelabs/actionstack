@@ -2,7 +2,7 @@ name: Update bundle size badge
 
 on:
   push:
-    branches: [main]
+    branches: [main, v3]
   workflow_dispatch:
 
 permissions:
@@ -30,7 +30,7 @@ jobs:
 
       # 3️⃣ Build library (so dist files exist)
       - name: Build library
-        run: npm i && npm run build actionstack
+        run: npm ci && npm run build
 
       # 4️⃣ Calculate gzipped bundle size
       - name: Calculate gzipped bundle size
@@ -77,9 +77,9 @@ jobs:
       # 7️⃣ Commit and push badge
       - name: Commit and push badge
         run: |
-          # Make sure we're on the right branch
-          git checkout main
-          git pull origin main
+          BRANCH="${GITHUB_REF_NAME}"
+          git checkout "$BRANCH"
+          git pull origin "$BRANCH"
 
           # Add the badge file
           git add projects/libraries/actionstack/bundle-size.svg
@@ -91,7 +91,6 @@ jobs:
             echo "📝 Committing badge update..."
             git commit -m "Update bundle size badge [skip ci]"
             echo "🚀 Pushing to repository..."
-            # Use HTTPS, not SSH - the checkout action already set up credentials
-            git push origin HEAD:main
+            git push origin "HEAD:${BRANCH}"
             echo "✅ Badge updated successfully!"
           fi

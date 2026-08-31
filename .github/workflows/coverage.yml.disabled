@@ -2,9 +2,9 @@ name: test & coverage
 
 on:
   push:
-    branches: [main]
+    branches: [main, v3]
   pull_request:
-    branches: [main]
+    branches: [main, v3]
 
 jobs:
   coverage:
@@ -18,13 +18,13 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm i
+        run: npm ci
 
       - name: Run tests with coverage
         run: npx testify --headless --coverage
 
       - name: Upload coverage to Codecov
         run: |
-          curl -s https://codecov.io/bash | bash -s -- -f coverage/lcov.info -r actioncrew/streamix
+          curl -s https://codecov.io/bash | bash -s -- -f coverage/lcov.info -r oleksii-shepel/actionstack
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
