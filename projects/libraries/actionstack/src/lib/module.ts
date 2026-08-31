@@ -54,6 +54,7 @@ function createModule<
   let configured = false;
   let loaded$ = atom<void>();
   let destroyed$ = atom<void>();
+  let destroying = false;
   let destroyed = false;
 
   const processedActions = processActions(config.actions ?? {}, slice, config.dependencies);
@@ -63,11 +64,31 @@ function createModule<
   );
   let store: Store<any> | undefined;
 
+  const recreateLifecycleAtoms = (moduleInstance: any) => {
+    loaded$ = atom<void>();
+    destroyed$ = atom<void>();
+    moduleInstance.loaded$ = loaded$;
+    moduleInstance.destroyed$ = destroyed$;
+  };
+
+  const finalizeDestroy = () => {
+    configured = false;
+    destroying = false;
+    destroyed = true;
+    store = undefined;
+  };
+
   const module = {
     slice,
     initialState: config.initialState,
     dependencies: config.dependencies,
     __rawActions: processedActions,
+    get destroying() {
+      return destroying;
+    },
+    get destroyed() {
+      return destroyed;
+    },
     loaded$,
     destroyed$,
     data$: {} as Streams<Selectors>,
@@ -79,7 +100,16 @@ function createModule<
     },
 
     configure(storeInstance: Store<any>) {
+      if (destroying) {
+        throw new Error(
+          `Module "${slice}" cannot be configured while destruction is in progress.`
+        );
+      }
       if (configured) return this;
+      if (destroyed) {
+        recreateLifecycleAtoms(this);
+      }
+
       configured = true;
       destroyed = false;
       store = storeInstance;
@@ -91,21 +121,23 @@ function createModule<
     },
 
     destroy(clearState?: boolean) {
+      if (destroying) return this;
+
+      destroying = true;
       destroyed = true;
       destroyed$.next();
       destroyed$.dispose();
       loaded$.dispose();
 
       if (store && clearState !== false) {
-        store.unloadModule(this, true);
+        void store.unloadModule(this, true).finally(() => {
+          if (destroying) {
+            finalizeDestroy();
+          }
+        });
+      } else {
+        finalizeDestroy();
       }
-
-      configured = false;
-      store = undefined;
-      loaded$ = atom<void>();
-      destroyed$ = atom<void>();
-      (this as any).loaded$ = loaded$;
-      (this as any).destroyed$ = destroyed$;
 
       return this;
     }
@@ -116,6 +148,7 @@ function createModule<
     processedSelectors,
     () => loaded$,
     () => destroyed$,
+    () => destroying,
     () => destroyed,
     () => store
   );
@@ -253,6 +286,7 @@ function processSelectors<
  * @param {Selectors} processedSelectors Processed selectors.
  * @param {() => import('@epikodelabs/streamix').Writable<void>} getLoaded$ Returns the current loaded atom.
  * @param {() => import('@epikodelabs/streamix').Writable<void>} getDestroyed$ Returns the current destroyed atom.
+ * @param {() => boolean} isDestroying Returns whether module destruction is in progress.
  * @param {() => boolean} isDestroyed Returns whether the module has been destroyed.
  * @param {() => Store<State> | undefined} getStore Function that returns the store instance.
  */
@@ -264,6 +298,7 @@ function initializeDataStreams<
   processedSelectors: Selectors,
   getLoaded$: () => any,
   getDestroyed$: () => any,
+  isDestroying: () => boolean,
   isDestroyed: () => boolean,
   getStore: () => Store<State> | undefined
 ) {
@@ -285,12 +320,11 @@ function initializeDataStreams<
       const store = getStore();
       const destroyed$ = getDestroyed$();
 
-      // Module was destroyed after configuration — surface the error directly
-      if (!store && isDestroyed()) {
+      // During or after destroy, callers should get an unavailable selector source
+      if (isDestroying() || (!store && isDestroyed())) {
         return unavailableAtom();
       }
 
-      // Module is not configured yet — wait for `loaded$` before projecting
       if (!store) {
         return createSharedSource<any>(async (push) => {
           let selectorSubscription: any;
@@ -357,7 +391,7 @@ function initializeActions<Actions extends Record<string, any>>(
     (moduleInstance.actions as any)[key] = (...args: any[]) => {
       // Access store via getter at runtime
       const store = getStore();
-      if (!store) {
+      if (!store || moduleInstance.destroying || moduleInstance.destroyed) {
         throw new Error(
           `Module "${slice}" actions cannot be dispatched before configuration. ` +
           `Call module.configure(store) first.`

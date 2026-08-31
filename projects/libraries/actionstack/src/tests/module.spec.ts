@@ -103,6 +103,35 @@ describe("module", () => {
     expect(unloadModule).not.toHaveBeenCalled();
   });
 
+  it("blocks reconfigure while destroy is still in progress", async () => {
+    let finishUnload!: () => void;
+    const unloadModule = jasmine
+      .createSpy("unloadModule")
+      .and.callFake(
+        () =>
+          new Promise<void>((resolve) => {
+            finishUnload = resolve;
+          })
+      );
+    const store: any = { dispatch: () => {}, select: () => ({}), unloadModule };
+
+    const mod = createModule({
+      slice: "pending-destroy",
+      initialState: {},
+      actions: {},
+    });
+
+    mod.configure(store);
+    mod.destroy();
+
+    expect(() => mod.configure(store)).toThrowError(/destruction is in progress/i);
+
+    finishUnload();
+    await Promise.resolve();
+
+    expect(() => mod.configure(store)).not.toThrow();
+  });
+
   it("registerModule chooses loadModule vs populate", () => {
     const loadModule = jasmine.createSpy("loadModule").and.resolveTo();
     const populate = jasmine.createSpy("populate").and.resolveTo();
@@ -229,6 +258,37 @@ describe("module", () => {
       expect(await firstValue).toBe(2);
       await store.dispatch({ type: "preconfigured/INC" });
       expect(await nextValue<number>(stream)).toBe(3);
+    });
+
+    it("creates fresh selector streams after destroy and reconfigure", async () => {
+      const store = createStore<any>();
+
+      const mod = createModule({
+        slice: "reconfigured",
+        initialState: { count: 4 },
+        actions: {
+          inc: action("INC", (state: any) => ({ count: (state?.count ?? 0) + 1 })),
+        },
+        selectors: {
+          count: selector((s: any) => s.count),
+        },
+      });
+
+      const firstLifecycleStream = mod.data$.count();
+
+      await store.loadModule(mod);
+      await store.dispatch({ type: "TEST/FLUSH" });
+      expect(await nextValue<number>(firstLifecycleStream)).toBe(4);
+
+      await store.unloadModule(mod, true);
+      mod.destroy(false);
+
+      await store.loadModule(mod);
+      await store.dispatch({ type: "TEST/FLUSH" });
+
+      const secondLifecycleStream = mod.data$.count();
+      expect(secondLifecycleStream).not.toBe(firstLifecycleStream);
+      expect(await nextValue<number>(secondLifecycleStream)).toBe(4);
     });
 
     it("selects nested slices for data streams", async () => {
