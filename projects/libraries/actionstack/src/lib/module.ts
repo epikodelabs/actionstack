@@ -60,6 +60,7 @@ function createModule<
   let loaded$ = createReplaySubject<void>();
   let destroyed$ = createSubject<void>();
   let destroyed = false;
+  let lifecycleId = 0;
 
   const processedActions = processActions(config.actions ?? {}, slice, config.dependencies);
   const processedSelectors = processSelectors(
@@ -85,6 +86,13 @@ function createModule<
 
     configure(storeInstance: Store<any>) {
       if (configured) return this;
+      if (destroyed) {
+        loaded$ = createReplaySubject<void>();
+        destroyed$ = createSubject<void>();
+        (this as any).loaded$ = loaded$;
+        (this as any).destroyed$ = destroyed$;
+      }
+
       configured = true;
       destroyed = false;
       store = storeInstance;
@@ -106,17 +114,22 @@ function createModule<
       }
 
       configured = false;
+      lifecycleId += 1;
       store = undefined;
-      loaded$ = createReplaySubject<void>();
-      destroyed$ = createSubject<void>();
-      (this as any).loaded$ = loaded$;
-      (this as any).destroyed$ = destroyed$;
 
       return this;
     }
   };
 
-  initializeDataStreams(module, processedSelectors, () => loaded$, () => destroyed$, () => destroyed, () => store);
+  initializeDataStreams(
+    module,
+    processedSelectors,
+    () => loaded$,
+    () => destroyed$,
+    () => destroyed,
+    () => lifecycleId,
+    () => store
+  );
 
   return module as FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
 }
@@ -263,8 +276,11 @@ function initializeDataStreams<
   getLoaded$: () => any,
   getDestroyed$: () => any,
   isDestroyed: () => boolean,
+  getLifecycleId: () => number,
   getStore: () => Store<State> | undefined
 ) {
+  const streamCache = new Map<string, { lifecycleId: number; stream: any }>();
+
   for (const key in processedSelectors) {
     const selectorFn = processedSelectors[key];
 
@@ -277,31 +293,39 @@ function initializeDataStreams<
 
     // ✅ data$.key() — zero args
     (moduleInstance.data$ as any)[key] = () => {
-      const store = getStore();
-      const destroyed$ = getDestroyed$();
-
-      if (!store && isDestroyed()) {
-        return unavailableStream();
+      const lifecycleId = getLifecycleId();
+      const cached = streamCache.get(key);
+      if (cached && cached.lifecycleId === lifecycleId) {
+        return cached.stream;
       }
 
-      if (store) {
-        return store.select(selectorFn).pipe(
+      const store = getStore();
+      const destroyed$ = getDestroyed$();
+      let stream: any;
+
+      if (!store && isDestroyed()) {
+        stream = unavailableStream();
+      } else if (store) {
+        stream = store.select(selectorFn).pipe(
+          takeUntil(destroyed$)
+        );
+      } else {
+        const loaded$ = getLoaded$();
+        stream = loaded$.pipe(
+          switchMap(() => {
+            const nextStore = getStore();
+            if (!nextStore) {
+              return unavailableStream();
+            }
+
+            return nextStore.select(selectorFn);
+          }),
           takeUntil(destroyed$)
         );
       }
 
-      const loaded$ = getLoaded$();
-      return loaded$.pipe(
-        switchMap(() => {
-          const nextStore = getStore();
-          if (!nextStore) {
-            return unavailableStream();
-          }
-
-          return nextStore.select(selectorFn);
-        }),
-        takeUntil(destroyed$)
-      );
+      streamCache.set(key, { lifecycleId, stream });
+      return stream;
     };
   }
 }

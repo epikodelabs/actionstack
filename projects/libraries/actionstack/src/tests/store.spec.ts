@@ -425,13 +425,18 @@ describe('store', () => {
     const scope = globalThis as typeof globalThis & {
       requestIdleCallback?: jasmine.Spy;
     };
+    const originalRequestIdleCallback = scope.requestIdleCallback;
     scope.requestIdleCallback = jasmine.createSpy('requestIdleCallback').and.callFake((callback: () => void) => {
       callback();
       return 1;
     });
 
-    await store.dispatch({ type: 'TEST/AWAIT' });
-    expect(scope.requestIdleCallback).toHaveBeenCalled();
+    try {
+      await store.dispatch({ type: 'TEST/AWAIT' });
+      expect(scope.requestIdleCallback).toHaveBeenCalled();
+    } finally {
+      scope.requestIdleCallback = originalRequestIdleCallback;
+    }
   });
 
   it('populate skips already loaded modules and warns', async () => {

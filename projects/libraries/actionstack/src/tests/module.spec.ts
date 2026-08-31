@@ -239,6 +239,50 @@ describe("module", () => {
       expect(await nextValue<number>(stream)).toBe(3);
     });
 
+    it("reuses the same selector stream within a module lifecycle", () => {
+      const mod = createModule({
+        slice: "cached",
+        initialState: { count: 1 },
+        actions: {},
+        selectors: {
+          count: selector((s: any) => s.count),
+        },
+      });
+
+      expect(mod.data$.count()).toBe(mod.data$.count());
+    });
+
+    it("creates fresh selector streams after destroy and reconfigure", async () => {
+      const store = createStore<any>();
+
+      const mod = createModule({
+        slice: "reconfigured",
+        initialState: { count: 4 },
+        actions: {
+          inc: action("INC", (state: any) => ({ count: (state?.count ?? 0) + 1 })),
+        },
+        selectors: {
+          count: selector((s: any) => s.count),
+        },
+      });
+
+      const firstLifecycleStream = mod.data$.count();
+
+      await store.loadModule(mod);
+      await store.dispatch({ type: "TEST/FLUSH" });
+      expect(await nextValue<number>(firstLifecycleStream)).toBe(4);
+
+      await store.unloadModule(mod, true);
+      mod.destroy(false);
+
+      await store.loadModule(mod);
+      await store.dispatch({ type: "TEST/FLUSH" });
+
+      const secondLifecycleStream = mod.data$.count();
+      expect(secondLifecycleStream).not.toBe(firstLifecycleStream);
+      expect(await nextValue<number>(secondLifecycleStream)).toBe(4);
+    });
+
     it("selects nested slices for data streams", async () => {
       const store = createStore<any>();
 

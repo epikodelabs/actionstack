@@ -18,7 +18,10 @@ describe("hash", () => {
     expect(token.split(".")).toHaveSize(10);
     expect(isValidToken(token)).toBeTrue();
 
-    const tampered = token.replace(/\./g, "").slice(0, 9) + "x";
+    const compact = token.replace(/\./g, "");
+    const lastChar = compact.at(-1);
+    const replacement = lastChar === "x" ? "y" : "x";
+    const tampered = compact.slice(0, 9) + replacement;
     expect(isValidToken(tampered)).toBeFalse();
   });
 });
