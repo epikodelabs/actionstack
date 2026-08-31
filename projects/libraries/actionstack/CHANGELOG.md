@@ -4,6 +4,10 @@
 
 Migrated Actionstack to Streamix 3.0.1. Store selectors and module `data$` accessors now return atoms, `loaded$` and `destroyed$` are writable atoms, and subscriptions are callable teardown functions rather than objects with `.unsubscribe()`. Removed the old `query()`/observer-object stream assumptions from the library, tests, and demo apps, replaced `isStream` with `isAtom`, updated docs for `pipe(...)` composition, and aligned the Angular and React examples with manual atom subscriptions.
 
+## 3.0.25
+
+Made `module.data$` selector factories available immediately at `createModule(...)` time, while keeping the underlying selector streams deferred until the module is configured and loaded. This fixes early field-initializer usage such as `module.data$.selectTopHeroes()` before `store.loadModule(module)`, updates module load ordering so selector streams attach only after state is published, aligns custom streams with the Streamix 2.0.53 `Stream` contract by adding `toArray()`, and moves `jasmine`/`node` typings into the spec tsconfig so library builds no longer require test-only type definitions.
+
 ## 3.0.24
 
 Simplified module selectors to plain state-accepting functions and removed selector factory support. Fixed batched module population so modules are configured before registration, ensured nested dispatches from directly dispatched thunks still flow through starter trigger handling, and clarified duplicate registration warnings to reflect that existing handlers and thunks are preserved. Also made the hash spec Node-safe and added package-local TypeScript configs so library tests resolve `jasmine` and `node` globals correctly in editors.
