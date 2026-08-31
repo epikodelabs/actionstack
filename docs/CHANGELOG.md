@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 4.0.0
 
 Added `module.attachView(...)` and `module.detachView(...)` so framework adapters can explicitly hook view updates into `data$` subscriptions without coupling the core store to Angular. For Angular, this gives the same recommended manual-subscription path in both `v3` and `v4`: prefer the `async` pipe first, and use `attachView(cdr)` when imperative subscription is required.
 
