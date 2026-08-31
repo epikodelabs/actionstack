@@ -1,4 +1,4 @@
-import type { Stream, Subject, Subscription } from '@epikodelabs/streamix';
+import type { Stream, Subject } from '@epikodelabs/streamix';
 import type { ActionQueue, Store, StoreSettings } from '../lib';
 
 /**
@@ -14,7 +14,7 @@ export type CancelablePromise<T = any> = Promise<T> & {
 /**
  * Describes a standard action object used to signal state changes.
  *
- * Actions are dispatched to update the state in ActionStack-like stores.
+ * Actions are dispatched to update the state in Actionstack-like stores.
  *
  * @template T - Type of the action payload. Defaults to `any`.
  */
@@ -207,7 +207,7 @@ export type MiddlewareAPI<TState = any, TDependencies = any> = {
 /**
  * Interface defining the structure of a middleware function.
  *
- * Middleware functions are used to intercept, handle, and potentially modify the dispatching process in ActionStack-like stores.
+ * Middleware functions are used to intercept, handle, and potentially modify the dispatching process in Actionstack-like stores.
  * This interface defines the expected behavior for a middleware function.
  *
  * @property (api: Store) => (next: Function) => (action: any) => Promise<any> | any
@@ -272,7 +272,7 @@ export type AnyFn = (...args: any[]) => any;
 /**
  * Interface defining the structure of a selector function.
  *
- * Selectors are functions that extract specific data or derived values from the ActionStack store's state.
+ * Selectors are functions that extract specific data or derived values from the Actionstack store's state.
  *
  * @param state - The current state of the application.
  * @param props - Optional props object that can be used by the selector for additional logic.
@@ -520,12 +520,12 @@ function isPromise(value: any) {
 }
 
 /**
- * Checks if a value is a valid ActionStack action object.
+ * Checks if a value is a valid Actionstack action object.
  *
  * This function determines if the provided value is a valid action object
- * used in ActionStack for dispatching state changes.
+ * used in Actionstack for dispatching state changes.
  *
- * @param action - The value to check if it's a ActionStack action.
+ * @param action - The value to check if it's a Actionstack action.
  * @returns boolean - True if the value is a plain object with a string property named "type", false otherwise.
  */
 function isAction(action: any): action is Action<any> {

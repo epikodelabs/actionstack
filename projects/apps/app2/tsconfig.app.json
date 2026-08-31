@@ -22,12 +22,12 @@
     "baseUrl": ".",
     "paths": {
       "@epikodelabs/actionstack/tools": [
-        "../../../dist/actionstack/tools",
-        "../../../projects/libraries/actionstack/tools/src/public-api.ts"
+        "../../../projects/libraries/actionstack/tools/src/public-api.ts",
+        "../../../dist/actionstack/tools"
       ],
       "@epikodelabs/actionstack": [
-        "../../../dist/actionstack",
-        "../../../projects/libraries/actionstack/src/public-api.ts"
+        "../../../projects/libraries/actionstack/src/public-api.ts",
+        "../../../dist/actionstack"
       ]
     }
   },

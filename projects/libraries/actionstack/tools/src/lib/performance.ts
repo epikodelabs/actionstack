@@ -1,10 +1,10 @@
-import { isSystemActionType, salt } from '@epikodelabs/actionstack';
 import type { Action } from '@epikodelabs/actionstack';
+import { isSystemActionType, salt } from '@epikodelabs/actionstack';
 
 /**
  * Creates a middleware function for logging action performance data.
  *
- * @returns {Function} - The middleware function to be added to the ActionStack middleware chain.
+ * @returns {Function} - The middleware function to be added to the Actionstack middleware chain.
  */
 export const createPerformanceMonitor = () => {
   const perfmon = () => (next: Function) => async (action: Action<any>): Promise<any> => {

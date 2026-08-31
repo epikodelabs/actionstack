@@ -1,7 +1,7 @@
 /**
  * Waits until the browser reaches an idle slot.
  *
- * This is a scheduler-level quiescence helper used by ActionStack's
+ * This is a scheduler-level quiescence helper used by Actionstack's
  * `awaitStatePropagation` option when callers prefer to defer resolution until
  * the environment had a chance to flush visual/update work.
  *
