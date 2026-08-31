@@ -5,9 +5,10 @@ name: build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "v3" ]
+    tags: [ "*" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "v3" ]
 
 jobs:
   build:
@@ -26,6 +27,6 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
-    - run: npm i
-    - run: npm run build actionstack
+    - run: npm ci
+    - run: npm run build
 
