@@ -1,7 +1,6 @@
-import type { OnDestroy, OnInit } from '@angular/core';
-import { ChangeDetectorRef, Component } from '@angular/core';
-import { registerModule, unregisterModule } from '@epikodelabs/actionstack';
-import type { Subscription } from '@epikodelabs/streamix';
+import { Component } from '@angular/core';
+import { registerModule } from '@epikodelabs/actionstack';
+import type { Stream } from '@epikodelabs/streamix';
 import { store } from '../app.module';
 import { messagesModule } from './messages.slice';
 
@@ -11,19 +10,15 @@ import { messagesModule } from './messages.slice';
   styleUrls: ['./messages.component.css'],
   standalone: false
 })
-export class MessagesComponent implements OnInit, OnDestroy {
-  messages: string[] = [];
-  subscription?: Subscription;
+export class MessagesComponent {
+  messages$!: Stream<any>;
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor() {
     registerModule(store, messagesModule);
   }
 
-  ngOnInit() {
-    messagesModule.attachView(this.cdr);
-    this.subscription = messagesModule.data$.selectMessages().subscribe((messages) => {
-      this.messages = messages;
-    });
+  async ngOnInit() {
+    this.messages$ = messagesModule.data$.selectMessages();
   }
 
   addMessage(message: string) {
@@ -32,12 +27,6 @@ export class MessagesComponent implements OnInit, OnDestroy {
 
   clearMessages() {
     messagesModule.actions.clearMessages();
-  }
-
-  ngOnDestroy() {
-    messagesModule.detachView(this.cdr);
-    this.subscription?.unsubscribe();
-    unregisterModule(store, messagesModule, true);
   }
 }
 

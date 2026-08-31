@@ -1,9 +1,9 @@
 import { Location } from '@angular/common';
-import type { OnDestroy, OnInit } from '@angular/core';
+import type { OnInit } from '@angular/core';
 import { Component } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 
-import { registerModule, unregisterModule } from '@epikodelabs/actionstack';
+import { registerModule } from '@epikodelabs/actionstack';
 import type { Stream } from '@epikodelabs/streamix';
 import type { Subscription } from 'rxjs';
 import { map, tap } from 'rxjs';
@@ -17,7 +17,7 @@ import { heroDetailsModule, loadHero } from './hero-details.slice';
   styleUrls: [ './hero-details.component.css' ],
   standalone: false
 })
-export class HeroDetailsComponent implements OnInit, OnDestroy {
+export class HeroDetailsComponent implements OnInit {
   hero$!: Stream<Hero | undefined>;
   subscription: Subscription | undefined;
 
@@ -44,10 +44,9 @@ export class HeroDetailsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    if (this.subscription) {
+    if(this.subscription) {
       this.subscription.unsubscribe();
     }
-    unregisterModule(store, heroDetailsModule, true);
   }
 }
 

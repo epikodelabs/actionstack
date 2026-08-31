@@ -2,7 +2,7 @@
   "entryPoints": ["projects/libraries/actionstack/src/public-api.ts"],
   "out": "docs/api",
   "gitRemote": "origin",
-  "gitRevision": "v4",
+  "gitRevision": "v3",
   "sourceLinkTemplate": "https://github.com/epikodelabs/actionstack/blob/{gitRevision}/{path}#L{line}",
   "plugin": ["typedoc-plugin-markdown"],
   "theme": "markdown",

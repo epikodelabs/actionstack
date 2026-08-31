@@ -1,9 +1,9 @@
 
 import { CommonModule } from '@angular/common';
-import type { OnDestroy, OnInit } from '@angular/core';
+import type { OnInit } from '@angular/core';
 import { Component } from '@angular/core';
 import { RouterModule } from '@angular/router';
-import { registerModule, unregisterModule } from '@epikodelabs/actionstack';
+import { registerModule } from '@epikodelabs/actionstack';
 import type { Stream } from '@epikodelabs/streamix';
 import { store } from '../app.module';
 import type { Hero } from '../hero';
@@ -16,7 +16,7 @@ import { dashboardModule } from './dashboard.slice';
   standalone: true,
   imports: [CommonModule, RouterModule],
 })
-export class DashboardComponent implements OnInit, OnDestroy {
+export class DashboardComponent implements OnInit {
   heroes$!: Stream<Hero[]>;
 
   constructor() {
@@ -29,7 +29,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    unregisterModule(store, dashboardModule, true);
   }
 }
 

@@ -1,12 +1,12 @@
 {
   "name": "@epikodelabs/actionstack",
-  "version": "4.0.0",
+  "version": "3.0.25",
   "license": "AGPL-3.0-only",
   "description": "Next-generation state management for reactive applications, built on Streamix for performance and simplicity.",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "ng build actionstack",
     "test": "npx testify",
     "react:serve": "vite --config projects/apps/app2/vite.config.ts",
     "react:build": "vite build --config projects/apps/app2/vite.config.ts",
