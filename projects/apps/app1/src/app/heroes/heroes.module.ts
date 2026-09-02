@@ -1,9 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
 import type { Routes } from '@angular/router';
-import { AtomDirective } from '../atomDirective';
+import { RouterModule } from '@angular/router';
+import { AtomDirective } from '../atom.directive';
 import { HeroesComponent } from './heroes.component';
 
 const routes: Routes = [

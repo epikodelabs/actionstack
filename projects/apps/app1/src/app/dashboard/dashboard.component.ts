@@ -3,10 +3,10 @@ import type { OnDestroy, OnInit } from '@angular/core';
 import { Component } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import type { Atom } from '@epikodelabs/streamix';
-import { AtomDirective } from '../atomDirective';
-import { dashboardModule } from './dashboard.slice';
 import { store } from '../app.module';
+import { AtomDirective } from '../atom.directive';
 import type { Hero } from '../hero';
+import { dashboardModule } from './dashboard.slice';
 
 @Component({
   selector: 'app-dashboard',
