@@ -1,9 +1,8 @@
 import {
   atom,
-  createSharedSource,
-  pipe,
-  takeUntil
+  createSubscription
 } from '@epikodelabs/streamix';
+import { createCurrentSource } from './current-source';
 import { isAction } from '../lib';
 import type { ActionCreator, FeatureModule, Store, Streams, Selector, ViewAttachment } from '../lib';
 
@@ -315,6 +314,9 @@ function initializeDataStreams<
   for (const key in processedSelectors) {
     const selectorFn = processedSelectors[key];
 
+    let lifecycleDestroyed$: any;
+    let lifecycleSource: any;
+
     const unavailableAtom = () => {
       const failed = atom<any>();
       failed.fail(
@@ -325,18 +327,12 @@ function initializeDataStreams<
       return failed;
     };
 
-    // ✅ data$.key() — zero args
-    (moduleInstance.data$ as any)[key] = () => {
-      const store = getStore();
+    const createSelectorSource = () => {
       const destroyed$ = getDestroyed$();
 
-      // During or after destroy, callers should get an unavailable selector source
-      if (isDestroying() || (!store && isDestroyed())) {
-        return unavailableAtom();
-      }
-
-      if (!store) {
-        return bindViewNotifications(createSharedSource<any>(async (push) => {
+      const source = createCurrentSource<any>({
+        connect: (emit) => {
+          let selectorSource: any;
           let selectorSubscription: any;
           let loadedSubscription: any;
 
@@ -346,9 +342,10 @@ function initializeDataStreams<
               return false;
             }
 
-            selectorSubscription = nextStore
-              .select(selectorFn)
-              .subscribe((value: any) => push(value));
+            selectorSource = nextStore.select(selectorFn);
+            selectorSubscription = selectorSource.subscribe((value: any) => {
+              emit(value);
+            });
 
             return true;
           };
@@ -362,17 +359,54 @@ function initializeDataStreams<
 
           connectToStore();
 
-          return () => {
-            loadedSubscription?.();
-            selectorSubscription?.();
-          };
-        }), getAttachedViews);
+          return createSubscription(async () => {
+            await loadedSubscription?.();
+            await selectorSubscription?.();
+            selectorSource?.dispose?.();
+          });
+        },
+      });
+
+      const disposeSource = source.dispose.bind(source);
+      let destroyedSubscription: any;
+
+      source.dispose = () => {
+        if (source.disposed) return;
+
+        const subscription = destroyedSubscription;
+        destroyedSubscription = undefined;
+        subscription?.();
+        disposeSource();
+      };
+
+      destroyedSubscription = destroyed$.subscribe(() => {
+        source.dispose();
+      });
+
+      lifecycleDestroyed$ = destroyed$;
+      lifecycleSource = bindViewNotifications(source, getAttachedViews);
+      return lifecycleSource;
+    };
+
+    // data$.key() — zero args
+    (moduleInstance.data$ as any)[key] = () => {
+      const store = getStore();
+
+      // During or after destroy, callers should get an unavailable selector source.
+      if (isDestroying() || (!store && isDestroyed())) {
+        return unavailableAtom();
       }
 
-      return bindViewNotifications(pipe(
-        store.select(selectorFn),
-        takeUntil(destroyed$)
-      ), getAttachedViews);
+      const destroyed$ = getDestroyed$();
+      if (
+        lifecycleSource &&
+        lifecycleDestroyed$ === destroyed$ &&
+        !lifecycleSource.disposed
+      ) {
+        return lifecycleSource;
+      }
+
+      return createSelectorSource();
     };
   }
 }

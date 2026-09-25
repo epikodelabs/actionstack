@@ -2,8 +2,7 @@
 
 ## 4.0.2
 
-* Added Angular, React, and Vue adoption layers for Streamix, including direct reactive bindings and framework-native lifecycle integration.
-* Expanded the Angular compiler/runtime with direct DOM bindings, compiled structural `sx` blocks, keyed rendering, lifecycle/build integration, coalesced scheduling, and renderer correctness/benchmark coverage.
+Fixed selector stream lifecycle semantics after the Streamix v3 migration. store.select(), module data$ selectors, selectStream(), and selectStreamAsync() now preserve their current value across unsubscribe/resubscribe cycles, immediately deliver the latest selected value to new subscribers, and remain reusable after their subscriber count drops to zero. Module selector streams now dispose correctly when their module is unloaded, while attached view notifications stay aligned with actual selector emissions. Replaced the redundant createSharedSource wrapping with a shared current-value source primitive and added regression coverage for selector resubscription and lifecycle behavior.
 
 ## 4.0.1
 

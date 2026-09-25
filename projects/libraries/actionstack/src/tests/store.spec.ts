@@ -259,6 +259,40 @@ describe('store', () => {
     expect(await firstValueFrom(stream)).toBe(1);
   });
 
+  it('select replays current state after all subscribers detach', async () => {
+    const store = createStore();
+    const mod = createModule({
+      slice: 'resubscribe-select',
+      initialState: 0,
+      actions: {
+        inc: action('INC', (state: number = 0) => state + 1),
+      },
+    });
+
+    await store.loadModule(mod);
+    await flush(store);
+
+    const stream = store.select((state: any) => state['resubscribe-select'], -1);
+    const firstValues: number[] = [];
+    const firstSubscription = stream.subscribe((value: number) => {
+      firstValues.push(value);
+    });
+
+    expect(firstValues).toEqual([0]);
+    firstSubscription();
+    expect(stream.disposed).toBeFalse();
+
+    await store.dispatch({ type: 'resubscribe-select/INC' });
+
+    const secondValues: number[] = [];
+    const secondSubscription = stream.subscribe((value: number) => {
+      secondValues.push(value);
+    });
+
+    expect(secondValues).toEqual([1]);
+    secondSubscription();
+  });
+
   it('select supports async selectors and applies defaultValue when resolved value is undefined', async () => {
     const store = createStore();
     await flush(store);

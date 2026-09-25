@@ -1,5 +1,5 @@
-import { createSharedSource } from '@epikodelabs/streamix';
 import type { Atom } from '@epikodelabs/streamix';
+import { createCurrentSource } from './current-source';
 
 /**
  * A selector extracts a value from state.
@@ -238,16 +238,13 @@ export function selectStream<T, R>(
   selector: Selector<T, R>,
   stateAtom: Atom<T>
 ): Atom<R> {
-  return createSharedSource<R>(async (push) => {
-    await push(selector(stateAtom.value));
-
-    const sourceSubscription = stateAtom.subscribe((state: T) => {
-      void push(selector(state));
-    });
-
-    return () => {
-      sourceSubscription();
-    };
+  return createCurrentSource<R>({
+    dedupe: false,
+    read: () => selector(stateAtom.value),
+    connect: (emit) =>
+      stateAtom.subscribe((state: T) => {
+        emit(selector(state));
+      }),
   });
 }
 
@@ -274,16 +271,12 @@ export function selectStreamAsync<T, R>(
     }
   };
 
-  return createSharedSource<R>(async (push) => {
-    await push((await resolve(stateAtom.value)) as R);
-
-    const sourceSubscription = stateAtom.subscribe((state: T) => {
-      void resolve(state).then((value) => push(value as R));
-    });
-
-    return () => {
-      sourceSubscription();
-    };
+  return createCurrentSource<R>({
+    dedupe: false,
+    read: () => resolve(stateAtom.value) as Promise<R>,
+    connect: (emit) =>
+      stateAtom.subscribe((state: T) => {
+        emit(resolve(state) as Promise<R>);
+      }),
   });
 }
-

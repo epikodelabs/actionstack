@@ -1,5 +1,6 @@
 import type { Atom } from '@epikodelabs/streamix';
-import { atom, createSharedSource } from '@epikodelabs/streamix';
+import { atom } from '@epikodelabs/streamix';
+import { createCurrentSource } from './current-source';
 import { action, createActionRegistry, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
 import { waitForBrowserIdle } from './idle';
 import { createModule, registerModule } from './module';
@@ -508,46 +509,45 @@ export function createStore<T = any>(
     selector: (state: Readonly<T>) => R | Promise<R>,
     defaultValue?: R
   ): Atom<R> => {
-    const resolveSelected = async (state: T): Promise<R> => {
-      if (state == null) {
+    const normalizeSelected = (value: R | undefined): R =>
+      value === undefined ? (defaultValue as R) : value;
+
+    const warnAndDefault = (error: unknown): R => {
+      const err = error as any;
+      console.warn(`Error in selector: ${err?.message ?? err}`);
+      return defaultValue as R;
+    };
+
+    const resolveSelected = (nextState: T): R | Promise<R> => {
+      if (nextState == null) {
         return defaultValue as R;
       }
 
       try {
-        const value = await selector(state);
-        return value === undefined ? (defaultValue as R) : value;
-      } catch (err: any) {
-        console.warn(`Error in selector: ${err?.message ?? err}`);
-        return defaultValue as R;
+        const selected = selector(nextState);
+
+        if (
+          selected != null &&
+          typeof (selected as PromiseLike<R>).then === 'function'
+        ) {
+          return Promise.resolve(selected).then(
+            (value) => normalizeSelected(value),
+            (error) => warnAndDefault(error)
+          );
+        }
+
+        return normalizeSelected(selected as R);
+      } catch (error) {
+        return warnAndDefault(error);
       }
     };
 
-    return createSharedSource<R>(async (push) => {
-      let hasValue = false;
-      let lastValue = defaultValue as R;
-
-      const emit = async (state: T): Promise<void> => {
-        const selected = await resolveSelected(state);
-
-        if (hasValue && Object.is(lastValue, selected)) {
-          return;
-        }
-
-        hasValue = true;
-        lastValue = selected;
-        await push(selected);
-      };
-
-      // Emit the selected current value as soon as the source connects
-      await emit(state);
-
-      const sourceSubscription = currentState.subscribe((nextState: T) => {
-        void emit(nextState);
-      });
-
-      return () => {
-        sourceSubscription();
-      };
+    return createCurrentSource<R>({
+      read: () => resolveSelected(state as T),
+      connect: (emit) =>
+        currentState.subscribe((nextState: T) => {
+          emit(resolveSelected(nextState));
+        }),
     });
   };
 

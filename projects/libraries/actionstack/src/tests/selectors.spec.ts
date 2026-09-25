@@ -231,6 +231,30 @@ describe('selectStream', () => {
     }, 10);
   });
 
+  it('should replay the current selected value after resubscribing', () => {
+    const selectCount = selector((state: TestState) => state.count);
+    const stream = selectStream(selectCount, stateSubject);
+
+    const firstValues: number[] = [];
+    const firstSubscription = stream.subscribe((value: number) => {
+      firstValues.push(value);
+    });
+
+    expect(firstValues).toEqual([5]);
+    firstSubscription();
+
+    stateSubject.next({ ...mockState, count: 9 });
+
+    const secondValues: number[] = [];
+    const secondSubscription = stream.subscribe((value: number) => {
+      secondValues.push(value);
+    });
+
+    expect(secondValues).toEqual([9]);
+    expect(stream.disposed).toBeFalse();
+    secondSubscription();
+  });
+
   it('should react to nested selector values', (done) => {
     const selectUserName = selector(
       (state: TestState) => state.user,

@@ -335,13 +335,57 @@ describe("module", () => {
       await store.loadModule(mod);
       await store.dispatch({ type: "TEST/FLUSH" });
 
-      const stream = mod.data$.count();
-      expect(await nextValue<number>(stream)).toBe(0);
+      const values: number[] = [];
+      const unsubscribe = mod.data$.count().subscribe((value: number) => {
+        values.push(value);
+      });
+
+      expect(values).toEqual([0]);
       expect(cdr.markForCheck).toHaveBeenCalledTimes(1);
 
       await store.dispatch({ type: "view-bound/INC" });
-      expect(await nextValue<number>(stream)).toBe(1);
+
+      expect(values).toEqual([0, 1]);
       expect(cdr.markForCheck).toHaveBeenCalledTimes(2);
+
+      unsubscribe();
+    });
+
+    it("provides current selector state after resubscribing", async () => {
+      const store = createStore<any>();
+
+      const mod = createModule({
+        slice: "resubscribe",
+        initialState: { count: 0 },
+        actions: {
+          inc: action("INC", (state: any) => ({ count: (state?.count ?? 0) + 1 })),
+        },
+        selectors: {
+          count: selector((s: any) => s.count),
+        },
+      });
+
+      await store.loadModule(mod);
+      await store.dispatch({ type: "TEST/FLUSH" });
+
+      const stream = mod.data$.count();
+      const firstValues: number[] = [];
+      const unsubscribeFirst = stream.subscribe((value: number) => {
+        firstValues.push(value);
+      });
+
+      expect(firstValues).toEqual([0]);
+      unsubscribeFirst();
+
+      await store.dispatch({ type: "resubscribe/INC" });
+
+      const secondValues: number[] = [];
+      const unsubscribeSecond = stream.subscribe((value: number) => {
+        secondValues.push(value);
+      });
+
+      expect(secondValues).toEqual([1]);
+      unsubscribeSecond();
     });
 
     it("stops notifying detached views", async () => {
@@ -515,4 +559,3 @@ describe("module", () => {
     expect((mod.selectors as any).v(undefined)).toBeUndefined();
   });
 });
-
