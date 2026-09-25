@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.0.2
+
+* Added Angular, React, and Vue adoption layers for Streamix, including direct reactive bindings and framework-native lifecycle integration.
+* Expanded the Angular compiler/runtime with direct DOM bindings, compiled structural `sx` blocks, keyed rendering, lifecycle/build integration, coalesced scheduling, and renderer correctness/benchmark coverage.
+
 ## 4.0.1
 
 Migrated Actionstack to Streamix 3.0.1. Store selectors and module `data$` accessors now return atoms, `loaded$` and `destroyed$` are writable atoms, and subscriptions are callable teardown functions rather than objects with `.unsubscribe()`. Removed the old `query()`/observer-object stream assumptions from the library, tests, and demo apps, replaced `isStream` with `isAtom`, updated docs for `pipe(...)` composition, and aligned the Angular and React examples with manual atom subscriptions.

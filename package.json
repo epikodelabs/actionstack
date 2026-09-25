@@ -1,7 +1,7 @@
 {
   "name": "@epikodelabs/actionstack",
-  "version": "4.0.1",
-  "license": "AGPL-3.0-only",
+  "version": "4.0.2",
+  "license": "MIT",
   "description": "Next-generation state management for reactive applications, built on Streamix for performance and simplicity.",
   "scripts": {
     "ng": "ng",
