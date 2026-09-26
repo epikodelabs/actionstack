@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.0.3
+
+Updated compatibility with @epikodelabs/streamix 3.0.3. Fixed selector, store, and module data streams to account for Streamix atoms replaying their current value on subscription, eliminating duplicate initial emissions and stale values after resubscription. Current-value sources now reconnect and refresh correctly while preserving derived, nested, and asynchronous selector updates.
+
 ## 4.0.2
 
 Fixed selector stream lifecycle semantics after the Streamix v3 migration. store.select(), module data$ selectors, selectStream(), and selectStreamAsync() now preserve their current value across unsubscribe/resubscribe cycles, immediately deliver the latest selected value to new subscribers, and remain reusable after their subscriber count drops to zero. Module selector streams now dispose correctly when their module is unloaded, while attached view notifications stay aligned with actual selector emissions. Replaced the redundant createSharedSource wrapping with a shared current-value source primitive and added regression coverage for selector resubscription and lifecycle behavior.
