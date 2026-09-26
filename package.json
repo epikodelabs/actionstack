@@ -1,6 +1,6 @@
 {
   "name": "@epikodelabs/actionstack",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "license": "MIT",
   "description": "Next-generation state management for reactive applications, built on Streamix for performance and simplicity.",
   "scripts": {
