@@ -20,6 +20,9 @@ Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="n
   <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
     <img src="https://epikodelabs.github.io/actionstack/bundle-size.svg" alt="Bundle Size">
   </a>
+  <a href="https://github.com/epikodelabs/streamix/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License">
+  </a>
 </div>
 
 ---
