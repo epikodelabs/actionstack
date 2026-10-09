@@ -234,13 +234,13 @@ The combination of Streamix atoms and actionstack's thunks creates a streamlined
 - **[Streamix: Reactive foundation](https://www.npmjs.com/package/@epikodelabs/streamix)**
 
 ## Licensing and Legal
-- **[License: GNU AGPL v3](https://github.com/epikodelabs/actionstack/blob/main/LICENSE)**
+- **[License: MIT](https://github.com/epikodelabs/actionstack/blob/main/LICENSE)**
 - **[Pricing](/PRICING)**
 - **[Terms of Service](/TERMS-OF-SERVICE)**
 - **[Privacy Policy](/PRIVACY-POLICY)**
 - **[Refund Policy](/REFUND-POLICY)**
 
-actionstack is available at no charge under the GNU Affero General Public License v3. Optional paid support, consulting, and custom delivery are available by separate written agreement.
+actionstack is open-source software available at no charge under the MIT License. Optional paid support, consulting, and custom delivery are available by separate written agreement.
 
 ---
 
