@@ -14,14 +14,8 @@ Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="n
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
     <img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Version">
   </a>
-  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
-    <img src="https://img.shields.io/npm/dt/@epikodelabs/actionstack.svg?style=flat-square" alt="Total Downloads">
-  </a>
-  <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
-    <img src="https://epikodelabs.github.io/actionstack/bundle-size.svg" alt="Bundle Size">
-  </a>
-  <a href="https://github.com/epikodelabs/streamix/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License">
+  <a href="https://codecov.io/gh/epikodelabs/actionstack">
+    <img src="https://codecov.io/gh/epikodelabs/actionstack/graph/badge.svg?style=flat-square" alt="Coverage">
   </a>
 </div>
 
@@ -237,13 +231,13 @@ The combination of Streamix atoms and actionstack's thunks creates a streamlined
 - **[Streamix: Reactive foundation](https://www.npmjs.com/package/@epikodelabs/streamix)**
 
 ## Licensing and Legal
-- **[License: GNU AGPL v3](https://github.com/epikodelabs/actionstack/blob/main/LICENSE)**
+- **[License: MIT](https://github.com/epikodelabs/actionstack/blob/main/LICENSE)**
 - **[Pricing](/PRICING)**
 - **[Terms of Service](/TERMS-OF-SERVICE)**
 - **[Privacy Policy](/PRIVACY-POLICY)**
 - **[Refund Policy](/REFUND-POLICY)**
 
-actionstack is available at no charge under the GNU Affero General Public License v3. Optional paid support, consulting, and custom delivery are available by separate written agreement.
+actionstack is available at no charge under the MIT License. Optional paid support, consulting, and custom delivery are available by separate written agreement.
 
 ---
 
