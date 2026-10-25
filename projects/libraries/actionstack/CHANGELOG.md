@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.0.6 - 2026-10-25
+
+- Aligned Streamix and Actionstack dependencies, bumping Streamix to 3.0.10 and updating Actionstack's peer dependency requirement to >=3.0.10.
+
 ## 4.0.5 - 2026-10-25
 
 - Updated development dependencies to Streamix 3.0.9 and adjusted the published peer range to support Streamix 3.0.6 or 3.0.9 and later.

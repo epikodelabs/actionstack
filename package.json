@@ -1,6 +1,6 @@
 {
   "name": "@epikodelabs/actionstack",
-  "version": "4.0.5",
+  "version": "4.0.6",
   "license": "MIT",
   "description": "Next-generation state management for reactive applications, built on Streamix for performance and simplicity.",
   "scripts": {
@@ -42,7 +42,7 @@
     "@angular-devkit/build-angular": "^21.1.3",
     "@angular/cli": "^21.1.3",
     "@angular/compiler-cli": "^21.1.3",
-    "@epikodelabs/streamix": "^3.0.9",
+    "@epikodelabs/streamix": "^3.0.10",
     "@epikodelabs/testify": "^1.0.58",
     "@types/eslint": "^9.6.1",
     "@types/estree": "^1.0.8",
