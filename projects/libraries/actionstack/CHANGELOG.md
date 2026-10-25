@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.0.5 - 2026-10-25
+
+- Updated development dependencies to Streamix 3.0.9 and adjusted the published peer range to support Streamix 3.0.6 or 3.0.9 and later.
+- Retained Angular 21 and TypeScript 5.9 with project-local legacy peer resolution for consistent npm install and npm ci behavior. Refreshed installed dependencies and regenerated the dependency lockfile.
+
 ## 4.0.3
 
 Updated compatibility with @epikodelabs/streamix 3.0.3. Fixed selector, store, and module data streams to account for Streamix atoms replaying their current value on subscription, eliminating duplicate initial emissions and stale values after resubscription. Current-value sources now reconnect and refresh correctly while preserving derived, nested, and asynchronous selector updates.
