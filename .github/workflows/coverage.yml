@@ -34,9 +34,12 @@ jobs:
       - name: Run tests with coverage
         run: npm run jasmine:coverage
 
-      # Public repository: Codecov accepts tokenless uploads. Add a repo
-      # CODECOV_TOKEN secret and pass `token:` for higher rate limits.
+      # Codecov requires a token for uploads to protected branches, even on
+      # public repositories. Set the CODECOV_TOKEN secret (repo upload token
+      # from codecov.io) for reports to land; the job stays green without it.
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
           files: coverage/lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
