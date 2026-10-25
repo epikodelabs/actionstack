@@ -1,248 +1,200 @@
-# actionstack
-Next-generation state management for reactive applications.
-
-Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="noopener">streamix</a> for ultimate performance and simplicity.
-
 <p align="center">
-  <img src="https://epikodelabs.github.io/actionstack/LOGO.png" alt="actionstack logo" width="500">
+  <img src="https://raw.githubusercontent.com/epikodelabs/epikodelabs.github.io/refs/heads/main/actionstack/LOGO.png" alt="Actionstack" width="420">
 </p>
 
-<div
-  align="center"
-  style="display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap;"
->
-  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
-    <img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Version">
-  </a>
-  <a href="https://codecov.io/gh/epikodelabs/actionstack">
-    <img src="https://codecov.io/gh/epikodelabs/actionstack/graph/badge.svg?style=flat-square" alt="Coverage">
-  </a>
-</div>
+<h3 align="center">State, actions, and async work. One feature at a time.</h3>
+<p align="center">
+  Modules for features. Actions for changes. Selectors for views.<br>
+  Built on Streamix to keep application state reactive and feature logic together.
+</p>
 
----
+<p align="center">
+  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack"><img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square&color=0ea5e9" alt="npm version"></a>
+  <a href="https://codecov.io/gh/epikodelabs/actionstack"><img src="https://codecov.io/gh/epikodelabs/actionstack/graph/badge.svg?style=flat-square" alt="coverage"></a>
+</p>
 
-## Give a Star on GitHub
+<p align="center">
+  <a href="https://epikodelabs.github.io/actionstack">Documentation</a> ·
+  <a href="https://epikodelabs.github.io/actionstack/api">API reference</a> ·
+  <a href="https://github.com/epikodelabs/actionstack/discussions">Discussions</a> ·
+  <a href="https://github.com/epikodelabs/actionstack/issues">Issues</a>
+</p>
 
-If actionstack helps you, please give it a star: https://github.com/epikodelabs/actionstack
+## Why Actionstack?
 
----
+Application state gets harder to follow when a feature's actions, async work, and derived data live in unrelated places.
 
-## Key Features
+Actionstack groups them into **feature modules**. Each module owns a state slice, action handlers, selectors, and dependencies. A store coordinates dispatch and module loading; Streamix supplies the reactive foundation.
 
-- **Modular Architecture** - Feature-based modules with co-located state and logic
-- **Reactive Streams** - Built on Streamix for high-performance reactive updates
-- **Action Handlers** - No reducers needed - sync actions with state logic
-- **Thunk Support** - Built-in async operations via thunks
-- **Safe Concurrency** - Built-in locking and execution control
-- **Dynamic Loading** - Load/unload modules at runtime
-- **Type Safety** - Full TypeScript support with intelligent inference
+- **Features have a home.** Keep state, actions, selectors, and dependencies together.
+- **Actions describe changes.** Define a handler alongside its action creator instead of maintaining a separate reducer switch.
+- **Selectors feed views.** Read selected state through reactive sources exposed by `data$`.
+- **Thunks handle async work.** Use dispatch, state access, and injected dependencies inside an async action.
+- **Modules can come and go.** Load features when needed and unload them when their work is done.
+- **Stores stay isolated.** Each store has its own action and thunk registries.
 
----
+Start with one feature. Add middleware and execution settings when the application needs them.
 
-## Installation
+## Get started
 
 ```bash
-npm install @epikodelabs/actionstack
+npm install @epikodelabs/actionstack @epikodelabs/streamix
 ```
 
----
+Streamix is a peer dependency of Actionstack. The current package declares support for Streamix `^3.0.3`.
 
-## Quick Start
+### 1. Define a feature
 
-```typescript
-import { createStore, createModule, action, thunk, selector } from '@epikodelabs/actionstack';
+```ts
+import {
+  action,
+  createModule,
+  createStore,
+  selector,
+} from '@epikodelabs/actionstack';
 
-// Actions with built-in state handlers
-const increment = action('increment', 
-  (state: number, payload: number = 1) => state + payload
+const increment = action(
+  'increment',
+  (state: number, amount: number) => state + amount,
 );
 
-const reset = action('reset', () => 0);
-
-// Create module
-const counterModule = createModule({
+const counter = createModule({
   slice: 'counter',
   initialState: 0,
-  actions: { increment, reset },
+  actions: { increment },
   selectors: {
     count: selector((state: number) => state),
-  }
+    doubled: selector((state: number) => state * 2),
+  },
 });
 
-// Initialize
 const store = createStore();
-counterModule.init(store);
+await store.loadModule(counter);
 
-// Use actions directly
-counterModule.actions.increment(5);  // Counter: 5
-counterModule.actions.reset();       // Counter: 0
+const unsubscribe = counter.data$.count().subscribe(value => {
+  console.log('Count:', value);
+});
 
-// Subscribe to changes
-counterModule.data$.count().subscribe(count => {
-  console.log('Counter:', count);
+counter.actions.increment(5);
+```
+
+Loading configures the module with its store. Module action calls dispatch automatically, so do not dispatch the same result a second time. The selector source supplies the current value and subsequent updates; consume it reactively rather than assuming dispatch has already updated every observer.
+
+### 2. Derive what the view needs
+
+The module already exposes `count` and `doubled`. Subscribe to the value the view needs:
+
+```ts
+const stopDoubled = counter.data$.doubled().subscribe(value => {
+  console.log('Doubled:', value);
 });
 ```
 
----
+Selectors describe calculations over a module's state slice. Keep derived values in selectors instead of storing another copy that must be synchronized.
 
-## Real-World Example
+### 3. Give the feature a lifecycle
 
-```typescript
-interface TodoState {
-  todos: Todo[];
-  loading: boolean;
-}
+When the feature is removed, release its subscriptions and unload its state:
 
-const addTodo = action('add', 
-  (state: TodoState, text: string) => ({
-    ...state,
-    todos: [...state.todos, { id: Date.now(), text, completed: false }]
-  })
+```ts
+await unsubscribe();
+await stopDoubled();
+await store.unloadModule(counter, true);
+```
+
+Use `store.populate(...modules)` to load several features. The store's load, populate, and unload methods return promises when you need to await lifecycle completion. The convenience helpers `registerModule`, `populateStore`, and `unregisterModule` return module arrays instead.
+
+## Let asynchronous work have a place
+
+Use `thunk(type, factory)` for work that needs to wait, fetch, or coordinate multiple actions. The factory receives your arguments and returns a function with `dispatch`, `getState`, and `dependencies`:
+
+```ts
+import { createModule, thunk } from '@epikodelabs/actionstack';
+
+const reportMessage = thunk('reportMessage', (message: string) =>
+  async (_dispatch, _getState, dependencies) => {
+    await dependencies.reporter.send(message);
+  },
 );
 
-const setTodos = action('setTodos',
-  (state: TodoState, todos: Todo[]) => ({ ...state, todos, loading: false })
-);
-
-const setLoading = action('setLoading',
-  (state: TodoState, loading: boolean) => ({ ...state, loading })
-);
-
-// Thunk using createThunk
-const fetchTodos = thunk('fetchTodos', () => 
-  (dispatch, getState, dependencies) => {
-    todoModule.actions.setLoading(true);
-    
-    dependencies.todoService.fetchTodos()
-      .then(todos => todoModule.actions.setTodos(todos))
-      .catch(error => {
-        todoModule.actions.setLoading(false);
-        console.error('Failed to fetch todos:', error);
-      });
-  }
-);
-
-// Selectors
-const selectActiveTodos = selector(
-  (state: TodoState) => state.todos.filter(t => !t.completed)
-);
-
-// Module with dependencies
-const todoModule = createModule({
-  slice: 'todos',
-  initialState: { todos: [], loading: false },
-  actions: { addTodo, setTodos, setLoading, fetchTodos },
-  selectors: { selectActiveTodos },
-  dependencies: { todoService: new TodoService() }
+const reports = createModule({
+  slice: 'reports',
+  initialState: {},
+  actions: { reportMessage },
+  dependencies: {
+    reporter: {
+      async send(message: string) {
+        console.log('Report:', message);
+      },
+    },
+  },
 });
 
-// Usage
-registerModule(store, todoModule);
-todoModule.actions.fetchTodos();
-
-// Reactive UI updates
-todoModule.data$.selectActiveTodos().subscribe(activeTodos => {
-  renderTodos(activeTodos);
-});
+await store.loadModule(reports);
+reports.actions.reportMessage('Counter feature is ready');
 ```
 
----
+Replace the example reporter with your application service. Returning or awaiting asynchronous work inside the thunk lets the store observe its completion. Thunks also support action triggers; see the API reference for execution and error-handling details.
 
-## Advanced Features
+## Under the hood
 
-### Static Module Loading
-```typescript
-let store = createStore();
-populateStore(store, authModule, uiModule, settingsModule);
+| Concept | Responsibility |
+| --- | --- |
+| **Store** | Coordinate state, dispatch, feature registration, and middleware. |
+| **Module** | Group one state slice with its actions, selectors, and dependencies. |
+| **Action** | Describe a change and provide its state handler. |
+| **Selector** | Project state into values a consumer needs. |
+| **Thunk** | Run asynchronous logic with access to dispatch, state, and dependencies. |
+| **Streamix** | Supply the reactive sources beneath store and selector updates. |
+
+Store settings include `awaitStatePropagation`, `dispatchSystemActions`, `enableGlobalReducers`, and `exclusiveActionProcessing`. Choose execution behavior explicitly when sequencing matters; check the API reference before relying on a particular concurrency policy.
+
+## Packages and project structure
+
+| Entry point | Includes |
+| --- | --- |
+| `@epikodelabs/actionstack` | Store, feature modules, actions, thunks, selectors, middleware utilities, and Angular's `atomToSignal` helper. |
+| `@epikodelabs/actionstack/tools` | Logging, state-freezing, and performance middleware. |
+
+Angular helpers currently ship from the core entry point. The repository also contains a React demo; it does not define separate `/react` or `/vue` package entry points.
+
+```text
+projects/
+├── libraries/
+│   └── actionstack/
+│       ├── src/lib/
+│       │   ├── store.ts           # Store and dispatch coordination
+│       │   ├── module.ts          # Feature registration and lifecycle
+│       │   ├── actions.ts         # Action creators, thunks, and registries
+│       │   ├── selectors.ts       # Selector composition
+│       │   ├── current-source.ts  # Current-value reactive sources
+│       │   ├── queue.ts           # Execution queue
+│       │   ├── starter.ts         # Thunk middleware
+│       │   ├── angular.ts         # Angular signal bridge
+│       │   └── types.ts           # Shared contracts
+│       └── tools/src/lib/         # Logger, freeze, and performance tools
+└── apps/
+    ├── app1/                      # Angular demo
+    └── app2/                      # React + Vite demo
 ```
 
-### Dynamic Module Loading
-```typescript
-// Load modules at runtime
-const featureModule = createDashboardModule();
-registerModule(store, featureModule);
+## Learn more
 
-// Unload when no longer needed and clear state
-unregisterModule(store, featureModule, true);
-```
+- [Full documentation](https://epikodelabs.github.io/actionstack)
+- [API reference](https://epikodelabs.github.io/actionstack/api)
+- [Streamix documentation](https://epikodelabs.github.io/streamix) — the reactive foundation
+- [Source code](https://github.com/epikodelabs/actionstack)
 
-### Stream Composition
-```typescript
-import { combineLatest, map, pipe } from '@epikodelabs/streamix';
+## Come build with us
 
-// Combine data from multiple modules
-const dashboardData$ = pipe(
-  combineLatest(
-    userModule.data$.selectCurrentUser(),
-    todoModule.data$.selectActiveTodos(),
-    notificationModule.data$.selectUnread()
-  ),
-  map(([user, todos, notifications]) => ({
-    user,
-    todoCount: todos.length,
-    hasNotifications: notifications.length > 0
-  }))
-);
+Have a feature that is awkward to model, an async edge case, or a useful example? We'd like to hear about it.
 
-// React to combined state changes
-for await (const data of dashboardData$) {
-  updateDashboard(data);
-}
-```
+- [Start a discussion](https://github.com/epikodelabs/actionstack/discussions) for questions and ideas.
+- [Open an issue](https://github.com/epikodelabs/actionstack/issues) with a minimal reproduction for bugs.
+- [Star the repository](https://github.com/epikodelabs/actionstack) if Actionstack helps you.
 
-### Store Configuration
-```typescript
-const store = createStore({
-  dispatchSystemActions: true,
-  enableGlobalReducers: false,
-  exclusiveActionProcessing: false
-}, applyMiddleware(logger, devtools));
-```
+## License and support
 
----
+Actionstack is available at no charge under the [MIT License](https://github.com/epikodelabs/actionstack/blob/main/LICENSE). Optional paid support, consulting, and custom delivery are available by separate written agreement.
 
-## Why Atoms + Thunks = Perfect Match
-The combination of Streamix atoms and actionstack's thunks creates a streamlined reactive workflow:
-
-- **Reactive by default** - Subscribe to atoms for UI updates
-- **Imperative when needed** - Use `firstValueFrom(atom)` for one-time reads
-- **Consistent API** - Same selectors work for both reactive and imperative use
-- **Type-safe** - Full TypeScript inference across reactive and sync access patterns
-- **Performance optimized** - Shared sources avoid duplicate selector work
-
----
-
-## actionstack vs Other Solutions
-
-| Feature | actionstack | Redux + RTK | Zustand |
-| --- | --- | --- | --- |
-| Bundle Size | Minimal | Large | Small |
-| Reactivity | Built-in | Manual | Manual |
-| Modules | Native | Manual | Manual |
-| Type Safety | Excellent | Good | Good |
-| Async Actions | Native | Thunks | Manual |
-
----
-
-## Resources
-- **[API Documentation](https://epikodelabs.github.io/actionstack/api)**
-- **[GitHub Repository](https://github.com/epikodelabs/actionstack)**
-- **[Community support](https://github.com/epikodelabs/actionstack/discussions)**
-- **[Streamix: Reactive foundation](https://www.npmjs.com/package/@epikodelabs/streamix)**
-
-## Licensing and Legal
-- **[License: MIT](https://github.com/epikodelabs/actionstack/blob/main/LICENSE)**
-- **[Pricing](/PRICING)**
-- **[Terms of Service](/TERMS-OF-SERVICE)**
-- **[Privacy Policy](/PRIVACY-POLICY)**
-- **[Refund Policy](/REFUND-POLICY)**
-
-actionstack is available at no charge under the MIT License. Optional paid support, consulting, and custom delivery are available by separate written agreement.
-
----
-
-<p align="center">
-  <strong>Ready for next-gen state management?</strong><br>
-  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">Install from NPM</a>
-  <a href="https://epikodelabs.github.io">View on GitHub</a>
-</p>
+[Pricing](https://epikodelabs.github.io/actionstack/PRICING) · [Terms of Service](https://epikodelabs.github.io/actionstack/TERMS-OF-SERVICE) · [Privacy Policy](https://epikodelabs.github.io/actionstack/PRIVACY-POLICY) · [Refund Policy](https://epikodelabs.github.io/actionstack/REFUND-POLICY)
