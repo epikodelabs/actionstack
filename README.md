@@ -14,14 +14,8 @@ Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="n
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
     <img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Version">
   </a>
-  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
-    <img src="https://img.shields.io/npm/dt/@epikodelabs/actionstack.svg?style=flat-square" alt="Total Downloads">
-  </a>
-  <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
-    <img src="https://epikodelabs.github.io/actionstack/bundle-size.svg" alt="Bundle Size">
-  </a>
-  <a href="https://github.com/epikodelabs/streamix/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License">
+  <a href="https://codecov.io/gh/epikodelabs/actionstack">
+    <img src="https://codecov.io/gh/epikodelabs/actionstack/graph/badge.svg?style=flat-square" alt="Coverage">
   </a>
 </div>
 
