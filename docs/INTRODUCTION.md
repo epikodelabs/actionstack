@@ -4,21 +4,17 @@ Next-generation state management for reactive applications.
 Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="noopener">streamix</a> for ultimate performance and simplicity.
 
 <p align="center">
-  <img src="https://epikodelabs.github.io/actionstack/LOGO.png" alt="actionstack logo" width="500">
+  <img src="https://raw.githubusercontent.com/epikodelabs/epikodelabs.github.io/refs/heads/main/actionstack/LOGO.png" alt="actionstack logo" width="500">
 </p>
 
 <div
   align="center"
   style="display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap;"
 >
-  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
-    <img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square" alt="NPM Version">
-  </a>
-  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack">
-    <img src="https://img.shields.io/npm/dt/@epikodelabs/actionstack.svg?style=flat-square" alt="Total Downloads">
-  </a>
+  <a href="https://www.npmjs.com/package/@epikodelabs/actionstack"><img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square&color=0ea5e9" alt="npm version"></a>
+  <a href="https://codecov.io/gh/epikodelabs/actionstack"><img src="https://codecov.io/gh/epikodelabs/actionstack/graph/badge.svg?style=flat-square" alt="coverage"></a>
   <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
-    <img src="https://epikodelabs.github.io/actionstack/bundle-size.svg" alt="Bundle Size">
+    <img src="https://raw.githubusercontent.com/epikodelabs/epikodelabs.github.io/161dea3e83f7bb6c27dcee0e33d615ba91cc5c5b/actionstack/bundle-size.svg" alt="Bundle Size">
   </a>
 </div>
 
