@@ -225,13 +225,14 @@ function createFrontmatter(filename, content, pageTitle, pageDescription, pageKe
     ]
   };
 
-  // Build YAML frontmatter
+  // Build YAML frontmatter. Scalar strings are quoted so colons and other
+  // YAML-sensitive characters in titles and descriptions stay literal.
   let yaml = '---\n';
-  yaml += `title: ${escapeYaml(pageTitle)}\n`;
-  yaml += `description: ${escapeYaml(pageDescription)}\n`;
+  yaml += `title: "${escapeYaml(pageTitle)}"\n`;
+  yaml += `description: "${escapeYaml(pageDescription)}"\n`;
   yaml += `keywords:\n`;
   for (const keyword of pageKeywords) {
-    yaml += `  - ${escapeYaml(keyword)}\n`;
+    yaml += `  - "${escapeYaml(keyword)}"\n`;
   }
   yaml += 'head:\n';
   for (const [tag, attrs] of metadata.head) {
