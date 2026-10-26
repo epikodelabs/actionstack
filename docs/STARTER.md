@@ -64,12 +64,15 @@ const userModule = createModule({
     loginUser: thunk(
       'loginUser',
       (credentials) => async (dispatch, getState, dependencies) => {
-        await dispatch(userModule.actions.setLoading(true));
+        // Module actions dispatch immediately; awaiting their promise waits
+        // for the handlers to finish (use `dispatch` for nested dispatches
+        // on exclusive stores instead).
+        await userModule.actions.setLoading(true);
         try {
           const user = await dependencies.userAPI.authenticate(credentials);
-          await dispatch(userModule.actions.setUser(user));
+          await userModule.actions.setUser(user);
         } catch (error) {
-          await dispatch(userModule.actions.setError(error.message));
+          await userModule.actions.setError(error.message);
           throw error;
         }
       }
