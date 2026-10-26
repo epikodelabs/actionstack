@@ -8,6 +8,7 @@
     "start": "ng serve",
     "build": "node scripts/build.mjs",
     "test": "npx testify",
+    "benchmark:mutations": "node --expose-gc --experimental-transform-types scripts/benchmark-mutations.mjs",
     "react:serve": "vite --config projects/apps/app2/vite.config.ts",
     "react:build": "vite build --config projects/apps/app2/vite.config.ts",
     "watch": "ng build --watch --configuration development",

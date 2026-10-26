@@ -12,12 +12,12 @@
  * GC pause time (via PerformanceObserver) proxies allocation pressure.
  * A steady-state heap check verifies dispatches leave nothing behind.
  *
- * Run: NODE_OPTIONS=--expose-gc npx tsx scripts/benchmark-mutations.ts
+ * Run: npm run benchmark:mutations
  */
 import { PerformanceObserver } from 'node:perf_hooks';
-import { MutationBatch, validateTree } from '../projects/libraries/actionstack/src/lib/mutations';
+import { MutationBatch, validateTree } from '../projects/libraries/actionstack/src/lib/mutations.ts';
 
-const gcPauses: { label: string; ms: number }[] = [];
+const gcPauses = [];
 new PerformanceObserver(list => {
   for (const entry of list.getEntries())
     gcPauses.push({ label: 'gc', ms: entry.duration });
@@ -25,32 +25,33 @@ new PerformanceObserver(list => {
 
 const hr = () => Number(process.hrtime.bigint() / 1000n) / 1000;
 const gc = () => global.gc?.();
-const fmt = (ms: number) => (ms >= 100 ? ms.toFixed(0) : ms >= 1 ? ms.toFixed(2) : ms.toFixed(3));
+const fmt = (ms) => (ms >= 100 ? ms.toFixed(0) : ms >= 1 ? ms.toFixed(2) : ms.toFixed(3));
 
-interface Sample { mean: number; p95: number; gcMs: number }
+function stats(durations) {
+  durations.sort((a, b) => a - b);
+  return {
+    mean: durations.reduce((a, b) => a + b, 0) / durations.length,
+    gcMs: gcPauses.reduce((a, g) => a + g.ms, 0) / durations.length,
+  };
+}
 
-function measure(label: string, iterations: number, body: () => void | Promise<void>): Sample {
-  for (let i = 0; i < Math.min(5, iterations); i++) { gc(); void body(); }
-  const durations: number[] = [];
+function measure(iterations, body) {
+  for (let i = 0; i < Math.min(5, iterations); i++) { gc(); body(); }
+  const durations = [];
   gcPauses.length = 0;
   for (let i = 0; i < iterations; i++) {
     gc();
     const start = hr();
     const result = body();
-    if (result instanceof Promise) { throw new Error('use measureAsync for async bodies'); }
+    if (result instanceof Promise) throw new Error('use measureAsync for async bodies');
     durations.push(hr() - start);
   }
-  durations.sort((a, b) => a - b);
-  return {
-    mean: durations.reduce((a, b) => a + b, 0) / durations.length,
-    p95: durations[Math.floor(durations.length * 0.95)],
-    gcMs: gcPauses.reduce((a, g) => a + g.ms, 0) / iterations,
-  };
+  return stats(durations);
 }
 
-async function measureAsync(label: string, iterations: number, body: () => Promise<void>): Promise<Sample> {
+async function measureAsync(iterations, body) {
   for (let i = 0; i < Math.min(5, iterations); i++) { gc(); await body(); }
-  const durations: number[] = [];
+  const durations = [];
   gcPauses.length = 0;
   for (let i = 0; i < iterations; i++) {
     gc();
@@ -58,41 +59,36 @@ async function measureAsync(label: string, iterations: number, body: () => Promi
     await body();
     durations.push(hr() - start);
   }
-  durations.sort((a, b) => a - b);
-  return {
-    mean: durations.reduce((a, b) => a + b, 0) / durations.length,
-    p95: durations[Math.floor(durations.length * 0.95)],
-    gcMs: gcPauses.reduce((a, g) => a + g.ms, 0) / iterations,
-  };
+  return stats(durations);
 }
 
-const dispatch = async (state: any, touch: (draft: any) => void, stages = 1) => {
+const dispatch = async (state, touch, stages = 1) => {
   const batch = new MutationBatch(state);
   for (let i = 0; i < stages; i++) await batch.run([], draft => touch(draft));
   batch.commit();
 };
 
-const row = (cells: (string | number)[]) =>
+const row = (cells) =>
   console.log('| ' + cells.map(c => String(c).padEnd(10)).join(' | ') + ' |');
-const header = (title: string, cells: string[]) => {
+const header = (title, cells) => {
   console.log(`\n=== ${title} ===`);
   row(cells);
   console.log('|' + cells.map(() => '-'.repeat(12)).join('|') + '|');
 };
 
 // ---------------------------------------------------------------- shapes
-const makeTree = (objects: number) => {
+const makeTree = (objects) => {
   const items = Array.from({ length: objects }, (_, i) => ({ n: i, name: `item-${i}` }));
   return { items, meta: { created: 0 } };
 };
-const makeMapState = (entries: number) => {
-  const map = new Map<string, { n: number }>();
+const makeMapState = (entries) => {
+  const map = new Map();
   for (let i = 0; i < entries; i++) map.set(`k${i}`, { n: i });
   return { map };
 };
 
 // ---------------------------------------------------------------- scenarios
-console.log('MutationBatch benchmark — mean ms per dispatch (p95 | gc pause ms/dispatch)');
+console.log('MutationBatch benchmark — mean ms per dispatch');
 console.log(`node ${process.version}, gc ${global.gc ? 'available' : 'MISSING (run with --expose-gc)'}`);
 
 // 1. Plain-tree dispatch: state size x touched nodes.
@@ -101,9 +97,10 @@ for (const objects of [1_000, 10_000, 50_000]) {
   for (const touched of [10, 100, 1_000]) {
     if (touched > objects) continue;
     const state = makeTree(objects);
-    const touch = (draft: any) => { for (let i = 0; i < touched; i++) draft.items[i].n++; };
-    const e2e = await measureAsync('e2e', Math.max(20, Math.min(300, 30_000 / objects)), () => dispatch(state, touch));
-    const validate = measure('validate', Math.max(20, Math.min(300, 30_000 / objects)), () => validateTree(state));
+    const touch = (draft) => { for (let i = 0; i < touched; i++) draft.items[i].n++; };
+    const iterations = Math.max(20, Math.min(300, 30_000 / objects));
+    const e2e = await measureAsync(iterations, () => dispatch(state, touch));
+    const validate = measure(iterations, () => validateTree(state));
     row([touched, fmt(e2e.mean), fmt(validate.mean), fmt(e2e.mean + validate.mean), fmt(e2e.gcMs)]);
   }
 }
@@ -112,9 +109,8 @@ for (const objects of [1_000, 10_000, 50_000]) {
 header('plain tree, no-op stage (equal writes only)', ['objects', 'e2e', 'validate-if-run', 'gc e2e']);
 for (const objects of [10_000, 50_000]) {
   const state = makeTree(objects);
-  const noop = async () => dispatch(state, () => { /* zero writes */ });
-  const e2e = await measureAsync('noop', 100, noop);
-  const validate = measure('validate', 100, () => validateTree(state));
+  const e2e = await measureAsync(100, () => dispatch(state, () => { /* zero writes */ }));
+  const validate = measure(100, () => validateTree(state));
   row([objects, fmt(e2e.mean), fmt(validate.mean), fmt(e2e.gcMs)]);
 }
 
@@ -122,9 +118,9 @@ for (const objects of [10_000, 50_000]) {
 header('plain tree 10k, 100 writes, stage scaling', ['stages', 'e2e', 'gc e2e']);
 {
   const state = makeTree(10_000);
-  const touch = (draft: any) => { for (let i = 0; i < 100; i++) draft.items[i].n++; };
+  const touch = (draft) => { for (let i = 0; i < 100; i++) draft.items[i].n++; };
   for (const stages of [1, 2, 4]) {
-    const e2e = await measureAsync('stages', 100, () => dispatch(state, touch, stages));
+    const e2e = await measureAsync(100, () => dispatch(state, touch, stages));
     row([stages, fmt(e2e.mean), fmt(e2e.gcMs)]);
   }
 }
@@ -133,11 +129,11 @@ header('plain tree 10k, 100 writes, stage scaling', ['stages', 'e2e', 'gc e2e'])
 header('Map state, 10 member writes', ['entries', 'e2e', 'mapcopy', 'validate', 'gc e2e']);
 for (const entries of [1_000, 10_000, 100_000]) {
   const state = makeMapState(entries);
-  const touch = (draft: any) => { for (let i = 0; i < 10; i++) draft.map.get(`k${i}`).n++; };
+  const touch = (draft) => { for (let i = 0; i < 10; i++) draft.map.get(`k${i}`).n++; };
   const iterations = Math.max(10, Math.min(200, 100_000 / entries));
-  const e2e = await measureAsync('e2e', iterations, () => dispatch(state, touch));
-  const mapcopy = measure('mapcopy', iterations, () => new Map(state.map));
-  const validate = measure('validate', iterations, () => validateTree(state));
+  const e2e = await measureAsync(iterations, () => dispatch(state, touch));
+  const mapcopy = measure(iterations, () => new Map(state.map));
+  const validate = measure(iterations, () => validateTree(state));
   row([entries, fmt(e2e.mean), fmt(mapcopy.mean), fmt(validate.mean), fmt(e2e.gcMs)]);
 }
 
@@ -145,7 +141,7 @@ for (const entries of [1_000, 10_000, 100_000]) {
 header('Date state', ['op', 'e2e', 'gc e2e']);
 {
   const state = { when: new Date() };
-  const e2e = await measureAsync('date', 2_000, () => dispatch(state, draft => { draft.when.setTime(1234567890); }));
+  const e2e = await measureAsync(2_000, () => dispatch(state, draft => { draft.when.setTime(1234567890); }));
   row(['setTime', fmt(e2e.mean), fmt(e2e.gcMs)]);
 }
 
@@ -153,7 +149,7 @@ header('Date state', ['op', 'e2e', 'gc e2e']);
 header('steady-state heap over 2,000 dispatches (10k tree, 100 writes)', ['heap start', 'heap end', 'growth']);
 {
   const state = makeTree(10_000);
-  const touch = (draft: any) => { for (let i = 0; i < 100; i++) draft.items[i].n++; };
+  const touch = (draft) => { for (let i = 0; i < 100; i++) draft.items[i].n++; };
   gc();
   const before = process.memoryUsage().heapUsed;
   for (let i = 0; i < 2_000; i++) await dispatch(state, touch);
