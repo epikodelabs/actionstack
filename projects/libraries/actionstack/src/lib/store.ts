@@ -460,7 +460,11 @@ export function createStore<T = any>(
       }
       // Dispatch module unloaded action
       sysActions.moduleUnloaded(module);
-      module.destroyed$.next();
+      if (typeof module.destroy === 'function') {
+        module.destroy(false);
+      } else {
+        module.destroyed$.next();
+      }
     });
   };
 

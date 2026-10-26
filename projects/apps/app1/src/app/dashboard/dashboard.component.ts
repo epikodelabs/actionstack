@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import type { OnDestroy, OnInit } from '@angular/core';
-import { Component } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import type { Atom } from '@epikodelabs/streamix';
 import { store } from '../app.module';
@@ -16,12 +16,15 @@ import { dashboardModule } from './dashboard.slice';
   imports: [CommonModule, RouterModule, AtomDirective],
 })
 export class DashboardComponent implements OnInit, OnDestroy {
-  heroes: Atom<Hero[]> = dashboardModule.data$.selectTopHeroes();
+  heroes?: Atom<Hero[]>;
+  private readonly changeDetector = inject(ChangeDetectorRef);
 
   constructor() {}
 
   async ngOnInit() {
     await store.loadModule(dashboardModule);
+    this.heroes = dashboardModule.data$.selectTopHeroes();
+    this.changeDetector.markForCheck();
 
     dashboardModule.actions.loadHeroes();
   }

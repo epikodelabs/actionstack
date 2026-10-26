@@ -260,7 +260,7 @@ describe("module", () => {
       expect(await nextValue<number>(stream)).toBe(3);
     });
 
-    it("creates fresh selector streams after destroy and reconfigure", async () => {
+    it("creates fresh selector streams after unload and reload", async () => {
       const store = createStore<any>();
 
       const mod = createModule({
@@ -281,7 +281,8 @@ describe("module", () => {
       expect(await nextValue<number>(firstLifecycleStream)).toBe(4);
 
       await store.unloadModule(mod, true);
-      mod.destroy(false);
+      expect(firstLifecycleStream.disposed).toBeTrue();
+      expect(mod.destroyed).toBeTrue();
 
       await store.loadModule(mod);
       await store.dispatch({ type: "TEST/FLUSH" });
@@ -289,6 +290,8 @@ describe("module", () => {
       const secondLifecycleStream = mod.data$.count();
       expect(secondLifecycleStream).not.toBe(firstLifecycleStream);
       expect(await nextValue<number>(secondLifecycleStream)).toBe(4);
+      await store.dispatch({ type: "reconfigured/INC" });
+      expect(await nextValue<number>(secondLifecycleStream)).toBe(5);
     });
 
     it("selects nested slices for data streams", async () => {

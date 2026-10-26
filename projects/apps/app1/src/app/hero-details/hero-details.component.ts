@@ -1,6 +1,6 @@
 import { Location } from '@angular/common';
 import type { OnDestroy, OnInit } from '@angular/core';
-import { Component } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 
 import { unregisterModule } from '@epikodelabs/actionstack';
@@ -16,7 +16,8 @@ import { heroDetailsModule, loadHero } from './hero-details.slice';
   standalone: false
 })
 export class HeroDetailsComponent implements OnInit, OnDestroy {
-  hero: Atom<Hero | undefined> = heroDetailsModule.data$.heroSelector();
+  hero?: Atom<Hero | undefined>;
+  private readonly changeDetector = inject(ChangeDetectorRef);
 
   constructor(
     private route: ActivatedRoute,
@@ -25,6 +26,8 @@ export class HeroDetailsComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
       await store.loadModule(heroDetailsModule);
+      this.hero = heroDetailsModule.data$.heroSelector();
+      this.changeDetector.markForCheck();
 
       const id = Number(this.route.snapshot.paramMap.get('id'));
       store.dispatch(loadHero(id));
