@@ -84,8 +84,16 @@ export const overlaps = (a: StatePath, b: StatePath): boolean => prefix(a, b) ||
 export class MutationBatch {
   private identities = new WeakMap<object, any>();
   private writes: Write[] = [];
+  /** Slots where this batch placed a new object: commit resolves exactly these, not the whole tree. */
+  private placements = new Map<object, Set<PropertyKey>>();
   readonly changes: StatePath[] = [];
   constructor(public state: any) {}
+
+  private place(parent: object, key: PropertyKey): void {
+    let keys = this.placements.get(parent);
+    if (!keys) { keys = new Set(); this.placements.set(parent, keys); }
+    keys.add(key);
+  }
 
   private live = (value: any): any => value && typeof value === 'object'
     ? this.identities.get(value) ?? value : value;
@@ -357,6 +365,7 @@ export class MutationBatch {
         if (child !== source[key]) {
           if (result === value) result = copy(value);
           Object.defineProperty(result, key, { value: child, writable: true, enumerable: true, configurable: true });
+          this.place(result, key);
         }
       }
       finalized.set(value, result);
@@ -388,6 +397,7 @@ export class MutationBatch {
           const key = path[index];
           const child = index === path.length - 1 ? next : install(original[key], index + 1);
           Object.defineProperty(result, key, { value: child, writable: true, configurable: true, enumerable: true });
+          this.place(result, key);
           if (index === path.length - 1 ? replacement && !Object.is(next, base) : !isContainer(original[key]))
             installs.push({ target: original, key, value: child });
           return result;
@@ -491,7 +501,20 @@ export class MutationBatch {
         if (write.target instanceof Map) op.key = prepare(op.key);
       } else if (op?.kind === 'remove') op.key = prepare(op.key);
     }
-    const root = prepare(this.state);
+    // Unwind the staged scaffold: placements mark every slot this batch filled with
+    // a new object, so each swaps to its committed identity without walking the tree.
+    for (const [parent, keys] of this.placements) {
+      for (const key of keys) {
+        const child = (parent as any)[key];
+        if (child !== null && typeof child === 'object') {
+          const liveChild = this.live(child);
+          if (liveChild !== child) Object.defineProperty(parent, key, {
+            value: liveChild, writable: true, enumerable: true, configurable: true,
+          });
+        }
+      }
+    }
+    const root = this.live(this.state);
     for (const [index, write] of this.writes.entries()) {
       const target = this.live(write.target);
       if (write.op) {
