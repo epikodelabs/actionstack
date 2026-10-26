@@ -63,13 +63,13 @@ const userModule = createModule({
     setError: action('setError', (state, error) => ({ ...state, loading: false, error })),
     loginUser: thunk(
       'loginUser',
-      (credentials) => async (getState, dependencies) => {
-        userModule.actions.setLoading(true);
+      (credentials) => async (dispatch, getState, dependencies) => {
+        await dispatch(userModule.actions.setLoading(true));
         try {
           const user = await dependencies.userAPI.authenticate(credentials);
-          userModule.actions.setUser(user);
+          await dispatch(userModule.actions.setUser(user));
         } catch (error) {
-          userModule.actions.setError(error.message);
+          await dispatch(userModule.actions.setError(error.message));
           throw error;
         }
       }
@@ -86,7 +86,8 @@ await store.populate(userModule);
 // Subscribe to state changes
 userModule.data$.getUser().subscribe((state) => console.log('User state:', state));
 
-// Call thunk method
+// Call thunk method — module actions return the dispatch promise, so awaiting
+// waits for completion and errors propagate to the caller
 try {
   await userModule.actions.loginUser({ username: 'jane', password: 'secret123' });
   console.log('Logged in successfully');

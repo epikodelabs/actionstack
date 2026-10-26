@@ -1,4 +1,4 @@
-import { action, createModule, createStore } from '@epikodelabs/actionstack';
+import { action, createModule, createStore, thunk } from '@epikodelabs/actionstack';
 
 describe('mutable store integration', () => {
   beforeEach(() => {
@@ -101,6 +101,55 @@ describe('mutable store integration', () => {
       expect(store.middlewareAPI.getState().mutable.count).toBe(2);
     });
   }
+
+  it('awaits module action methods until processing completes', async () => {
+    const store = createStore();
+    let thunkDone = false;
+    const module = createModule({
+      slice: 'awaited',
+      initialState: { count: 0 },
+      actions: {
+        inc: action('INC', (s: { count: number }) => { s.count++; }),
+        finish: thunk('FINISH', () => async () => {
+          await new Promise(resolve => setTimeout(resolve, 20));
+          thunkDone = true;
+          return 'payload';
+        }),
+      },
+    });
+    await store.loadModule(module);
+    await store.dispatch({ type: 'FLUSH' });
+
+    await module.actions.inc();
+    expect(store.middlewareAPI.getState('awaited')).toEqual({ count: 1 });
+
+    const result = await module.actions.finish();
+    expect(thunkDone).toBeTrue();
+    expect(result).toBe('payload');
+  });
+
+  it('rejects failed module actions but keeps triggered thunk failures log-only', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'failing',
+      initialState: { count: 0 },
+      actions: {
+        boom: action('BOOM', (s: { count: number }) => {
+          s.count++;
+          throw new Error('handler failed');
+        }),
+        react: thunk('REACT', () => async () => { throw new Error('triggered failed'); },
+          ['failing/OK']),
+        ok: action('OK', () => {}),
+      },
+    });
+    await store.loadModule(module);
+    await store.dispatch({ type: 'FLUSH' });
+
+    await expectAsync(module.actions.boom()).toBeRejectedWithError('handler failed');
+    await module.actions.ok();
+    expect(store.middlewareAPI.getState('failing')).toEqual({ count: 0 });
+  });
 
   it('awaits affected async selectors but permits later reducer commits', async () => {
     const store = createStore({ awaitStatePropagation: true });

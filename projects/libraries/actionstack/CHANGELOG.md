@@ -5,7 +5,8 @@
 - Fixed module reloads being skipped when an unload was still queued, and duplicate registration from simultaneous loads. Await `store.loadModule(module)` before using module actions or selectors.
 - Unloading now destroys the module lifecycle and disposes its selector streams. After reloading, acquire fresh `module.data$` streams; Angular components must notify change detection when assigning these streams asynchronously.
 - Rejected selector propagation completions now produce a console warning and allow later dispatches to continue when `awaitStatePropagation` is enabled.
-- Handler and reducer errors — including mixing draft mutation with a returned replacement — abort the action transactionally and are reported as starter middleware console warnings; `dispatch` does not reject.
+- Handler and reducer errors abort the action transactionally. A failing action handler or thunk rejects the dispatch promise after being logged — module action methods and `store.dispatch` now surface failures to their callers, and a thunk's return value becomes the dispatch resolution. Reducer failures stay contained with earlier stages retained, and automatically triggered thunk failures are logged without failing the triggering action.
+- Module action methods return the dispatch promise instead of the action object, making `await module.actions.someAction(...)` wait for processing to complete.
 - Halved tree-validation cost per action: state is no longer re-validated when a batch is created, and stages that change nothing skip the walk entirely. Collections with custom own properties are still rejected before a draft reads them.
 - Dispatches no longer walk untouched state: commits resolve recorded placements instead of scanning the tree, and finalize skips clean subtrees. No-op dispatches are O(1) regardless of state size; benchmark dispatches on 50k-object states dropped 20–60% (`npm run benchmark:mutations`).
 

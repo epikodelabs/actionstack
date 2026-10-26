@@ -123,7 +123,7 @@ const unsubscribe = counter.data$.count().subscribe(value => {
 counter.actions.increment(5);
 ```
 
-Loading configures the module with its store. Module action calls dispatch automatically, so do not dispatch the same result a second time. Action methods return the action itself, not the dispatch promise; await `store.dispatch(action)` when you need processing to finish. The selector source supplies the current value and subsequent updates; consume it reactively rather than assuming dispatch has already updated every observer.
+Loading configures the module with its store. Module action calls dispatch automatically, so do not dispatch the same result a second time. Action methods return the dispatch promise: awaiting one waits for processing to finish, a thunk's return value becomes the resolution, and a failing handler or thunk rejects it. Automatically triggered thunks stay log-only and never fail their triggering action. The selector source supplies the current value and subsequent updates; consume it reactively rather than assuming dispatch has already updated every observer.
 
 ### 2. Derive what the view needs
 

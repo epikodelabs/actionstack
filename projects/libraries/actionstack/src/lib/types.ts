@@ -298,6 +298,22 @@ export type Streams<S extends Record<string, (state: any) => any>> = {
 };
 
 /**
+ * A module action method bound to its store: called with the creator's
+ * arguments, it dispatches and returns the dispatch promise, which resolves
+ * when processing completes (and rejects when the handler or thunk fails).
+ */
+export type BoundAction<T> = T extends (...args: infer A) => any
+  ? (...args: A) => Promise<any>
+  : never;
+
+/**
+ * Maps a module's action creators to their store-bound methods.
+ */
+export type BoundActions<Actions> = {
+  [K in keyof Actions]: BoundAction<Actions[K]>;
+};
+
+/**
  * A lightweight view notifier contract for framework adapters.
  *
  * It intentionally matches Angular's `ChangeDetectorRef` shape without importing Angular.
@@ -343,7 +359,7 @@ export interface FeatureModule<
   readonly loaded$: Writable<void>;
   readonly destroyed$: Writable<void>;
   readonly data$: Streams<Selectors>;
-  readonly actions: Actions;
+  readonly actions: BoundActions<Actions>;
   readonly selectors: Selectors;
   attachView: (view: ViewAttachment) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
   detachView: (view: ViewAttachment) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;

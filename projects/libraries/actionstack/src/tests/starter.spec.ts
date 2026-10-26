@@ -430,7 +430,7 @@ describe('starter', () => {
         },
       });
 
-      await dispatch({ type: 'PING' });
+      await expectAsync(dispatch({ type: 'PING' })).toBeRejectedWithError('next boom');
       expect(String(warn.calls.allArgs().flat().join(' '))).toContain(
         '[starter] [exclusive] Unhandled error'
       );
@@ -716,7 +716,7 @@ describe('starter', () => {
       });
       const dispatch = dispatchFn as any;
 
-      await dispatch({ type: 'PING' });
+      await expectAsync(dispatch({ type: 'PING' })).toBeRejected();
       await dispatch.waitForAll();
 
       expect(dispatch.pendingCount()).toBe(0);
@@ -1154,8 +1154,8 @@ describe('starter', () => {
         },
       });
 
-      await dispatch({ type: 'PING' });
-      
+      await expectAsync(dispatch({ type: 'PING' })).toBeRejectedWith('next error string');
+
       expect(warn).toHaveBeenCalled();
       const messages = warn.calls.all().map(c => String(c.args[0]));
       expect(messages.some(m => m.includes('next error string'))).toBeTrue();
@@ -1170,8 +1170,8 @@ describe('starter', () => {
         },
       });
 
-      await dispatch({ type: 'PING' });
-      
+      await expectAsync(dispatch({ type: 'PING' })).toBeRejected();
+
       expect(warn).toHaveBeenCalled();
       const messages = warn.calls.all().map(c => String(c.args[0]));
       expect(messages.some(m => m.includes('unknown'))).toBeTrue();
@@ -1187,8 +1187,8 @@ describe('starter', () => {
         },
       });
 
-      await dispatch({ type: 'PING' });
-      
+      await expectAsync(dispatch({ type: 'PING' })).toBeRejected();
+
       expect(warn).toHaveBeenCalled();
     });
   });
