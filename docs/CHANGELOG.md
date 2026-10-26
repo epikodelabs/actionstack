@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.0.2 - 2026-10-26
+
+- Fixed module reloads being skipped when an unload was still queued, and duplicate registration from simultaneous loads. Await `store.loadModule(module)` before using module actions or selectors.
+- Unloading now destroys the module lifecycle and disposes its selector streams. After reloading, acquire fresh `module.data$` streams; Angular components must notify change detection when assigning these streams asynchronously.
+- Rejected selector propagation completions now produce a console warning and allow later dispatches to continue when `awaitStatePropagation` is enabled.
+- Handler and reducer errors — including mixing draft mutation with a returned replacement — abort the action transactionally and are reported as starter middleware console warnings; `dispatch` does not reject.
+- Halved tree-validation cost per action: state is no longer re-validated when a batch is created, and stages that change nothing skip the walk entirely. Collections with custom own properties are still rejected before a draft reads them.
+
 ## 5.0.1 - 2026-10-26
 
 Rebuilt how handlers update state and how selectors observe it: mutation drafts, transactional in-place commits, and read-tracked selectors. Upgrading from 4.x requires no changes to user code — the public API is unchanged, and handlers that return replacement state keep working exactly as before.
