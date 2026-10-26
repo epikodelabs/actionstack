@@ -104,12 +104,16 @@ export class MutationBatch {
     const writes: Write[] = [];
     const changes: StatePath[] = [];
     const revokers: (() => void)[] = [];
-    type Node = { base: any; shadow?: any; proxy: any; path: StatePath; array?: StatePath; parent?: Node; dirty?: boolean };
+    type DirtyLink = { parent?: DirtyLink; dirty?: boolean };
+    type Node = DirtyLink & { base: any; shadow?: any; proxy: any; path: StatePath; array?: StatePath };
     const nodes = new WeakMap<object, Node>();
     const proxies = new WeakMap<object, Node>();
     const opaque = new WeakMap<object, any>();
     const collections = new WeakMap<object, any>();
-    const collectionNodes = new WeakMap<object, { shadow: any; modified: boolean; parent?: any; dirty?: boolean }>();
+    const collectionNodes = new WeakMap<object, DirtyLink & { shadow: any; modified: boolean }>();
+    // Reducer-constructed values assigned into the draft: their content may embed
+    // draft proxies, so nodes created for them must never take the clean shortcut.
+    const fresh = new Set<object>();
     let active = true;
     const assertActive = () => {
       if (!active) throw new Error('Cannot use an Actionstack draft after its reducer has finished.');
@@ -117,13 +121,13 @@ export class MutationBatch {
     const unwrap = (value: any): any => proxies.get(value)?.base ?? value;
     // A write marks its whole ancestor chain, so finalize can trust a clean node
     // to finalize to itself and skip its entire subtree.
-    const markDirty = (start: { parent?: any; dirty?: boolean }): void => {
-      for (let ancestor = start; ancestor; ancestor = ancestor.parent) ancestor.dirty = true;
+    const markDirty = (start: DirtyLink): void => {
+      for (let ancestor: DirtyLink | undefined = start; ancestor; ancestor = ancestor.parent) ancestor.dirty = true;
     };
     const changed = (node: Node, key: PropertyKey) => {
       changes.push(node.array ?? [...node.path, key]);
     };
-    const wrap = (value: any, at: StatePath, array?: StatePath, parent?: Node): any => {
+    const wrap = (value: any, at: StatePath, array?: StatePath, parent?: DirtyLink): any => {
       if (value === null || typeof value !== 'object') return value;
       if (!isContainer(value)) {
         if (isCollection(value)) {
@@ -158,13 +162,15 @@ export class MutationBatch {
       }
       const cached = nodes.get(value);
       if (cached) return cached.proxy;
-      const node: Node = { base: value, proxy: undefined, path: at, array: array ?? (Array.isArray(value) ? at : undefined), parent, dirty: false };
+      const node: Node = { base: value, proxy: undefined, path: at, array: array ?? (Array.isArray(value) ? at : undefined), parent, dirty: fresh.has(value) };
       const current = () => node.shadow ?? node.base;
       const ensure = () => node.shadow ??= copy(node.base);
       const write = (key: PropertyKey, next: any): boolean => {
         next = unwrap(next);
         const source = current();
         if (Object.hasOwn(source, key) && Object.is(unwrap(source[key]), next)) return true;
+        if (next !== null && typeof next === 'object' && !nodes.has(next) && !collectionNodes.has(next))
+          fresh.add(next);
         // Mutate only the private shadow. Array length validation happens here.
         Object.defineProperty(ensure(), key, Array.isArray(source) && key === 'length'
           ? { value: next } : { value: next, writable: true, enumerable: true, configurable: true });
@@ -207,7 +213,7 @@ export class MutationBatch {
       revokers.push(handle.revoke);
       return node.proxy;
     };
-    const wrapCollection = (value: any, at: StatePath, array?: StatePath, parent?: any): any => {
+    const wrapCollection = (value: any, at: StatePath, array?: StatePath, parent?: DirtyLink): any => {
       // Reject before any proxy read so accessor properties are never evaluated.
       if (Reflect.ownKeys(value).length)
         throw new Error('Actionstack state collections cannot have custom own properties.');
@@ -215,7 +221,7 @@ export class MutationBatch {
       // Failed stages simply discard their private shadows, including nested edits.
       const shadow: any = value instanceof Date ? new Date(value.getTime())
         : value instanceof Map ? new Map(value) : new Set(value);
-      const node = { shadow, modified: false, parent, dirty: false };
+      const node = { shadow, modified: false, parent, dirty: fresh.has(value) };
       collectionNodes.set(value, node);
       const segment = (key: any): PropertyKey =>
         (typeof key === 'object' && key !== null) || typeof key === 'function' ? '#' : key;
@@ -362,7 +368,9 @@ export class MutationBatch {
           if (!modified) result = value;
         }
         finalized.set(value, result);
-        if (result !== value && (node || this.identities.has(value)))
+        // Fresh collections commit as their rebuilt form: mapping back to the
+        // original would restore its pre-stage content (and any proxies in it).
+        if (result !== value && (node || this.identities.has(value)) && !fresh.has(value))
           this.identities.set(result, this.live(value));
         return result;
       }
@@ -383,7 +391,9 @@ export class MutationBatch {
         }
       }
       finalized.set(value, result);
-      if (result !== value && (node || this.identities.has(value)))
+      // Fresh containers commit as their finalized form: the raw original may
+      // still hold draft proxies, and nothing else references its content.
+      if (result !== value && (node || this.identities.has(value)) && !fresh.has(value))
         this.identities.set(result, this.live(value));
       return result;
     };
@@ -529,6 +539,10 @@ export class MutationBatch {
       }
     }
     const root = this.live(this.state);
+    // A replaced root collection is carried by no journal write, so its staged
+    // entries (e.g. a clone used as a key) resolve here. Bounded by the
+    // replacement's own content, never by the wider state.
+    if (isCollection(root)) prepare(root);
     for (const [index, write] of this.writes.entries()) {
       const target = this.live(write.target);
       if (write.op) {

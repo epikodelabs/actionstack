@@ -60,13 +60,14 @@ export type GetState<TState = any> = () => TState;
  */
 export interface AsyncAction<
   TState = any,
-  TDependencies = any
+  TDependencies = any,
+  TResult = any
 > {
   (
     dispatch: Dispatch<TState, TDependencies>,
     getState: GetState<TState>,
     dependencies: TDependencies
-  ): Promise<void>;
+  ): Promise<TResult>;
 }
 
 /**
@@ -301,9 +302,11 @@ export type Streams<S extends Record<string, (state: any) => any>> = {
  * A module action method bound to its store: called with the creator's
  * arguments, it dispatches and returns the dispatch promise, which resolves
  * when processing completes (and rejects when the handler or thunk fails).
+ * Creator metadata (`.type`, `.match`, `.toString`) is preserved at runtime
+ * and surfaced through the intersection.
  */
 export type BoundAction<T> = T extends (...args: infer A) => any
-  ? (...args: A) => Promise<any>
+  ? ((...args: A) => Promise<any>) & T
   : never;
 
 /**
@@ -358,6 +361,8 @@ export interface FeatureModule<
   readonly dependencies?: Dependencies;
   readonly loaded$: Writable<void>;
   readonly destroyed$: Writable<void>;
+  readonly destroying: boolean;
+  readonly destroyed: boolean;
   readonly data$: Streams<Selectors>;
   readonly actions: BoundActions<Actions>;
   readonly selectors: Selectors;

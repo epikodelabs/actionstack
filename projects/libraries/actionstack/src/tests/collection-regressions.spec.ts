@@ -245,6 +245,30 @@ describe('collection transaction regressions', () => {
     expect([...state.map.keys()]).toEqual(['valid']);
   });
 
+  it('resolves staged clones used as keys in root collection replacements', async () => {
+    const item = { n: 1 };
+    const state: any = { item };
+    const batch = new MutationBatch(state);
+    await batch.run([], draft => { draft.item.n = 2; });
+    await batch.run([], draft => new Map([[draft.item, 'v']]));
+    const committed = batch.commit();
+    expect([...committed.keys()][0]).toBe(item);
+    expect(committed.get(item)).toBe('v');
+  });
+
+  it('strips draft proxies from wrappers assigned into the draft and read back', async () => {
+    const state: any = { user: { name: 'a' } };
+    const batch = new MutationBatch(state);
+    await batch.run([], draft => {
+      draft.result = { child: draft.user };
+      delete draft.user;
+      void draft.result;
+    });
+    batch.commit();
+    expect(state.result.child.name).toBe('a');
+    expect(state.user).toBeUndefined();
+  });
+
   it('revokes extracted Map, Set, and Date methods after a successful stage', async () => {
     const methods: (() => any)[] = [];
     const batch = new MutationBatch({ map: new Map([['a', 1]]), set: new Set([1]), date: new Date(0) });

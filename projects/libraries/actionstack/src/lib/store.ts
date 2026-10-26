@@ -58,8 +58,11 @@ export type Store<TState = any, TDependencies = any> = {
     };
 
     select: {
-        <R = any>(selector: (state: Readonly<TState>) => R, defaultValue?: R): Atom<R>;
+        // The Promise overload must come first: TypeScript tries overloads in
+        // order, and an async selector otherwise infers Atom<Promise<T>> against
+        // this runtime's Atom<T> emissions.
         <R = any>(selector: (state: Readonly<TState>) => Promise<R>, defaultValue?: R): Atom<R>;
+        <R = any>(selector: (state: Readonly<TState>) => R, defaultValue?: R): Atom<R>;
     };
 
     populate: (...modules: FeatureModule[]) => Promise<void>;
@@ -403,14 +406,24 @@ export function createStore<T = any>(
 
       const slicePath = (module.slice || 'main').split('/');
       if (getProperty(state, slicePath) === undefined) {
-        const batch = new MutationBatch(state);
-        await batch.run([], draft => {
-          let parent = draft;
-          for (const key of slicePath.slice(0, -1)) parent = parent[key] ??= {};
-          parent[slicePath[slicePath.length - 1]] = module.initialState;
-        });
-        state = batch.commit();
-        publish(batch.changes);
+        try {
+          const batch = new MutationBatch(state);
+          await batch.run([], draft => {
+            let parent = draft;
+            for (const key of slicePath.slice(0, -1)) parent = parent[key] ??= {};
+            parent[slicePath[slicePath.length - 1]] = module.initialState;
+          });
+          state = batch.commit();
+          publish(batch.changes);
+        } catch (error) {
+          // Roll back partial registration so a repaired retry starts clean
+          // instead of hitting the already-loaded shortcut without state.
+          modules = modules.filter((m) => m.slice !== module.slice);
+          unregisterActionHandlers(module, registry);
+          unregisterThunks(module, registry);
+          module.loaded$.fail(error);
+          throw error;
+        }
       }
 
       sysActions.moduleLoaded(module);

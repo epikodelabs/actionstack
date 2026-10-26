@@ -199,7 +199,9 @@ export const createStarter = () => {
     return (next: Function) => async (action: { type: string }) => {
       return queue.enqueue(async () => {
         try {
-          await handler(action as any, next, true);
+          // `return await` so thunk results resolve the dispatch promise while
+          // the catch below still converts failures into rejections.
+          return await handler(action as any, next, true);
         } catch (err: any) {
           onError(`[starter] [exclusive] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${err.message}`);
           // Directly dispatched actions reject the dispatch promise; triggered

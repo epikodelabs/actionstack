@@ -168,6 +168,25 @@ describe('store', () => {
     expect(count).toBe(1);
   });
 
+  it('rolls back registration when initial state is invalid and allows a clean retry', async () => {
+    const store = createStore();
+    const cyclic: any = {}; cyclic.self = cyclic;
+    const broken = createModule({
+      slice: 'rollback',
+      initialState: cyclic,
+      actions: { ping: action('PING', () => {}) },
+    });
+    await expectAsync(store.loadModule(broken)).toBeRejectedWithError(/tree/);
+
+    const repaired = createModule({
+      slice: 'rollback',
+      initialState: { ok: true },
+      actions: { ping: action('PING', () => {}) },
+    });
+    await store.loadModule(repaired);
+    expect(await readState(store, 'rollback')).toEqual({ ok: true });
+  });
+
   it('reloads after an unload that is still queued', async () => {
     const store = createStore();
     const mod = createModule({

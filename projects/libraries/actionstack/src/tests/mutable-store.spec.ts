@@ -128,6 +128,54 @@ describe('mutable store integration', () => {
     expect(result).toBe('payload');
   });
 
+  it('resolves module thunk actions with their return value in both processing modes', async () => {
+    for (const exclusiveActionProcessing of [false, true]) {
+      const store = createStore({ exclusiveActionProcessing });
+      const module = createModule({
+        slice: 'answered',
+        initialState: {},
+        actions: { answer: thunk('ANSWER', () => async () => 42) },
+      });
+      await store.loadModule(module);
+      expect(await module.actions.answer()).toBe(42);
+    }
+  });
+
+  it('never delivers the stale cached value to subscribers attaching during a pending async selection', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'stale',
+      initialState: { n: 0 },
+      actions: { bump: action('BUMP', (s: { n: number }) => { s.n = 1; }) },
+      selectors: { current: (s: { n: number }) => s.n },
+    });
+    await store.loadModule(module);
+    await store.dispatch({ type: 'FLUSH' });
+
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    let observed!: () => void;
+    const pending = new Promise<void>(resolve => { observed = resolve; });
+    let started = false;
+    const values: number[] = [];
+    const sub1 = store.select(async (s: any) => {
+      if (started) { observed(); await gate; }
+      return s.stale.n;
+    }).subscribe(v => values.push(v));
+
+    started = true;
+    const dispatch = store.dispatch({ type: 'stale/BUMP' });
+    await pending;   // the fresh evaluation is now in flight
+    // Attach while the re-evaluation is pending: the cache still holds 0.
+    const second: number[] = [];
+    const sub2 = store.select((s: any) => s.stale.n, -1).subscribe(v => second.push(v));
+    release();
+    await dispatch;
+    expect(second).toEqual([1]);
+    await sub2();
+    await sub1();
+  });
+
   it('rejects failed module actions but keeps triggered thunk failures log-only', async () => {
     const store = createStore();
     const module = createModule({
