@@ -332,6 +332,9 @@ const combineReducers = (reducers: Tree<Reducer | AsyncReducer>): AsyncReducer =
  * Updates a nested state object by applying a change to the specified path and value.
  * Ensures that intermediate nodes in the state are properly cloned or created, preserving immutability
  * for unchanged branches. Tracks visited nodes in the provided object tree to avoid redundant updates.
+ *
+ * Internal to {@link combineReducers}: builds its minimal change tree across
+ * all combined reducers in a single pass. Not part of the public API.
  */
 function applyChange(initialState: any, path: string[], value: any, objTree: Tree<boolean>): any {
   let currentState: any = Object.keys(objTree).length > 0 ? initialState: {...initialState};
@@ -392,7 +395,6 @@ const applyMiddleware = (...middlewares: Function[]): StoreEnhancer => {
 };
 
 export {
-  applyChange,
   applyMiddleware,
   combineEnhancers,
   combineReducers
