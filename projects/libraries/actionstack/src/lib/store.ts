@@ -1,6 +1,6 @@
 import type { Atom } from '@epikodelabs/streamix';
-import { atom } from '@epikodelabs/streamix';
-import { createCurrentSource } from './current-source';
+import { MutationBatch, type StatePath } from './mutations';
+import { createSelectorRegistry } from './tracked-selectors';
 import { action, createActionRegistry, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
 import { waitForBrowserIdle } from './idle';
 import { createModule, registerModule } from './module';
@@ -20,7 +20,6 @@ import type {
 import {
     combineEnhancers,
     getProperty,
-    setProperty,
 } from './utils';
 
 /**
@@ -59,15 +58,15 @@ export type Store<TState = any, TDependencies = any> = {
     };
 
     select: {
-        <R = any>(selector: (state: Readonly<TState>) => R, defaultValue?: R): Atom<R>;
         <R = any>(selector: (state: Readonly<TState>) => Promise<R>, defaultValue?: R): Atom<R>;
+        <R = any>(selector: (state: Readonly<TState>) => R, defaultValue?: R): Atom<R>;
     };
 
     populate: (...modules: FeatureModule[]) => Promise<void>;
     loadModule: (module: FeatureModule) => Promise<void>;
     unloadModule: (module: FeatureModule, clearState?: boolean) => Promise<void>;
 
-    addReducer: (reducer: (state: TState, action: Action<any> | AsyncAction<TState, TDependencies>) => TState | Promise<TState>) => void;
+    addReducer: (reducer: (state: TState, action: Action<any> | AsyncAction<TState, TDependencies>) => TState | void | Promise<TState | void>) => void;
 
     middlewareAPI: MiddlewareAPI;
     starter: Middleware;
@@ -178,7 +177,13 @@ export function createStore<T = any>(
   };
 
   let state = {} as T;
-  const currentState = atom<T>(state as T);
+  const selectors = createSelectorRegistry(() => state);
+  let propagation: Promise<void> = Promise.resolve();
+  const publish = (changes: StatePath[]): void => {
+    if (!changes.length) return;
+    const completion = selectors.notify(changes);
+    propagation = Promise.all([propagation, completion]).then(() => undefined);
+  };
   const queue = createQueue();
 
   /**
@@ -203,29 +208,20 @@ export function createStore<T = any>(
       return;
     }
 
-    let newState = state; // start with current state
-
-
+    // Starter middleware already serializes this transaction through the store queue.
+    const batch = new MutationBatch(state);
     const handler = getActionHandlers(action.type, registry);
 
     if (handler) {
       const slicePath = action.type.split('/').slice(0, -1); // handles 'foo/bar/ACTION'
-      const currentSliceState = getProperty(newState, slicePath);
-      const updatedSliceState = await handler(
-        currentSliceState,
-        action.payload
-      );
-      newState = setProperty(newState, slicePath, updatedSliceState);
+      await batch.run(slicePath, draft => handler(draft, action.payload));
     }
 
     if (reducers?.length) {
       for (let i = reducers.length - 1; i >= 0; i--) {
         try {
           const reducer = reducers[i];
-          const maybeUpdatedState = await reducer(newState, action);
-          if (maybeUpdatedState !== undefined) {
-            newState = maybeUpdatedState;
-          }
+          await batch.run([], draft => reducer(draft, action));
         } catch (err: any) {
           console.warn(`Error in meta-reducer ${i}:`, err.message ?? err);
         }
@@ -233,9 +229,9 @@ export function createStore<T = any>(
     }
 
     // Emit only once after all reducers have run
-    if (newState !== state) {
-      state = newState;
-      currentState.next(state as T);
+    if (batch.changes.length) {
+      state = batch.commit();
+      publish(batch.changes);
     }
   };
 
@@ -351,13 +347,19 @@ export function createStore<T = any>(
           // Initialize state if not already present
           const slicePath = (module.slice || 'main').split('/');
           if (getProperty(state, slicePath) === undefined) {
-            state = setProperty(state, slicePath, module.initialState);
+            const batch = new MutationBatch(state);
+            await batch.run([], draft => {
+              let parent = draft;
+              for (const key of slicePath.slice(0, -1)) parent = parent[key] ??= {};
+              parent[slicePath[slicePath.length - 1]] = module.initialState;
+            });
+            state = batch.commit();
+            publish(batch.changes);
           }
           
           // Dispatch system action
           sysActions.moduleLoaded(module);
           // Update current state
-          currentState.next(state);
           // Signal that module state and selectors are ready
           module.loaded$.next();
         } catch (error) {
@@ -399,11 +401,17 @@ export function createStore<T = any>(
 
       const slicePath = (module.slice || 'main').split('/');
       if (getProperty(state, slicePath) === undefined) {
-        state = setProperty(state, slicePath, module.initialState);
+        const batch = new MutationBatch(state);
+        await batch.run([], draft => {
+          let parent = draft;
+          for (const key of slicePath.slice(0, -1)) parent = parent[key] ??= {};
+          parent[slicePath[slicePath.length - 1]] = module.initialState;
+        });
+        state = batch.commit();
+        publish(batch.changes);
       }
 
       sysActions.moduleLoaded(module);
-      currentState.next(state);
       module.loaded$.next();
     });
   };
@@ -438,12 +446,21 @@ export function createStore<T = any>(
 
       const slicePath = normalizePath(module.slice || 'main');
       if (clearState) {
-        state = setProperty(state, slicePath, undefined);
+        const batch = new MutationBatch(state);
+        await batch.run([], draft => {
+          let parent = draft;
+          for (const key of slicePath.slice(0, -1)) {
+            parent = parent?.[key];
+            if (!parent) return;
+          }
+          if (parent) parent[slicePath[slicePath.length - 1]] = undefined;
+        });
+        state = batch.commit();
+        publish(batch.changes);
       }
       // Dispatch module unloaded action
       sysActions.moduleUnloaded(module);
       module.destroyed$.next();
-      currentState.next(state);
     });
   };
 
@@ -509,53 +526,14 @@ export function createStore<T = any>(
     selector: (state: Readonly<T>) => R | Promise<R>,
     defaultValue?: R
   ): Atom<R> => {
-    const normalizeSelected = (value: R | undefined): R =>
-      value === undefined ? (defaultValue as R) : value;
-
-    const warnAndDefault = (error: unknown): R => {
-      const err = error as any;
-      console.warn(`Error in selector: ${err?.message ?? err}`);
-      return defaultValue as R;
-    };
-
-    const resolveSelected = (nextState: T): R | Promise<R> => {
-      if (nextState == null) {
-        return defaultValue as R;
-      }
-
-      try {
-        const selected = selector(nextState);
-
-        if (
-          selected != null &&
-          typeof (selected as PromiseLike<R>).then === 'function'
-        ) {
-          return Promise.resolve(selected).then(
-            (value) => normalizeSelected(value),
-            (error) => warnAndDefault(error)
-          );
-        }
-
-        return normalizeSelected(selected as R);
-      } catch (error) {
-        return warnAndDefault(error);
-      }
-    };
-
-    return createCurrentSource<R>({
-      read: () => resolveSelected(state as T),
-      connect: (emit) =>
-        currentState.subscribe((nextState: T) => {
-          emit(resolveSelected(nextState));
-        }),
-    });
+    return selectors.track(selector, defaultValue);
   };
 
   /**
    * Registers a global reducer that runs on every dispatched action.
    */
   const addReducer = (
-    reducer: (state: T, action: Action<any> | AsyncAction<T, any>) => T | Promise<T>
+    reducer: (state: T, action: Action<any> | AsyncAction<T, any>) => T | void | Promise<T | void>
   ): void => {
     void queue.enqueue(async () => {
       if (!settings.enableGlobalReducers) {
@@ -626,6 +604,8 @@ export function createStore<T = any>(
 
     // Support async dispatch (thunks, effects, etc.)
     return Promise.resolve(result).then(async () => {
+      await propagation;
+      await selectors.settled();
       await waitForBrowserIdle();
       return result;
     });

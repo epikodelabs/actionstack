@@ -54,6 +54,12 @@ const PAGE_METADATA = {
     keywords: ['middleware', 'tools', 'logger', 'performance monitor', 'state freezer', 'debugging']
   },
 
+  'MUTATIONS.md': {
+    title: 'Mutations - Drafts, Commits, and Tracked Selectors',
+    description: 'How ActionStack v5 updates state: mutable drafts in action handlers, transactional in-place commits, and selectors that rerun only when the state they read changes. Upgrading from 4.x requires no code changes.',
+    keywords: ['mutations', 'mutable drafts', 'tracked selectors', 'selectors', 'transactional commits', 'state updates', 'actionstack']
+  },
+
   'REACT.md': {
     title: 'React Integration Guide - Using ActionStack with React',
     description: 'Integrate ActionStack state management with React applications. Learn how to use modules with React hooks for reactive components.',

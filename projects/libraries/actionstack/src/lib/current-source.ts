@@ -9,6 +9,8 @@ export type CurrentValue<T> = T | PromiseLike<T> | typeof NO_CURRENT_VALUE;
 export interface CurrentSourceOptions<T> {
   /** Preserve repeated equal upstream emissions when false. Defaults to true. */
   dedupe?: boolean;
+  /** Optional equality policy for sources whose objects can change in place. */
+  equals?: (previous: T, next: T) => boolean;
   /** Reads the latest value when a subscriber attaches if connect does not provide one. */
   read?: () => CurrentValue<T>;
   /** Connects to current and future changes while at least one subscriber is attached. */
@@ -42,7 +44,7 @@ export function createCurrentSource<T>(
 
   const publish = (value: T): void => {
     if (cache.disposed) return;
-    if (options.dedupe !== false && hasValue && Object.is(cache.safeValue, value)) {
+    if (options.dedupe !== false && hasValue && (options.equals ?? Object.is)(cache.safeValue as T, value)) {
       return;
     }
 

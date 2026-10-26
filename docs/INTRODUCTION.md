@@ -31,10 +31,15 @@ If actionstack helps you, please give it a star: https://github.com/epikodelabs/
 - **Modular Architecture** - Feature-based modules with co-located state and logic
 - **Reactive Streams** - Built on Streamix for high-performance reactive updates
 - **Action Handlers** - No reducers needed - sync actions with state logic
+- **Mutable Drafts** - Mutate a draft inside your handler; commits are transactional and in place
+- **Tracked Selectors** - Selectors rerun only when the state they actually read changes
 - **Thunk Support** - Built-in async operations via thunks
 - **Safe Concurrency** - Built-in locking and execution control
 - **Dynamic Loading** - Load/unload modules at runtime
 - **Type Safety** - Full TypeScript support with intelligent inference
+
+> **New in v5:** action handlers write through mutable drafts and selectors track their reads.
+> Upgrading from 4.x requires no changes to your code — see the [Mutations guide](/MUTATIONS).
 
 ---
 
@@ -82,6 +87,8 @@ counterModule.data$.count().subscribe(count => {
 });
 ```
 
+This slice holds a number, so the handler returns replacement state. Slices holding objects or arrays can simply mutate the draft instead — see the [Mutations guide](/MUTATIONS).
+
 ---
 
 ## Real-World Example
@@ -92,19 +99,24 @@ interface TodoState {
   loading: boolean;
 }
 
-const addTodo = action('add', 
-  (state: TodoState, text: string) => ({
-    ...state,
-    todos: [...state.todos, { id: Date.now(), text, completed: false }]
-  })
+// v5 draft style: mutate the state, return nothing
+const addTodo = action('add',
+  (state: TodoState, text: string) => {
+    state.todos.push({ id: Date.now(), text, completed: false });
+  }
 );
 
 const setTodos = action('setTodos',
-  (state: TodoState, todos: Todo[]) => ({ ...state, todos, loading: false })
+  (state: TodoState, todos: Todo[]) => {
+    state.todos = todos;
+    state.loading = false;
+  }
 );
 
 const setLoading = action('setLoading',
-  (state: TodoState, loading: boolean) => ({ ...state, loading })
+  (state: TodoState, loading: boolean) => {
+    state.loading = loading;
+  }
 );
 
 // Thunk using createThunk

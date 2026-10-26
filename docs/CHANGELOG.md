@@ -1,5 +1,19 @@
 # Changelog
 
+## 5.0.1 - 2026-10-26
+
+Rebuilt how handlers update state and how selectors observe it: mutation drafts, transactional in-place commits, and read-tracked selectors. Upgrading from 4.x requires no changes to user code — the public API is unchanged, and handlers that return replacement state keep working exactly as before.
+
+- Action handlers and global reducers now receive a temporary proxy draft. Mutate the draft and return nothing (or return the draft itself), or return replacement state as before — mixing both in one handler throws. Drafts are revoked when the handler settles, so they cannot be retained.
+- Handler writes are journaled privately and committed once per action after all handlers and global reducers succeed. A failing global reducer loses only its own writes while earlier successful stages of the same action are retained.
+- Commits update existing objects and arrays in place instead of producing new references. Retained state references therefore observe later commits, and `storeFreeze` is no longer combinable with mutable handlers.
+- Store-backed selectors (`store.select`, module `data$`) now track the state paths they read and rerun only when a committed change overlaps those paths. Whole-object selections emit after nested changes even when the reference is unchanged; primitive results still suppress equal values. Any change beneath an array — `length`, an index, or iteration — invalidates selectors reading that array.
+- Async selectors read live state and can observe commits that land after an `await`. A commit during a pending evaluation discards its result and coalesces into a fresh evaluation when it settles.
+- With `awaitStatePropagation: true`, dispatch now also waits for selector evaluations and delivery to their sources before the browser idle boundary.
+- `createCurrentSource` accepts a custom `equals` policy; store-backed streams use it to re-emit objects updated in place while still deduping equal primitives.
+- State must be a tree of plain objects, arrays, `Map`, `Set`, and `Date` values with data properties. Cycles, shared mutable references, and accessors are rejected.
+- `Map`, `Set`, and `Date` values are no longer fully opaque: handlers mutate them through their methods (`map.set`, `set.add`, `date.setMonth`) and selectors read them through theirs (`map.get`, `set.has`, `date.getTime`). Method calls are journaled privately and replayed onto the original instance at commit; Map values and Set members are wrapped too, so nested writes stay inside the transaction. Any change to a collection invalidates selectors reading it as a whole. Class instances and accessor-based values remain replace-only because their methods cannot be reliably intercepted.
+
 ## 4.0.6 - 2026-10-25
 
 - Aligned Streamix and Actionstack dependencies, bumping Streamix to 3.0.10 and updating Actionstack's peer dependency requirement to >=3.0.10.

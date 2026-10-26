@@ -331,6 +331,8 @@ function initializeDataStreams<
       const destroyed$ = getDestroyed$();
 
       const source = createCurrentSource<any>({
+        // Store-backed objects can be updated in place between emissions.
+        equals: (previous, next) => (next === null || typeof next !== 'object') && Object.is(previous, next),
         connect: (emit) => {
           let selectorSource: any;
           let selectorSubscription: any;

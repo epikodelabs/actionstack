@@ -146,17 +146,16 @@ export type ThunkCreator<
  * Defines a function that handles a specific action type to update state.
  *
  * An `ActionHandler` receives the current state of a slice and the payload
- * of the action that triggered it. It is responsible for computing and
- * returning the new state for that slice. The handler can be synchronous
- * (returning `T`) or asynchronous (returning `Promise<T>`), though typically
- * state updates themselves are synchronous results of an async action having completed its side effects.
+ * of the action that triggered it. Mutate the temporary draft and return void
+ * (or the draft), or return replacement state without mutating. Async handlers
+ * follow the same rules. Draft proxies are revoked when the handler settles.
  *
  * @param {T} state - The current state of the slice.
  * @param {any} [payload] - The payload of the action that triggered this handler. Optional, as not all actions have payloads.
- * @returns {T | Promise<T>} The new state of the slice, or a Promise resolving to the new state.
+ * @returns Replacement state or void, optionally wrapped in a Promise.
  */
 export type ActionHandler<State = any, Payload = any> =
-  (state: State, payload: Payload) => State | Promise<State>;
+  (state: State, payload: Payload) => State | void | Promise<State | void>;
 
 /**
  * Per-store registry for action handlers and thunks.
@@ -171,7 +170,7 @@ export interface ActionRegistry {
  * A function that takes the current state and an action, and returns
  * the updated state (excluding promises).
  */
-export type Reducer<T = any> = (state: T, action: Action) => T;
+export type Reducer<T = any> = (state: T, action: Action) => T | void;
 
 /**
  * Type alias for an asynchronous reducer function.
@@ -183,7 +182,7 @@ export type Reducer<T = any> = (state: T, action: Action) => T;
  * @param action - The action object being dispatched.
  * @returns A Promise resolving to the updated state.
  */
-export type AsyncReducer<T = any> = (state: T, action: Action) => Promise<T>;
+export type AsyncReducer<T = any> = (state: T, action: Action) => Promise<T | void>;
 
 /**
  * Defines the methods and properties available to middleware for interacting with the store.

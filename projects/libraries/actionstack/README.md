@@ -37,6 +37,51 @@ Start with one feature. Add middleware and execution settings when the applicati
 
 ## Get started
 
+### Mutable handlers and selective updates
+
+Action handlers and global reducers receive a temporary proxy draft. Mutate it
+and return nothing (or the draft), or return replacement state without mutating.
+Existing 4.x handlers keep working unchanged; upgrading requires no code changes:
+
+```ts
+const addItem = action('ADD_ITEM', (state: { items: string[] }, item: string) => {
+  state.items.push(item);
+});
+```
+
+Writes stay private until the action succeeds. Committing updates existing
+objects and arrays in place; explicit replacements replace their values.
+Retained state references therefore observe later commits. Never mutate state
+outside a handler, mutate state from a selector, or retain a handler's draft:
+drafts are revoked when the handler finishes. A failing global reducer loses
+its own writes while earlier successful stages are retained.
+
+Store-backed custom selectors track their reads and rerun once per relevant
+action. Whole-object selections emit after nested changes even if their reference
+is unchanged. Primitive results still suppress equal values. Any change beneath
+an array invalidates selectors reading that array, including `length`, an index,
+or iteration; individual array operations are not exposed as public patches.
+
+Async selectors read live state and can observe later commits after an `await`.
+Commits while an evaluation is pending discard its result and coalesce into a
+fresh evaluation when it settles. With `awaitStatePropagation: true`, dispatch
+also waits for selector evaluations and delivery to their sources, followed by
+the browser idle boundary; arbitrary asynchronous subscriber effects are not awaited.
+
+State must be a tree of plain objects, arrays, `Map`, `Set`, and `Date` values
+with data properties; cyclic or shared mutable references and accessors are
+rejected. `Map`, `Set`, and `Date` support their read methods through proxies
+and mutate through them inside handlers (`map.set`, `set.add`, `date.setMonth`),
+with any change invalidating selectors reading that value as a whole. Class
+instances and accessor-based values stay opaque: replace them instead of
+mutating. Direct in-place commits require writable state; do not combine
+mutable handlers with the `storeFreeze` meta-reducer.
+
+Tree validation includes Map keys/values and Set members. Native collections
+cannot have custom own properties; subclasses remain opaque. Draft methods and
+iterators expire with their reducer, and nested member edits are visible to
+later reducer stages before commit.
+
 ```bash
 npm install @epikodelabs/actionstack @epikodelabs/streamix
 ```

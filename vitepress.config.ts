@@ -47,6 +47,7 @@ export default defineConfig({
             { text: 'Changelog', link: '/CHANGELOG' },
             { text: 'Middleware', link: '/MIDDLEWARE' },
             { text: 'Modules', link: '/MODULES' },
+            { text: 'Mutations', link: '/MUTATIONS' },
             { text: 'Pricing', link: '/PRICING' },
             { text: 'Starter', link: '/STARTER' },
             { text: 'React', link: '/REACT' },
