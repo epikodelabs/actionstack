@@ -7,6 +7,7 @@
 - Rejected selector propagation completions now produce a console warning and allow later dispatches to continue when `awaitStatePropagation` is enabled.
 - Handler and reducer errors — including mixing draft mutation with a returned replacement — abort the action transactionally and are reported as starter middleware console warnings; `dispatch` does not reject.
 - Halved tree-validation cost per action: state is no longer re-validated when a batch is created, and stages that change nothing skip the walk entirely. Collections with custom own properties are still rejected before a draft reads them.
+- Dispatches no longer walk untouched state: commits resolve recorded placements instead of scanning the tree, and finalize skips clean subtrees. No-op dispatches are O(1) regardless of state size; benchmark dispatches on 50k-object states dropped 20–60% (`npm run benchmark:mutations`).
 
 ## 5.0.1 - 2026-10-26
 

@@ -104,27 +104,32 @@ export class MutationBatch {
     const writes: Write[] = [];
     const changes: StatePath[] = [];
     const revokers: (() => void)[] = [];
-    type Node = { base: any; shadow?: any; proxy: any; path: StatePath; array?: StatePath };
+    type Node = { base: any; shadow?: any; proxy: any; path: StatePath; array?: StatePath; parent?: Node; dirty?: boolean };
     const nodes = new WeakMap<object, Node>();
     const proxies = new WeakMap<object, Node>();
     const opaque = new WeakMap<object, any>();
     const collections = new WeakMap<object, any>();
-    const collectionNodes = new WeakMap<object, { shadow: any; modified: boolean }>();
+    const collectionNodes = new WeakMap<object, { shadow: any; modified: boolean; parent?: any; dirty?: boolean }>();
     let active = true;
     const assertActive = () => {
       if (!active) throw new Error('Cannot use an Actionstack draft after its reducer has finished.');
     };
     const unwrap = (value: any): any => proxies.get(value)?.base ?? value;
+    // A write marks its whole ancestor chain, so finalize can trust a clean node
+    // to finalize to itself and skip its entire subtree.
+    const markDirty = (start: { parent?: any; dirty?: boolean }): void => {
+      for (let ancestor = start; ancestor; ancestor = ancestor.parent) ancestor.dirty = true;
+    };
     const changed = (node: Node, key: PropertyKey) => {
       changes.push(node.array ?? [...node.path, key]);
     };
-    const wrap = (value: any, at: StatePath, array?: StatePath): any => {
+    const wrap = (value: any, at: StatePath, array?: StatePath, parent?: Node): any => {
       if (value === null || typeof value !== 'object') return value;
       if (!isContainer(value)) {
         if (isCollection(value)) {
           const cached = collections.get(value);
           if (cached) return cached;
-          const wrapped = wrapCollection(value, at, array);
+          const wrapped = wrapCollection(value, at, array, parent);
           collections.set(value, wrapped);
           return wrapped;
         }
@@ -153,7 +158,7 @@ export class MutationBatch {
       }
       const cached = nodes.get(value);
       if (cached) return cached.proxy;
-      const node: Node = { base: value, proxy: undefined, path: at, array: array ?? (Array.isArray(value) ? at : undefined) };
+      const node: Node = { base: value, proxy: undefined, path: at, array: array ?? (Array.isArray(value) ? at : undefined), parent, dirty: false };
       const current = () => node.shadow ?? node.base;
       const ensure = () => node.shadow ??= copy(node.base);
       const write = (key: PropertyKey, next: any): boolean => {
@@ -165,16 +170,18 @@ export class MutationBatch {
           ? { value: next } : { value: next, writable: true, enumerable: true, configurable: true });
         writes.push({ target: node.base, key, value: next });
         changed(node, key);
+        markDirty(node);
         return true;
       };
       const handle = Proxy.revocable(Array.isArray(value) ? [] : Object.create(Object.getPrototypeOf(value)), {
-        get: (_target, key) => wrap(Reflect.get(current(), key, node.proxy), [...at, key], node.array),
+        get: (_target, key) => wrap(Reflect.get(current(), key, node.proxy), [...at, key], node.array, node),
         set: (_target, key, next) => write(key, next),
         deleteProperty: (_target, key) => {
           if (!Object.hasOwn(current(), key)) return true;
           if (!Reflect.deleteProperty(ensure(), key)) throw new Error('Cannot delete non-configurable state property.');
           writes.push({ target: node.base, key, remove: true });
           changed(node, key);
+          markDirty(node);
           return true;
         },
         has: (_target, key) => key in current(),
@@ -183,7 +190,7 @@ export class MutationBatch {
           const descriptor = Object.getOwnPropertyDescriptor(current(), key);
           if (!descriptor) return undefined;
           return { ...descriptor, configurable: !(Array.isArray(value) && key === 'length'),
-            value: wrap(descriptor.value, [...at, key], node.array) };
+            value: wrap(descriptor.value, [...at, key], node.array, node) };
         },
         defineProperty: (_target, key, descriptor) => {
           if (!('value' in descriptor) || descriptor.get || descriptor.set ||
@@ -200,7 +207,7 @@ export class MutationBatch {
       revokers.push(handle.revoke);
       return node.proxy;
     };
-    const wrapCollection = (value: any, at: StatePath, array?: StatePath): any => {
+    const wrapCollection = (value: any, at: StatePath, array?: StatePath, parent?: any): any => {
       // Reject before any proxy read so accessor properties are never evaluated.
       if (Reflect.ownKeys(value).length)
         throw new Error('Actionstack state collections cannot have custom own properties.');
@@ -208,11 +215,11 @@ export class MutationBatch {
       // Failed stages simply discard their private shadows, including nested edits.
       const shadow: any = value instanceof Date ? new Date(value.getTime())
         : value instanceof Map ? new Map(value) : new Set(value);
-      const node = { shadow, modified: false };
+      const node = { shadow, modified: false, parent, dirty: false };
       collectionNodes.set(value, node);
       const segment = (key: any): PropertyKey =>
         (typeof key === 'object' && key !== null) || typeof key === 'function' ? '#' : key;
-      const member = (item: any, key: any): any => wrap(item, [...at, segment(key)], array);
+      const member = (item: any, key: any): any => wrap(item, [...at, segment(key)], array, node);
       const iteratorOf = (items: any[]) => {
         let index = 0;
         return {
@@ -232,6 +239,7 @@ export class MutationBatch {
       const methods = new Map<PropertyKey, (...args: any[]) => any>();
       const record = (op: CollectionOp): void => {
         node.modified = true;
+        markDirty(node);
         writes.push({ target: value, key: 'size', op });
         changes.push(array ?? at);
       };
@@ -320,14 +328,19 @@ export class MutationBatch {
       return handle.proxy;
     };
     // Materialize only changed branches; retain mappings to their committed identities.
+    // Tracked-and-clean subtrees return as-is: a write marks its ancestor chain dirty,
+    // so a node nothing wrote to (directly or beneath) holds committed state only.
+    // Untracked values (reducer-constructed replacements) are always walked to strip
+    // embedded draft proxies — O(replacement size), never O(state).
     const finalized = new WeakMap<object, any>();
     const finalize = (input: any): any => {
       const value = unwrap(input);
       if (isCollection(value)) {
+        const node = collectionNodes.get(value);
+        if (node && !(node.modified || node.dirty)) return value;
+        if (finalized.has(value)) return finalized.get(value);
         if (Reflect.ownKeys(value).length)
           throw new Error('Actionstack state collections cannot have custom own properties.');
-        if (finalized.has(value)) return finalized.get(value);
-        const node = collectionNodes.get(value);
         const source = node?.shadow ?? value;
         let result: any;
         let modified = node?.modified ?? false;
@@ -354,8 +367,9 @@ export class MutationBatch {
         return result;
       }
       if (!isContainer(value)) return value;
-      if (finalized.has(value)) return finalized.get(value);
       const node = nodes.get(value);
+      if (node && !node.dirty) return value;
+      if (finalized.has(value)) return finalized.get(value);
       const source = node?.shadow ?? value;
       let result = source;
       // Register first so invalid cyclic assignments can be diagnosed by validateTree.
