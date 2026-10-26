@@ -168,6 +168,66 @@ describe('store', () => {
     expect(count).toBe(1);
   });
 
+  it('reloads after an unload that is still queued', async () => {
+    const store = createStore();
+    const mod = createModule({
+      slice: 'reload-race',
+      initialState: { count: 0 },
+      actions: { inc: action('INC', (state: any) => { state.count++; }) },
+      selectors: { count: (state: any) => state.count },
+    });
+    await store.loadModule(mod);
+    const oldStream = mod.data$.count();
+    const unload = store.unloadModule(mod, true);
+    await store.loadModule(mod);
+    await unload;
+
+    expect(oldStream.disposed).toBeTrue();
+    expect(mod.destroyed).toBeFalse();
+    await store.dispatch({ type: 'reload-race/INC' });
+    expect(await readState(store, 'reload-race')).toEqual({ count: 1 });
+    expect(await firstValueFrom(mod.data$.count())).toBe(1);
+  });
+
+  it('serializes simultaneous loads of the same module', async () => {
+    const store = createStore();
+    const mod = createModule({ slice: 'simultaneous', initialState: {}, actions: {} });
+    const configure = spyOn(mod, 'configure').and.callThrough();
+    await Promise.all([store.loadModule(mod), store.loadModule(mod)]);
+    await flush(store);
+    expect(configure).toHaveBeenCalledTimes(1);
+    expect((await readState<any>(store, 'system'))._modules.filter(
+      (slice: string) => slice === 'simultaneous'
+    ).length).toBe(1);
+  });
+
+  it('recovers from a rejected selector propagation completion', async () => {
+    const store = createStore({ awaitStatePropagation: true });
+    const mod = createModule({
+      slice: 'propagation-recovery', initialState: 0,
+      actions: { inc: action('INC', (state: number) => state + 1) },
+    });
+    await store.loadModule(mod);
+    await flush(store);
+    const failure = new Error('selector notification failed');
+    const all = Promise.all.bind(Promise);
+    let injected = false;
+    // Inject a rejected completion at the selector registry's empty listener join.
+    spyOn(Promise, 'all').and.callFake(((values: any) => {
+      if (!injected && Array.isArray(values) && values.length === 0) {
+        injected = true;
+        return Promise.reject(failure);
+      }
+      return all(values);
+    }) as typeof Promise.all);
+
+    await store.dispatch({ type: 'propagation-recovery/INC' });
+    expect(injected).toBeTrue();
+    expect(console.warn).toHaveBeenCalledWith('Error propagating state to selectors:', failure);
+    await store.dispatch({ type: 'propagation-recovery/INC' });
+    expect(await readState(store, 'propagation-recovery')).toBe(2);
+  });
+
   it('dispatch applies action handlers and is serialized via internal queue', async () => {
     const store = createStore();
     const firstStarted = deferred<void>();

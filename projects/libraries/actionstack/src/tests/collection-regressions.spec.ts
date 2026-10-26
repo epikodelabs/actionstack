@@ -37,7 +37,9 @@ describe('collection transaction regressions', () => {
     const map = new Map();
     const getter = jasmine.createSpy().and.returnValue({ n: 1 });
     Object.defineProperty(map, 'metadata', { get: getter });
-    expect(() => new MutationBatch({ map })).toThrowError(/custom own properties/);
+    const batch = new MutationBatch({ map });
+    await expectAsync(batch.run([], draft => { void draft.map; }))
+      .toBeRejectedWithError(/custom own properties/);
     expect(getter).not.toHaveBeenCalled();
   });
   it('carries nested Map and Set member writes into later stages', async () => {

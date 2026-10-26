@@ -58,8 +58,8 @@ export type Store<TState = any, TDependencies = any> = {
     };
 
     select: {
-        <R = any>(selector: (state: Readonly<TState>) => Promise<R>, defaultValue?: R): Atom<R>;
         <R = any>(selector: (state: Readonly<TState>) => R, defaultValue?: R): Atom<R>;
+        <R = any>(selector: (state: Readonly<TState>) => Promise<R>, defaultValue?: R): Atom<R>;
     };
 
     populate: (...modules: FeatureModule[]) => Promise<void>;
@@ -182,7 +182,9 @@ export function createStore<T = any>(
   const publish = (changes: StatePath[]): void => {
     if (!changes.length) return;
     const completion = selectors.notify(changes);
-    propagation = Promise.all([propagation, completion]).then(() => undefined);
+    propagation = Promise.all([propagation, completion]).then(() => undefined).catch(error => {
+      console.warn('Error propagating state to selectors:', error);
+    });
   };
   const queue = createQueue();
 
@@ -383,13 +385,13 @@ export function createStore<T = any>(
    * and a `moduleLoaded` action is dispatched once the module is successfully loaded.
    */
   const loadModule = async (module: FeatureModule): Promise<void> => {
-    if (modules.some((m) => m.slice === module.slice)) {
-      return Promise.resolve(); // Already loaded
-    }
-
-    module.configure(store);
-
     return queue.enqueue(async () => {
+      if (modules.some((m) => m.slice === module.slice)) {
+        return; // Already loaded
+      }
+
+      module.configure(store);
+
       // Register the module
       modules = [...modules, module];
 
@@ -567,6 +569,8 @@ export function createStore<T = any>(
    * Initializes the store with system actions and state setup
    */
   const initializeStore = (storeInstance: Store<any>) => {
+    // System actions are used immediately, before queued module registration runs.
+    systemModule.configure(storeInstance);
     // Bind system actions using the store's dispatch method
     registerModule(storeInstance, systemModule);
 

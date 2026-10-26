@@ -17,6 +17,8 @@ Modules are like mission control, handling **actions** and **thunks** with style
 ### 3. Lifecycle Management: The Time Traveler
 Modules have a lifecycle smoother than a superhero’s time-travel gadget. With `init`, `configure`, and `destroy` methods, you can dynamically load or unload modules as needed—perfect for features that don’t need to stick around forever. The `loaded$` and `destroyed$` atoms keep everything in sync, ensuring data and actions don’t go rogue when a module retires.
 
+Unloading a module destroys its lifecycle and disposes its `data$` selector streams. After reloading the same module, acquire fresh streams from `module.data$` instead of reusing the ones you held before the unload — the old ones stay disposed. Await `store.loadModule(module)` before calling its actions or subscribing, since loading is serialized with unloads on the store queue.
+
 ### 4. Dependency Injection: The Sidekick Supplier
 The `createModule` function lets you inject a **dependencies** object, like handing your superhero a trusty sidekick (e.g., `userAPI`). These dependencies flow into thunks, keeping business logic separate from external services. This makes your code testable, maintainable, and ready to save the day without breaking a sweat.
 

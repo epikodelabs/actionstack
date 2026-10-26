@@ -85,7 +85,7 @@ export class MutationBatch {
   private identities = new WeakMap<object, any>();
   private writes: Write[] = [];
   readonly changes: StatePath[] = [];
-  constructor(public state: any) { validateTree(state); }
+  constructor(public state: any) {}
 
   private live = (value: any): any => value && typeof value === 'object'
     ? this.identities.get(value) ?? value : value;
@@ -193,6 +193,9 @@ export class MutationBatch {
       return node.proxy;
     };
     const wrapCollection = (value: any, at: StatePath, array?: StatePath): any => {
+      // Reject before any proxy read so accessor properties are never evaluated.
+      if (Reflect.ownKeys(value).length)
+        throw new Error('Actionstack state collections cannot have custom own properties.');
       // A successful stage materializes this shadow into the next working state.
       // Failed stages simply discard their private shadows, including nested edits.
       const shadow: any = value instanceof Date ? new Date(value.getTime())
@@ -391,7 +394,8 @@ export class MutationBatch {
         };
         root = install(this.state, 0);
       }
-      validateTree(root, new WeakSet(), this.live);
+      // Unchanged stages keep the committed tree untouched; only real edits need the walk.
+      if (writes.length || replacement) validateTree(root, new WeakSet(), this.live);
       for (const write of writes) {
         if (write.op) {
           if (write.op.kind === 'insert') {

@@ -28,7 +28,7 @@ const increment = action('increment', (state: number, amount: number) => state +
 
 Two rules keep transactions unambiguous:
 
-- **Mutate or return — never both.** A handler that mutates its draft and also returns replacement state throws.
+- **Mutate or return — never both.** A handler that mutates its draft and also returns replacement state aborts the whole action: nothing commits, and the starter middleware logs the error. Dispatch still resolves — handler errors surface as console warnings, not as rejected dispatches.
 - **Do not retain the draft.** Drafts are revoked when the handler settles; touching one afterwards throws. Copy out the data you need, not the proxy.
 
 ## 🧱 How commits work
