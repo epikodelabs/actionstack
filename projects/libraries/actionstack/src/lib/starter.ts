@@ -11,7 +11,7 @@ import type { Action, ActionRegistry, AsyncAction } from './types';
  * It's the `config` parameter received by middleware functions like `exclusive` and `concurrent`.
  */
 export interface MiddlewareConfig<TState = any, TDependencies extends Record<string, any> = Record<string, any>> {
-  dispatch: (action: Action | AsyncAction) => Promise<void>;
+  dispatch: (action: Action | AsyncAction) => Promise<any>;
   getState: () => TState;
   dependencies: () => TDependencies;
   queue: ActionQueue;
@@ -59,9 +59,10 @@ export function createActionHandler(
     if (typeof action === 'function') {
       const runThunk = async () =>
         (action as AsyncAction)(
-          async (dispatchedAction: Action | AsyncAction) => {
-            await handleAction(dispatchedAction, next, true);
-          },
+          // Return the nested result so `await dispatch(thunk)` inside a thunk
+          // resolves with the inner thunk's value instead of discarding it.
+          async (dispatchedAction: Action | AsyncAction) =>
+            handleAction(dispatchedAction, next, true),
           getState,
           dependencies()
         );
@@ -74,17 +75,21 @@ export function createActionHandler(
           inlineIfRunning: lockThunks && isNestedDispatch,
         });
 
+      // Preserve `next`'s resolution (undefined for plain actions, a thunk's
+      // value when a middleware forwards one) while triggered thunks still
+      // run log-only after it.
+      let result: any;
       if (lockThunks && isNestedDispatch && nestedQueue) {
-        await nestedQueue.enqueue(run);
+        result = await nestedQueue.enqueue(run);
       } else {
-        await run();
+        result = await run();
       }
 
       if (afterAction) {
         await afterAction(action, next, isNestedDispatch);
       }
 
-      return;
+      return result;
     }
   };
 

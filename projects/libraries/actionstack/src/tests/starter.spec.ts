@@ -436,6 +436,22 @@ describe('starter', () => {
       );
     });
 
+    ['exclusive', 'concurrent'].forEach((strategy) => {
+      it(`resolves nested thunk results through the injected dispatch in ${strategy} mode`, async () => {
+        const inner = thunk('TEST/INNER', () => async () => 'inner payload');
+
+        const outer = thunk('TEST/OUTER', () => async (dispatch: any) => {
+          const value = await dispatch(inner());
+          return { wrapped: value };
+        });
+
+        const { dispatch } = createHarness(strategy);
+        await expectAsync(dispatch(outer() as any)).toBeResolvedTo({
+          wrapped: 'inner payload',
+        });
+      });
+    });
+
     it('runs matching thunks sequentially in exclusive mode', async () => {
       const events: string[] = [];
       const t1Started = deferred<void>();
