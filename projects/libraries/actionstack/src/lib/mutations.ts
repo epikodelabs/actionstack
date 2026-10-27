@@ -46,10 +46,15 @@ export const isContainer = (value: any): boolean => value !== null &&
 
 const keys = (value: any) => Reflect.ownKeys(value).filter(key =>
   !(Array.isArray(value) && key === 'length'));
+const dataValue = (value: any, key: PropertyKey): any => {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+  if (!('value' in descriptor)) throw new Error('Actionstack state does not support accessors.');
+  return descriptor.value;
+};
 const copy = (value: any): any => {
   const result = Array.isArray(value) ? new Array(value.length) : Object.create(Object.getPrototypeOf(value));
   for (const key of keys(value)) Object.defineProperty(result, key, {
-    value: value[key], writable: true, configurable: true, enumerable: true,
+    value: dataValue(value, key), writable: true, configurable: true, enumerable: true,
   });
   return result;
 };
@@ -104,7 +109,7 @@ export class MutationBatch {
     const writes: Write[] = [];
     const changes: StatePath[] = [];
     const revokers: (() => void)[] = [];
-    type DirtyLink = { parent?: DirtyLink; dirty?: boolean };
+    type DirtyLink = { parent?: DirtyLink; dirty?: boolean; fresh?: boolean };
     type Node = DirtyLink & { base: any; shadow?: any; proxy: any; path: StatePath; array?: StatePath };
     const nodes = new WeakMap<object, Node>();
     const proxies = new WeakMap<object, Node>();
@@ -129,6 +134,8 @@ export class MutationBatch {
     };
     const wrap = (value: any, at: StatePath, array?: StatePath, parent?: DirtyLink): any => {
       if (value === null || typeof value !== 'object') return value;
+      if (proxies.has(value)) return value;
+      if (parent?.fresh) fresh.add(value);
       if (!isContainer(value)) {
         if (isCollection(value)) {
           const cached = collections.get(value);
@@ -162,7 +169,7 @@ export class MutationBatch {
       }
       const cached = nodes.get(value);
       if (cached) return cached.proxy;
-      const node: Node = { base: value, proxy: undefined, path: at, array: array ?? (Array.isArray(value) ? at : undefined), parent, dirty: fresh.has(value) };
+      const node: Node = { base: value, proxy: undefined, path: at, array: array ?? (Array.isArray(value) ? at : undefined), parent, dirty: fresh.has(value), fresh: fresh.has(value) };
       const current = () => node.shadow ?? node.base;
       const ensure = () => node.shadow ??= copy(node.base);
       const write = (key: PropertyKey, next: any): boolean => {
@@ -180,7 +187,13 @@ export class MutationBatch {
         return true;
       };
       const handle = Proxy.revocable(Array.isArray(value) ? [] : Object.create(Object.getPrototypeOf(value)), {
-        get: (_target, key) => wrap(Reflect.get(current(), key, node.proxy), [...at, key], node.array, node),
+        get: (_target, key) => {
+          const source = current();
+          const descriptor = Object.getOwnPropertyDescriptor(source, key);
+          if (descriptor && !('value' in descriptor))
+            throw new Error('Actionstack state does not support accessors.');
+          return wrap(Reflect.get(source, key, node.proxy), [...at, key], node.array, node);
+        },
         set: (_target, key, next) => write(key, next),
         deleteProperty: (_target, key) => {
           if (!Object.hasOwn(current(), key)) return true;
@@ -195,6 +208,7 @@ export class MutationBatch {
         getOwnPropertyDescriptor: (_target, key) => {
           const descriptor = Object.getOwnPropertyDescriptor(current(), key);
           if (!descriptor) return undefined;
+          if (!('value' in descriptor)) throw new Error('Actionstack state does not support accessors.');
           return { ...descriptor, configurable: !(Array.isArray(value) && key === 'length'),
             value: wrap(descriptor.value, [...at, key], node.array, node) };
         },
@@ -221,7 +235,7 @@ export class MutationBatch {
       // Failed stages simply discard their private shadows, including nested edits.
       const shadow: any = value instanceof Date ? new Date(value.getTime())
         : value instanceof Map ? new Map(value) : new Set(value);
-      const node = { shadow, modified: false, parent, dirty: fresh.has(value) };
+      const node = { shadow, modified: false, parent, dirty: fresh.has(value), fresh: fresh.has(value) };
       collectionNodes.set(value, node);
       const segment = (key: any): PropertyKey =>
         (typeof key === 'object' && key !== null) || typeof key === 'function' ? '#' : key;
@@ -249,6 +263,10 @@ export class MutationBatch {
         writes.push({ target: value, key: 'size', op });
         changes.push(array ?? at);
       };
+      const registerFresh = (item: any): void => {
+        if (item !== null && typeof item === 'object' && !nodes.has(item) && !collectionNodes.has(item))
+          fresh.add(item);
+      };
       if (value instanceof Map) {
         methods.set('get', (key: any) => member(shadow.get(storedKey(key)), key));
         methods.set('has', (key: any) => shadow.has(storedKey(key)));
@@ -256,6 +274,8 @@ export class MutationBatch {
           const baseKey = storedKey(key);
           const baseNext = unwrap(next);
           if (shadow.has(baseKey) && Object.is(shadow.get(baseKey), baseNext)) return proxy;
+          registerFresh(baseKey);
+          registerFresh(baseNext);
           shadow.set(baseKey, baseNext);
           record({ kind: 'insert', key: baseKey, value: baseNext });
           return proxy;
@@ -279,6 +299,7 @@ export class MutationBatch {
         methods.set('add', (item: any) => {
           const base = storedKey(item);
           if (shadow.has(base)) return proxy;
+          registerFresh(base);
           shadow.add(base);
           record({ kind: 'insert', value: base });
           return proxy;
@@ -383,8 +404,9 @@ export class MutationBatch {
       // Register first so invalid cyclic assignments can be diagnosed by validateTree.
       finalized.set(value, source);
       for (const key of keys(source)) {
-        const child = finalize(source[key]);
-        if (child !== source[key]) {
+        const previous = dataValue(source, key);
+        const child = finalize(previous);
+        if (child !== previous) {
           if (result === value) result = copy(value);
           Object.defineProperty(result, key, { value: child, writable: true, enumerable: true, configurable: true });
           this.place(result, key);
@@ -452,8 +474,8 @@ export class MutationBatch {
     // Preflight all targets before the first write, avoiding partial commits.
     for (const write of this.writes) {
       const target = this.live(write.target);
+      if (!Object.isExtensible(target)) throw new Error('Actionstack committed state must be mutable and extensible.');
       if (write.op) {
-        if (!Object.isExtensible(target)) throw new Error('Actionstack committed state must be mutable.');
         continue;
       }
       const descriptor = Object.getOwnPropertyDescriptor(target, write.key);
@@ -509,8 +531,9 @@ export class MutationBatch {
       if (!isContainer(value)) return live;
       seen.add(value);
       for (const key of keys(value)) {
-        const child = prepare(value[key], seen);
-        if (child !== value[key]) Object.defineProperty(value, key, {
+        const previous = dataValue(value, key);
+        const child = prepare(previous, seen);
+        if (child !== previous) Object.defineProperty(value, key, {
           value: child, writable: true, enumerable: true, configurable: true,
         });
       }

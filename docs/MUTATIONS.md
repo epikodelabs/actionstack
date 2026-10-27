@@ -2,7 +2,7 @@
 
 Version 5 rebuilt the inside of the store: action handlers now write through mutable drafts, commits are transactional, and selectors track exactly the state they read. The result is less boilerplate, fewer wasted selector runs, and no spread-operator gymnastics.
 
-**Upgrading from 4.x requires no changes to your code.** The public API is unchanged, and handlers that return replacement state keep working exactly as before. The new draft style is opt-in, one handler at a time.
+Existing handlers that return replacement state remain supported. The draft style can be adopted one handler at a time. When upgrading from 4.x, review awaitable module actions, live state references, and the Angular adapter entry point described below.
 
 ## ✍️ Mutate the draft, return nothing
 
@@ -97,9 +97,11 @@ Class instances and accessor-based values remain opaque: their methods can touch
 
 ## 🛣️ Upgrading from 4.x
 
-Nothing to do. Install the new version and your existing code runs: handlers that return state, global reducers, selectors, and thunks all keep their contracts. Two behavioral notes worth knowing:
+Replacement-return handlers remain supported. Module actions now return dispatch promises rather than action objects; await completion and handle rejected promises. Import Angular helpers from `@epikodelabs/actionstack/angular`. Also review these state and selector differences:
 
 - Selectors that return whole state objects now re-emit when nested properties change, even without a reference change. If you relied on reference inequality to filter emissions, rely on the value instead.
 - Commits write in place, so state references remain stable across updates. Memoization keyed on state identity should key on content.
 
 When you want the shorter syntax, convert a handler by deleting the spread and returning nothing — the draft does the rest.
+
+Commit targets must be ordinary extensible objects or native collections. Frozen, sealed, and non-extensible write targets are rejected before any journal entry is applied. Accessor properties are rejected without invoking their getters.

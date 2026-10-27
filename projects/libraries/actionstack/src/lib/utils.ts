@@ -252,7 +252,7 @@ const combineReducers = (reducers: Tree<Reducer | AsyncReducer>): AsyncReducer =
       const currentPath = [...path, key];
 
       if (typeof reducer === "function") {
-        reducerMap.set(currentPath.join("."), { reducer, path: currentPath });
+        reducerMap.set(JSON.stringify(currentPath), { reducer, path: currentPath });
       } else if (typeof reducer === "object" && reducer !== null) {
         // Recursively flatten the nested reducers.
         const childReducers = flattenReducers(reducer, currentPath);
@@ -316,7 +316,7 @@ const combineReducers = (reducers: Tree<Reducer | AsyncReducer>): AsyncReducer =
 
       try {
         const updatedState = await reducer(currentState, action);
-        if (currentState !== updatedState) {
+        if (updatedState !== undefined && currentState !== updatedState) {
           // Apply the change to the state using applyChange
           state = await applyChange(state, path, updatedState, modified);
         }

@@ -33,9 +33,11 @@ export interface Action<T = any> {
  * @template TState - The store state shape.
  * @template TDependencies - Dependencies available to async actions.
  */
-export type Dispatch<TState = any, TDependencies = any> = (
-  action: Action | AsyncAction<TState, TDependencies>
-) => Promise<any>;
+export interface Dispatch<TState = any, TDependencies = any> {
+  <TResult>(action: AsyncAction<TState, TDependencies, TResult>): Promise<TResult>;
+  (action: Action): Promise<void>;
+  (action: Action | AsyncAction<TState, TDependencies>): Promise<any>;
+}
 
 /**
  * Getter function for the current store state.
@@ -310,11 +312,10 @@ export type Streams<S extends Record<string, (state: any) => any>> = {
  * intersection; the creator's original action-returning call signature is
  * deliberately dropped, because bound methods resolve with promises.
  */
-export type BoundAction<T> = T extends ThunkAction<infer _State, infer _Dependencies, infer TResult>
-  ? ((...args: Parameters<T>) => Promise<TResult>) & { [K in keyof T]: T[K] }
-  : T extends (...args: infer A) => any
-    ? ((...args: A) => Promise<any>) & { [K in keyof T]: T[K] }
-    : never;
+export type BoundAction<T> = T extends (...args: infer A) => infer Created
+  ? ((...args: A) => Promise<Created extends (...args: any[]) => infer Result ? Awaited<Result> : void>) &
+    { [K in keyof T]: T[K] }
+  : never;
 
 /**
  * Maps a module's action creators to their store-bound methods.

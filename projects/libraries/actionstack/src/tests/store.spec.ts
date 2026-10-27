@@ -626,13 +626,11 @@ describe('store', () => {
     const onFail = jasmine.createSpy('loaded$.fail');
     const badModule: any = {
       slice: 'badmod',
-      initialState: {},
+      get initialState() { throw new Error('boom'); },
       actions: {},
       dependencies: {},
       loaded$: {
-        next: () => {
-          throw new Error('boom');
-        },
+        next: () => {},
         fail: onFail,
       },
       destroyed$: { next: () => {} },

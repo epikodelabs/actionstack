@@ -184,7 +184,11 @@ export function createStore<T = any>(
   let propagation: Promise<void> = Promise.resolve();
   const publish = (changes: StatePath[]): void => {
     if (!changes.length) return;
-    const completion = selectors.notify(changes);
+    let completion: Promise<void>;
+    try { completion = selectors.notify(changes); } catch (error) {
+      console.warn('Error propagating state to selectors:', error);
+      return;
+    }
     propagation = Promise.all([propagation, completion]).then(() => undefined).catch(error => {
       console.warn('Error propagating state to selectors:', error);
     });
@@ -198,12 +202,10 @@ export function createStore<T = any>(
    * If any validation fails, a warning is logged to the console and the action is not dispatched.
    * After validation, the action is processed by the reducer, and the global state is updated accordingly.
    */
-  let dispatch: Dispatch<T, any> = async (action) => {
+  let dispatch: Dispatch<T, any> = async (action: Action | AsyncAction<T, any>): Promise<any> => {
     if (typeof action === 'function') {
-      // Preserve the thunk's return value so a thunk forwarded past the starter
-      // still resolves the dispatch promise with its result.
       return await (action as AsyncAction<T, any>)(
-        (nestedAction) => store.dispatch(nestedAction as any),
+        (nestedAction: Action | AsyncAction<T, any>): Promise<any> => store.dispatch(nestedAction as any),
         () => state,
         pipeline.dependencies
       );
@@ -269,32 +271,22 @@ export function createStore<T = any>(
     processed: any = {},
     origin: string = ''
   ): any => {
-    if (Array.isArray(source)) {
-      return source.map((item) => processDependencies(item, processed));
-    }
+    if (Array.isArray(source)) return source.map(item => processDependencies(item, {}, origin));
+    if (source === null || typeof source !== 'object') return source;
+    const prototype = Object.getPrototypeOf(source);
+    if (prototype !== Object.prototype && prototype !== null) return source;
 
-    if (source && typeof source === 'object') {
-      // Check if the source is a plain object
-      if (
-        typeof source.constructor === 'function' &&
-        source.constructor !== Object
-      ) {
-        return source;
+    for (const [key, value] of Object.entries(source)) {
+      if (!Object.hasOwn(processed, key)) {
+        Object.defineProperty(processed, key, {
+          value: processDependencies(value, {}, origin),
+          enumerable: true, writable: true, configurable: true,
+        });
       } else {
-        for (const [key, value] of Object.entries(source)) {
-          if (!processed.hasOwnProperty(key)) {
-            processed[key] = processDependencies(value, processed, origin);
-          } else {
-            console.warn(
-              `Overlapping property '${key}' found in dependencies from module: ${origin}. The existing value will be preserved.`
-            );
-          }
-        }
-        return processed; // Assume it's a class instance or other non-plain object
+        console.warn(`Overlapping property '${key}' found in dependencies from module: ${origin}. The existing value will be preserved.`);
       }
     }
-
-    return source;
+    return processed;
   };
 
   /**
@@ -326,112 +318,64 @@ export function createStore<T = any>(
    * Populates the store with an array of feature modules.
    * This method ensures modules are initialized and loaded into the store.
    */
-  const populate = async (...moduleList: FeatureModule[]): Promise<void> => {
-    return queue.enqueue(async () => {
-      // Load modules sequentially within the same queue operation
-      for (const module of moduleList) {
-        if (modules.some((m) => m.slice === module.slice)) {
-          console.warn(`Module ${module.slice} already loaded, skipping`);
-          continue;
-        }
+  const installModule = async (module: FeatureModule, warnDuplicate = false): Promise<void> => {
+    if (modules.some(m => m.slice === module.slice)) {
+      if (warnDuplicate) console.warn(`Module ${module.slice} already loaded, skipping`);
+      return;
+    }
 
-        try {
-          if (typeof module.configure === 'function') {
-            module.configure(store);
-          }
-
-          // Register the module first
-          modules = [...modules, module];
-
-          // Register action handlers
-          registerActionHandlers(module, registry);
-          registerThunks(module, registry);
-
-          // Inject dependencies
-          injectDependencies();
-
-          // Initialize state if not already present
-          const slicePath = (module.slice || 'main').split('/');
-          if (getProperty(state, slicePath) === undefined) {
-            const batch = new MutationBatch(state);
-            await batch.run([], draft => {
-              let parent = draft;
-              for (const key of slicePath.slice(0, -1)) parent = parent[key] ??= {};
-              parent[slicePath[slicePath.length - 1]] = module.initialState;
-            });
-            state = batch.commit();
-            publish(batch.changes);
-          }
-          
-          // Dispatch system action
-          sysActions.moduleLoaded(module);
-          // Update current state
-          // Signal that module state and selectors are ready
-          module.loaded$.next();
-        } catch (error) {
-          console.warn(`Failed to load module ${module.slice}:`, error);
-
-          // Clean up on failure
-          modules = modules.filter((m) => m.slice !== module.slice);
-
-          // Signal error on loaded$ atom
-          module.loaded$.fail(error);
-
-          throw error; // Re-throw to let caller handle
-        }
-      }
-    });
-  };
-
-  /**
-   * Loads a new feature module into the store if it isn't already loaded.
-   * It ensures that dependencies are injected, the global state is updated,
-   * and a `moduleLoaded` action is dispatched once the module is successfully loaded.
-   */
-  const loadModule = async (module: FeatureModule): Promise<void> => {
-    return queue.enqueue(async () => {
-      if (modules.some((m) => m.slice === module.slice)) {
-        return; // Already loaded
+    const previousModules = modules;
+    const previousDependencies = pipeline.dependencies;
+    const previousHandlers = new Map(registry.actionHandlers);
+    const previousThunks = new Map(registry.registeredThunks);
+    let batch: MutationBatch | undefined;
+    try {
+      if (typeof module.configure === 'function') module.configure(store);
+      const slicePath = (module.slice || 'main').split('/');
+      if (getProperty(state, slicePath) === undefined) {
+        batch = new MutationBatch(state);
+        await batch.run([], draft => {
+          let parent = draft;
+          for (const key of slicePath.slice(0, -1)) parent = parent[key] ??= {};
+          parent[slicePath[slicePath.length - 1]] = module.initialState;
+        });
       }
 
-      module.configure(store);
-
-      // Registration, dependencies, and state installation share one failure
-      // boundary: any failure unwinds all of it so a repaired retry
-      // starts clean instead of hitting the already-loaded shortcut.
       modules = [...modules, module];
+      registerActionHandlers(module, registry);
+      registerThunks(module, registry);
+      injectDependencies();
+      if (batch) state = batch.commit();
+    } catch (error) {
+      modules = previousModules;
+      pipeline.dependencies = previousDependencies;
+      registry.actionHandlers.clear();
+      for (const [key, handler] of previousHandlers) registry.actionHandlers.set(key, handler);
+      registry.registeredThunks.clear();
+      for (const [key, creator] of previousThunks) registry.registeredThunks.set(key, creator);
+      try { module.loaded$.fail(error); } catch { /* Preserve the installation failure. */ }
+      try { module.destroy?.(false); } catch { /* A failed module must not replace the original error. */ }
+      throw error;
+    }
 
-      try {
-        registerActionHandlers(module, registry);
-        registerThunks(module, registry);
-
-        // Inject dependencies
-        injectDependencies();
-
-        const slicePath = (module.slice || 'main').split('/');
-        if (getProperty(state, slicePath) === undefined) {
-          const batch = new MutationBatch(state);
-          await batch.run([], draft => {
-            let parent = draft;
-            for (const key of slicePath.slice(0, -1)) parent = parent[key] ??= {};
-            parent[slicePath[slicePath.length - 1]] = module.initialState;
-          });
-          state = batch.commit();
-          publish(batch.changes);
-        }
-      } catch (error) {
-        modules = modules.filter((m) => m.slice !== module.slice);
-        unregisterActionHandlers(module, registry);
-        unregisterThunks(module, registry);
-        ejectDependencies(module);
-        module.loaded$.fail(error);
-        throw error;
-      }
-
-      sysActions.moduleLoaded(module);
-      module.loaded$.next();
-    });
+    // Observers run after the installation is committed. Their failures cannot
+    // roll back state that another observer has already seen.
+    if (batch) publish(batch.changes);
+    if (settings.dispatchSystemActions) {
+      void sysActions.moduleLoaded(module).catch(() => {});
+    }
+    try { module.loaded$.next(); } catch (error) {
+      console.warn(`Error notifying loaded module ${module.slice}:`, error);
+    }
   };
+
+  const populate = (...moduleList: FeatureModule[]): Promise<void> =>
+    queue.enqueue(async () => {
+      for (const module of moduleList) await installModule(module, true);
+    });
+
+  const loadModule = (module: FeatureModule): Promise<void> =>
+    queue.enqueue(() => installModule(module));
 
   /**
    * Unloads a feature module from the store, optionally clearing its state.
@@ -476,7 +420,9 @@ export function createStore<T = any>(
         publish(batch.changes);
       }
       // Dispatch module unloaded action
-      sysActions.moduleUnloaded(module);
+      if (settings.dispatchSystemActions) {
+        void sysActions.moduleUnloaded(module).catch(() => {});
+      }
       if (typeof module.destroy === 'function') {
         module.destroy(false);
       } else {
@@ -592,7 +538,9 @@ export function createStore<T = any>(
     sysActions = systemModule.actions;
 
     // Initialize state and mark store as initialized
-    sysActions.initializeState();
+    if (settings.dispatchSystemActions) {
+      void sysActions.initializeState().catch(() => {});
+    }
 
     console.log(
       '%cYou are using Actionstack. Happy coding! 🎉',
@@ -601,7 +549,7 @@ export function createStore<T = any>(
 
     // The observable system marker honors the setting; internal bookkeeping always runs.
     if (settings.dispatchSystemActions) {
-      sysActions.storeInitialized();
+      void sysActions.storeInitialized().catch(() => {});
     }
   };
 
@@ -617,7 +565,7 @@ export function createStore<T = any>(
 
   store = enhancer(() => store)(settings);
   let originalDispatch = store.dispatch;
-  store.dispatch = (action) => {
+  store.dispatch = (action: Action | AsyncAction<T, any>): Promise<any> => {
     // Fast path: avoid creating closures/promises if no tracking is needed
     if (!settings.awaitStatePropagation) {
       return originalDispatch(action);

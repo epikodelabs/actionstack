@@ -153,7 +153,8 @@ Store settings include `awaitStatePropagation`, `dispatchSystemActions`, `enable
 
 | Entry point | Includes |
 | --- | --- |
-| `@epikodelabs/actionstack` | Store, feature modules, actions, thunks, selectors, middleware utilities, and Angular's `atomToSignal` helper. |
+| `@epikodelabs/actionstack` | Store, feature modules, actions, thunks, selectors, and middleware utilities. |
+| `@epikodelabs/actionstack/angular` | Optional Angular adapter exposing `atomToSignal`; requires Angular 16 or later. |
 | `@epikodelabs/actionstack/tools` | Logging, state-freezing, and performance middleware. |
 
 Angular helpers currently ship from the core entry point. The repository also contains a React demo; it does not define separate `/react` or `/vue` package entry points.
@@ -198,3 +199,5 @@ Have a feature that is awkward to model, an async edge case, or a useful example
 Actionstack is available at no charge under the [MIT License](https://github.com/epikodelabs/actionstack/blob/main/LICENSE). Optional paid support, consulting, and custom delivery are available by separate written agreement.
 
 [Pricing](https://epikodelabs.github.io/actionstack/PRICING) · [Terms of Service](https://epikodelabs.github.io/actionstack/TERMS-OF-SERVICE) · [Privacy Policy](https://epikodelabs.github.io/actionstack/PRIVACY-POLICY) · [Refund Policy](https://epikodelabs.github.io/actionstack/REFUND-POLICY)
+
+Module action methods return promises: await them for processing completion and catch failures. This changes the old action-object return contract. Within an exclusive thunk, use its injected `dispatch` and `getState` for nested work so it runs inside the active workflow. Async selector reads are live; 5.x `awaitStatePropagation` waits for selector settlement and the browser idle boundary, but does not await arbitrary subscriber side effects.

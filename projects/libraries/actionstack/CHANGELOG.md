@@ -1,5 +1,15 @@
 # Changelog
 
+## 5.0.3 - 2026-10-27
+
+- Preserve results from injected nested thunk dispatches while keeping exclusive workflows locked until their awaited work finishes.
+- Deliver confirmed current selections to new subscribers even when values deduplicate, propagate pending readiness through module streams, and prevent delayed teardown from disposing a newer connection.
+- Unify module load and population rollback across configuration, registries, dependencies, and state installation; failed modules can be repaired and loaded again. Observer failures after commit are logged without undoing a successful installation.
+- Preserve inferred thunk result types for direct, nested, and module dispatches, and reject action-creator factory failures through the returned promise.
+- Finalize nested fresh objects, arrays, and collections without leaking draft proxies; reject accessor properties before executing them and preflight non-extensible write targets before committing any change.
+- Honor disabled system dispatches during initialization and lifecycle events, preserve the disabled markers, and keep literal dotted reducer keys distinct from nested paths.
+- Preserve nested dependency object and array structure without hoisting fields or creating self-references, and declare the Angular adapter's optional peer in the published library metadata.
+
 ## 5.0.2 - 2026-10-26
 
 - Fixed module reloads being skipped when an unload was still queued, and duplicate registration from simultaneous loads. Await `store.loadModule(module)` before using module actions or selectors.

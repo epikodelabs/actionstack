@@ -1,6 +1,6 @@
 import { getRegisteredThunks } from './actions';
 import { createQueue, type ActionQueue } from './queue';
-import type { Action, ActionRegistry, AsyncAction } from './types';
+import type { Action, ActionRegistry, AsyncAction, Dispatch } from './types';
 
 /**
  * @template TState - The overall type of your application's state.
@@ -11,7 +11,7 @@ import type { Action, ActionRegistry, AsyncAction } from './types';
  * It's the `config` parameter received by middleware functions like `exclusive` and `concurrent`.
  */
 export interface MiddlewareConfig<TState = any, TDependencies extends Record<string, any> = Record<string, any>> {
-  dispatch: (action: Action | AsyncAction) => Promise<any>;
+  dispatch: Dispatch<TState, TDependencies>;
   getState: () => TState;
   dependencies: () => TDependencies;
   queue: ActionQueue;
@@ -52,17 +52,16 @@ export function createActionHandler(
     next: Function,
     lockOrNested: any = false,
     maybeNestedDispatch: boolean = false
-  ): Promise<void> => {
+  ): Promise<any> => {
     const isNestedDispatch =
       typeof lockOrNested === 'boolean' ? lockOrNested : Boolean(maybeNestedDispatch);
 
     if (typeof action === 'function') {
       const runThunk = async () =>
         (action as AsyncAction)(
-          // Return the nested result so `await dispatch(thunk)` inside a thunk
-          // resolves with the inner thunk's value instead of discarding it.
-          async (dispatchedAction: Action | AsyncAction) =>
-            handleAction(dispatchedAction, next, true),
+          async (dispatchedAction: Action | AsyncAction) => {
+            return await handleAction(dispatchedAction, next, true);
+          },
           getState,
           dependencies()
         );

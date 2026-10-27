@@ -208,21 +208,22 @@ export function createAction<TType extends string, TArgs extends readonly any[] 
  *   - `isThunk`: `true` for identification in middleware
  *   - `triggers`: (optional) the list of trigger definitions
  */
-export function createThunk<TType extends string, TArgs extends readonly any[] = []>(
+export function createThunk<TType extends string, TArgs extends readonly any[] = [], TResult = any>(
   type: TType,
-  thunkBodyCreator: (...args: TArgs) => AsyncAction<any, any>,
+  thunkBodyCreator: (...args: TArgs) => AsyncAction<any, any, TResult>,
   triggers?: ReadonlyArray<ThunkTrigger>
-): ThunkCreator<TType, any, any, TArgs>;
+): ThunkCreator<TType, any, any, TArgs, TResult>;
 export function createThunk<
   TType extends string,
   TState = any,
   TDependencies = any,
-  TArgs extends readonly any[] = []
+  TArgs extends readonly any[] = [],
+  TResult = any
 >(
   type: TType,
-  thunkBodyCreator: (...args: TArgs) => AsyncAction<TState, TDependencies>,
+  thunkBodyCreator: (...args: TArgs) => AsyncAction<TState, TDependencies, TResult>,
   triggers?: ReadonlyArray<ThunkTrigger>
-): ThunkCreator<TType, TState, TDependencies, TArgs>;
+): ThunkCreator<TType, TState, TDependencies, TArgs, TResult>;
 export function createThunk<
   TType extends string,
   TState = any,
@@ -258,7 +259,7 @@ export function createThunk<
       ...(triggers?.length ? { triggers } : {}),
     });
 
-    return thunkWithProps as ThunkAction<TState, TDependencies>;
+    return thunkWithProps as ThunkAction<TState, TDependencies, TResult>;
   }) as ThunkCreator<TType, TState, TDependencies, TArgs, TResult>;
 
   return Object.assign(thunkCreator, {
