@@ -201,7 +201,7 @@ Store settings include `awaitStatePropagation`, `dispatchSystemActions`, `enable
 | `@epikodelabs/actionstack` | Store, feature modules, actions, thunks, selectors, middleware utilities, and Angular's `atomToSignal` helper. |
 | `@epikodelabs/actionstack/tools` | Logging, state-freezing, and performance middleware. |
 
-Angular helpers currently ship from the core entry point. The repository also contains a React demo; it does not define separate `/react` or `/vue` package entry points.
+Angular helpers ship from the separate `@epikodelabs/actionstack/angular` entry point, which optionally peers with `@angular/core`. The repository also contains a React demo; it does not define separate `/react` or `/vue` package entry points.
 
 ```text
 projects/

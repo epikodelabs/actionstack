@@ -10,6 +10,14 @@
 - Dispatching on a destroyed or unconfigured module rejects the action's promise instead of throwing synchronously, and thunk failures are logged once by the starter (the thunk wrapper no longer double-logs), giving processing failures a single channel.
 - Halved tree-validation cost per action: state is no longer re-validated when a batch is created, and stages that change nothing skip the walk entirely. Collections with custom own properties are still rejected before a draft reads them.
 - Dispatches no longer walk untouched state: commits resolve recorded placements instead of scanning the tree, and finalize skips clean subtrees. No-op dispatches are O(1) regardless of state size; benchmark dispatches on 50k-object states dropped 20–60% (`npm run benchmark:mutations`).
+- Event-only actions (`action('PING')` without a handler) keep their module slice instead of replacing it with `undefined`.
+- The core entry point no longer imports Angular: `atomToSignal` moved to a separate `@epikodelabs/actionstack/angular` entry (optional `@angular/core` peer), so React or Node consumers can import the core package without Angular installed.
+- Pending selections always reach suppressed subscribers even when they resolve to the cached value (resolutions bypass dedupe while a stale replay was skipped), and module `data$` no longer replays its stale cache while the upstream selection is resolving.
+- Module-load rollback is complete: registration, dependency injection, and state installation share one failure boundary, so any failure unwinds all of it.
+- `BoundAction` keeps creator metadata but no longer preserves the creator's action-returning call signature: bound methods are typed as promise-returning only.
+- `data$` selector types unwrap async selectors (`Awaited<ReturnType<...>>`), matching the values atoms actually emit.
+- Path utilities treat only canonical numeric strings as array indices (`"01"` stays a property name), and `combineReducers` lets child reducers initialize missing intermediate branches instead of throwing during traversal.
+- `dispatchSystemActions: false` is now honored, and exclusive-mode error logging handles non-Error throws without losing the message.
 
 ## 5.0.1 - 2026-10-26
 

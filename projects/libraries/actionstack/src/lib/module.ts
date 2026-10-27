@@ -330,6 +330,9 @@ function initializeDataStreams<
 
     const createSelectorSource = () => {
       const destroyed$ = getDestroyed$();
+      // Set when the store-side selection is still resolving: the cache below
+      // can be stale, so its synchronous replay must be skipped.
+      let upstreamPending = false;
 
       const source = createCurrentSource<any>({
         // Store-backed objects can be updated in place between emissions.
@@ -349,6 +352,7 @@ function initializeDataStreams<
             selectorSubscription = selectorSource.subscribe((value: any) => {
               emit(value);
             });
+            upstreamPending = (selectorSource as any).isPending?.() ?? false;
 
             return true;
           };
@@ -369,6 +373,19 @@ function initializeDataStreams<
           });
         },
       });
+
+      // Skip the synchronous cached replay while the upstream selection is
+      // pending: it can be stale, and the fresh value arrives when it settles.
+      const rawSubscribe = source.subscribe.bind(source);
+      source.subscribe = (callback?: (value: any, previous: any) => void) => {
+        let subscribing = true;
+        const inner = rawSubscribe((value: any, previous: any) => {
+          if (upstreamPending && subscribing) return;
+          callback?.(value, previous);
+        });
+        subscribing = false;
+        return inner;
+      };
 
       const disposeSource = source.dispose.bind(source);
       let destroyedSubscription: any;

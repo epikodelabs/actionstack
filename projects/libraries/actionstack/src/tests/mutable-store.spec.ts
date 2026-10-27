@@ -199,6 +199,52 @@ describe('mutable store integration', () => {
     expect(store.middlewareAPI.getState('failing')).toEqual({ count: 0 });
   });
 
+  it('delivers the pending selection to reconnecting subscribers even when it equals the cache', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'same',
+      initialState: { n: 7, other: 0 },
+      actions: {
+        bumpOther: action('BUMP_OTHER', (s: any) => { s.other++; }),
+      },
+    });
+    await store.loadModule(module);
+    await store.dispatch({ type: 'FLUSH' });
+
+    // Retained source: the cache survives unsubscribe, which is where the
+    // stale replay and dedupe collision can starve a reconnecting subscriber.
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    let observed!: () => void;
+    const pending = new Promise<void>(resolve => { observed = resolve; });
+    let started = false;
+    const source = store.select(async (s: any) => {
+      if (started) { observed(); await gate; }
+      return s.same.n;
+    });
+
+    const first: number[] = [];
+    const sub1 = source.subscribe(v => first.push(v));
+    await new Promise(resolve => setTimeout(resolve));   // initial resolution lands
+    expect(first).toEqual([7]);
+    await sub1();   // detach; the source keeps its cache
+
+    started = true;
+    // Real state change (other) while detached, but the selection resolves to
+    // the same value it already delivered.
+    await store.dispatch({ type: 'same/BUMP_OTHER' });
+
+    const second: number[] = [];
+    const sub2 = source.subscribe(v => second.push(v));   // re-evaluation starts; replay suppressed
+    await pending;   // the fresh evaluation is now in flight
+    release();
+    await new Promise(resolve => setTimeout(resolve));
+    // The resolution equals the cache, but a suppressed subscriber must
+    // still receive it instead of nothing.
+    expect(second).toEqual([7]);
+    await sub2();
+  });
+
   it('awaits affected async selectors but permits later reducer commits', async () => {
     const store = createStore({ awaitStatePropagation: true });
     await store.loadModule(feature());

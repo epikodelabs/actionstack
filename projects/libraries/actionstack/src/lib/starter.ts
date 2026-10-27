@@ -203,7 +203,8 @@ export const createStarter = () => {
           // the catch below still converts failures into rejections.
           return await handler(action as any, next, true);
         } catch (err: any) {
-          onError(`[starter] [exclusive] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${err.message}`);
+          const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
+          onError(`[starter] [exclusive] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${msg}`);
           // Directly dispatched actions reject the dispatch promise; triggered
           // thunks above stay log-only so they never fail their trigger.
           throw err;

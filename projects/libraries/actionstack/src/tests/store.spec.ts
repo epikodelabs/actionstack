@@ -168,6 +168,44 @@ describe('store', () => {
     expect(count).toBe(1);
   });
 
+  it('keeps the module slice for event-only actions without a handler', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'events',
+      initialState: { n: 1 },
+      actions: { ping: action('PING') },
+    });
+    await store.loadModule(module);
+    await flush(store);
+
+    module.actions.ping();
+    await flush(store);
+    expect(await readState<any>(store, 'events')).toEqual({ n: 1 });
+  });
+
+  it('treats non-canonical numeric slice names as property keys', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'users/01',
+      initialState: { count: 0 },
+      actions: { inc: action('INC', (state: any) => { state.count++; }) },
+    });
+    await store.loadModule(module);
+    await flush(store);
+
+    module.actions.inc();
+    await flush(store);
+    expect(await readState<any>(store, 'users/01')).toEqual({ count: 1 });
+  });
+
+  it('honors dispatchSystemActions: false', async () => {
+    const store = createStore({ dispatchSystemActions: false });
+    await flush(store);
+    const system = await readState<any>(store, 'system');
+    expect(system._initialized).toBeFalse();
+    expect(system._ready).toBeFalse();
+  });
+
   it('rolls back registration when initial state is invalid and allows a clean retry', async () => {
     const store = createStore();
     const cyclic: any = {}; cyclic.self = cyclic;

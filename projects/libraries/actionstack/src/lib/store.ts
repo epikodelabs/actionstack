@@ -395,18 +395,20 @@ export function createStore<T = any>(
 
       module.configure(store);
 
-      // Register the module
+      // Registration, dependencies, and state installation share one failure
+      // boundary: any failure unwinds all of it so a repaired retry
+      // starts clean instead of hitting the already-loaded shortcut.
       modules = [...modules, module];
 
-      registerActionHandlers(module, registry);
-      registerThunks(module, registry);
+      try {
+        registerActionHandlers(module, registry);
+        registerThunks(module, registry);
 
-      // Inject dependencies
-      injectDependencies();
+        // Inject dependencies
+        injectDependencies();
 
-      const slicePath = (module.slice || 'main').split('/');
-      if (getProperty(state, slicePath) === undefined) {
-        try {
+        const slicePath = (module.slice || 'main').split('/');
+        if (getProperty(state, slicePath) === undefined) {
           const batch = new MutationBatch(state);
           await batch.run([], draft => {
             let parent = draft;
@@ -415,15 +417,14 @@ export function createStore<T = any>(
           });
           state = batch.commit();
           publish(batch.changes);
-        } catch (error) {
-          // Roll back partial registration so a repaired retry starts clean
-          // instead of hitting the already-loaded shortcut without state.
-          modules = modules.filter((m) => m.slice !== module.slice);
-          unregisterActionHandlers(module, registry);
-          unregisterThunks(module, registry);
-          module.loaded$.fail(error);
-          throw error;
         }
+      } catch (error) {
+        modules = modules.filter((m) => m.slice !== module.slice);
+        unregisterActionHandlers(module, registry);
+        unregisterThunks(module, registry);
+        ejectDependencies(module);
+        module.loaded$.fail(error);
+        throw error;
       }
 
       sysActions.moduleLoaded(module);
@@ -597,7 +598,10 @@ export function createStore<T = any>(
       'font-weight: bold;'
     );
 
-    sysActions.storeInitialized();
+    // The observable system marker honors the setting; internal bookkeeping always runs.
+    if (settings.dispatchSystemActions) {
+      sysActions.storeInitialized();
+    }
   };
 
   // Always run the starter middleware as the outermost middleware layer,
