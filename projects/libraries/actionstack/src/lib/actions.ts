@@ -151,7 +151,9 @@ export function createAction<TType extends string, TArgs extends readonly any[],
  */
 export function createAction<TType extends string, TArgs extends readonly any[] = [], TPayload = void>(
   type: TType,
-  handler: ActionHandler<any, TPayload> = (() => void 0) as ActionHandler<any, TPayload>,
+  // Event-only actions keep their slice: an omitted handler is an identity,
+  // never a replacement with undefined.
+  handler: ActionHandler<any, TPayload> = ((state: any) => state) as ActionHandler<any, TPayload>,
   payloadCreator?: (...args: TArgs) => TPayload
 ): ActionCreator<TPayload, TType, TArgs> {
   const defaultPayloadCreator = ((...args: any[]) => (args.length > 0 ? args[0] : undefined)) as (...args: TArgs) => TPayload;

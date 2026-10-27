@@ -41,7 +41,7 @@ export function getProperty(obj: any, path: any): any {
       const key =
         typeof rawKey === 'number'
           ? rawKey
-          : typeof rawKey === 'string' && /^[0-9]+$/.test(rawKey)
+          : typeof rawKey === 'string' && /^[0-9]+$/.test(rawKey) && String(Number(rawKey)) === rawKey
             ? Number(rawKey)
             : rawKey;
       current = current?.[key];
@@ -85,10 +85,12 @@ export function setProperty(obj: any, path: any, value: any): any {
 
   const isIndexKey = (key: unknown): boolean =>
     (typeof key === 'number' && Number.isInteger(key) && key >= 0) ||
-    (typeof key === 'string' && /^[0-9]+$/.test(key));
+    (typeof key === 'string' && /^[0-9]+$/.test(key) && String(Number(key)) === key);
 
   const normalizeKey = (key: unknown): string | number => {
     if (typeof key === 'number') return key;
+    // Only canonical numeric strings become indices: "01" is a property name,
+    // not array index 1.
     if (typeof key === 'string' && isIndexKey(key)) return Number(key);
     return String(key);
   };
@@ -308,7 +310,9 @@ const combineReducers = (reducers: Tree<Reducer | AsyncReducer>): AsyncReducer =
 
     // Process each reducer in the flattened reducer map
     for (const { reducer, path } of reducerMap.values()) {
-      const currentState = path.reduce((acc, segment) => acc[segment], state);
+      // Missing intermediate branches resolve to undefined so the child
+      // reducer can initialize them, instead of throwing during traversal.
+      const currentState = path.reduce((acc, segment) => acc?.[segment], state);
 
       try {
         const updatedState = await reducer(currentState, action);

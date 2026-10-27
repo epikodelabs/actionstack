@@ -10,6 +10,15 @@ Backported the 5.x awaitable-action contract and lifecycle fixes to the 4.x line
 - A failure while applying a module's initial state rolls back the partial registration (modules, handlers, thunks) and fails `loaded$`, so a repaired retry loads cleanly.
 - Async selections no longer deliver a stale cached value to subscribers attaching while a re-evaluation is pending, not only to the reactivating one.
 - `store.select` overloads restored to Promise-first so async selectors infer `Atom<T>`.
+- Event-only actions (`action('PING')` without a handler) keep their module slice instead of replacing it with `undefined`.
+- The core entry point no longer imports Angular: `atomToSignal` moved to a separate `@epikodelabs/actionstack/angular` entry (optional `@angular/core` peer), so React or Node consumers can import the core package without Angular installed.
+- Pending selections always reach suppressed subscribers even when they resolve to the cached value (resolutions bypass dedupe while a stale replay was skipped), and module `data$` no longer replays its stale cache while the upstream selection is resolving.
+- Module-load rollback is complete: registration, dependency injection, and state installation share one failure boundary, so any failure unwinds all of it.
+- `BoundAction` keeps creator metadata but no longer preserves the creator's action-returning call signature: bound methods are typed as promise-returning only.
+- `data$` selector types unwrap async selectors (`Awaited<ReturnType<...>>`), matching the values atoms actually emit.
+- Path utilities treat only canonical numeric strings as array indices (`"01"` stays a property name), and `combineReducers` lets child reducers initialize missing intermediate branches instead of throwing during traversal.
+- `dispatchSystemActions: false` is now honored, and exclusive-mode error logging handles non-Error throws without losing the message.
+- Observable API change: module actions return promises and direct failures reject; callers inspecting returned action objects or relying on synchronous throws need adjustments.
 - Thunk result types are inferred end to end: `ThunkCreator` and `BoundAction` carry `TResult`, so awaited bound thunks are typed by what the thunk returns.
 - Dispatching on a destroyed or unconfigured module rejects the action's promise instead of throwing synchronously, and thunk failures are logged once by the starter (the thunk wrapper no longer double-logs), giving processing failures a single channel.
 

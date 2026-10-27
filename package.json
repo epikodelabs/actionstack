@@ -63,5 +63,14 @@
     "vite-tsconfig-paths": "^6.1.0",
     "vitepress": "^1.6.4"
   },
-  "type": "module"
+  "type": "module",
+  "peerDependencies": {
+    "@angular/core": ">=16.0.0",
+    "@epikodelabs/streamix": ">=3.0.10"
+  },
+  "peerDependenciesMeta": {
+    "@angular/core": {
+      "optional": true
+    }
+  }
 }

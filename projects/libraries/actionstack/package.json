@@ -5,7 +5,8 @@
     "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "@epikodelabs/streamix": ">=3.0.10"
+    "@epikodelabs/streamix": ">=3.0.10",
+    "@angular/core": ">=16.0.0"
   },
   "license": "MIT",
   "homepage": "https://epikodelabs.github.io/actionstack",
@@ -22,5 +23,10 @@
     "asynchronous store",
     "reactive programming"
   ],
-  "type": "module"
+  "type": "module",
+  "peerDependenciesMeta": {
+    "@angular/core": {
+      "optional": true
+    }
+  }
 }

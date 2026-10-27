@@ -242,6 +242,83 @@ describe('store', () => {
     expect(await readState<any>(store, 'reload-race')).toEqual({ count: 1 });
   });
 
+  it('keeps the module slice for event-only actions without a handler', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'events',
+      initialState: { n: 1 },
+      actions: { ping: action('PING') },
+    });
+    await store.loadModule(module);
+    await flush(store);
+
+    module.actions.ping();
+    await flush(store);
+    expect(await readState<any>(store, 'events')).toEqual({ n: 1 });
+  });
+
+  it('treats non-canonical numeric slice names as property keys', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'users/01',
+      initialState: { count: 0 },
+      actions: { inc: action('INC', (state: any) => ({ ...state, count: state.count + 1 })) },
+    });
+    await store.loadModule(module);
+    await flush(store);
+
+    module.actions.inc();
+    await flush(store);
+    expect(await readState<any>(store, 'users/01')).toEqual({ count: 1 });
+  });
+
+  it('delivers the pending selection to reconnecting subscribers even when it equals the cache', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'same',
+      initialState: { n: 7, other: 0 },
+      actions: {
+        bumpOther: action('BUMP_OTHER', (state: any) => ({ ...state, other: state.other + 1 })),
+      },
+      selectors: { current: (state: any) => state.n },
+    });
+    await store.loadModule(module);
+    await flush(store);
+
+    // Retained source: the cache survives unsubscribe, which is where the
+    // stale replay and dedupe collision can starve a reconnecting subscriber.
+    const source = store.select(async (state: any) => {
+      if (started) { observed(); await gate; }
+      return state.same.n;
+    });
+    let started = false;
+    let observed!: () => void;
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const pending = new Promise<void>(resolve => { observed = resolve; });
+
+    const first: number[] = [];
+    const sub1 = source.subscribe(v => first.push(v));
+    await new Promise(resolve => setTimeout(resolve));   // initial resolution lands
+    expect(first).toEqual([7]);
+    await sub1();   // detach; the source keeps its cache
+
+    started = true;
+    // Real state change (other) while detached, but the selection resolves to
+    // the same value it already delivered.
+    await store.dispatch({ type: 'same/BUMP_OTHER' });
+
+    const second: number[] = [];
+    const sub2 = source.subscribe(v => second.push(v));   // re-evaluation starts; replay suppressed
+    await pending;   // the fresh evaluation is now in flight
+    release();
+    await new Promise(resolve => setTimeout(resolve));
+    // The resolution equals the cache, but a suppressed subscriber must
+    // still receive it instead of nothing.
+    expect(second).toEqual([7]);
+    await sub2();
+  });
+
   it('rolls back registration when initial state cannot be applied', async () => {
     const store = createStore();
     const module: any = createModule({

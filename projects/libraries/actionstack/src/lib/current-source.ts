@@ -39,13 +39,21 @@ export function createCurrentSource<T>(
   let pendingResolution = false;
   let activeSubscriptions = 0;
   let upstreamSubscription: Subscription | undefined;
+  // Subscribers that attached while a resolution was pending and skipped the
+  // stale cache replay. Resolutions bypass dedupe while any exist, so a value
+  // equal to the cache still reaches them instead of arriving never.
+  let staleReplaySubscribers = 0;
 
   const publish = (value: T): void => {
     if (cache.disposed) return;
-    if (options.dedupe !== false && hasValue && Object.is(cache.safeValue, value)) {
+    // Subscribers waiting past a stale replay must receive the pending value
+    // even when it equals the cache; delivering it ends their wait.
+    const bypassDedupe = staleReplaySubscribers > 0;
+    if (!bypassDedupe && options.dedupe !== false && hasValue && Object.is(cache.safeValue, value)) {
       return;
     }
 
+    staleReplaySubscribers = 0;
     hasValue = true;
     cache.next(value);
   };
@@ -116,6 +124,9 @@ export function createCurrentSource<T>(
   };
 
   const source = Object.create(cache) as Atom<T>;
+  // True while an accepted selection is still resolving: subscribers attaching
+  // now will skip the stale cache replay, and wrappers can suppress theirs too.
+  (source as any).isPending = () => pendingResolution;
 
   source.subscribe = (callback) => {
     if (cache.disposed) {
@@ -139,14 +150,17 @@ export function createCurrentSource<T>(
     // While a current selection is still pending, the cache may hold the value
     // from a previous connection or resolution. Streamix would replay that
     // stale value immediately to ANY subscriber attaching now, so suppress
-    // exactly that replay and let the pending selection deliver instead. If
-    // the pending value dedupes against the cache, the cache was already
-    // current, so a suppressed subscriber has not missed anything.
+    // exactly that replay and let the pending selection deliver instead.
+    // Resolutions bypass dedupe while suppressed subscribers exist, so the
+    // pending value always reaches them even when it equals the cache.
     const suppressStaleReplay = pendingResolution && hasValue;
     let firstDelivery = true;
+    if (suppressStaleReplay) staleReplaySubscribers++;
 
     const innerSubscription = cache.subscribe((value, previous) => {
       if (suppressStaleReplay && firstDelivery) {
+        // The stale replay is skipped; the counter stays raised so the
+        // pending resolution bypasses dedupe and reaches this subscriber.
         firstDelivery = false;
         return;
       }
@@ -160,6 +174,11 @@ export function createCurrentSource<T>(
     return createSubscription(async () => {
       await innerSubscription();
       activeSubscriptions = Math.max(0, activeSubscriptions - 1);
+
+      if (suppressStaleReplay && firstDelivery) {
+        // Detached before the pending resolution arrived; its bypass dies here.
+        staleReplaySubscribers = Math.max(0, staleReplaySubscribers - 1);
+      }
 
       if (activeSubscriptions === 0) {
         disconnect();

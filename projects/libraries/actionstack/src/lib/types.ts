@@ -295,24 +295,26 @@ export type ProcessingStrategy = "exclusive" | "concurrent";
 export type SliceStrategy = "persistent" | "temporary";
 
 /**
- * Maps selector definitions to atom factory functions.
+ * Maps selector definitions to atom factory functions. Async selectors emit
+ * their resolved value, so `Awaited` unwraps promised returns.
  */
 export type Streams<S extends Record<string, (state: any) => any>> = {
-  [K in keyof S]: () => Atom<ReturnType<S[K]>>;
+  [K in keyof S]: () => Atom<Awaited<ReturnType<S[K]>>>;
 };
 
 /**
  * A module action method bound to its store: called with the creator's
  * arguments, it dispatches and returns the dispatch promise, which resolves
  * when processing completes (and rejects when the handler or thunk fails).
- * A thunk's return value becomes the promise resolution, and creator metadata
- * (`.type`, `.match`, `.toString`) is preserved at runtime and surfaced
- * through the intersection.
+ * A thunk's return value becomes the promise resolution. Creator metadata
+ * (`.type`, `.match`, `.toString`) is preserved through the property
+ * intersection; the creator's original action-returning call signature is
+ * deliberately dropped, because bound methods resolve with promises.
  */
 export type BoundAction<T> = T extends ThunkAction<infer _State, infer _Dependencies, infer TResult>
-  ? ((...args: Parameters<T>) => Promise<TResult>) & T
+  ? ((...args: Parameters<T>) => Promise<TResult>) & { [K in keyof T]: T[K] }
   : T extends (...args: infer A) => any
-    ? ((...args: A) => Promise<any>) & T
+    ? ((...args: A) => Promise<any>) & { [K in keyof T]: T[K] }
     : never;
 
 /**

@@ -1,3 +1,9 @@
+/**
+ * Angular integration for Actionstack: converts atoms into Angular signals.
+ *
+ * This entry point is the only one that depends on Angular; the core
+ * `@epikodelabs/actionstack` entry is framework-agnostic.
+ */
 import { DestroyRef, NgZone, inject, signal } from '@angular/core';
 import type { Signal, WritableSignal } from '@angular/core';
 import type { Atom } from '@epikodelabs/streamix';
