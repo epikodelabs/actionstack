@@ -68,6 +68,102 @@ describe('starter', () => {
     currentRegistry = createActionRegistry();
   });
 
+  describe('nested dispatch results and failure channels', () => {
+    it('resolves an exclusive parent with the awaited child thunk result', async () => {
+      const child = thunk(
+        'TEST/CHILD',
+        () => async () => 42,
+      );
+      const parent = thunk(
+        'TEST/PARENT',
+        () => async (dispatch: any) => await dispatch(child() as any),
+      );
+      registerTestModule({ child, parent });
+
+      const { dispatch } = createHarness('exclusive');
+      const result = await (dispatch(parent() as any) as any);
+      expect(result).toBe(42);
+    });
+
+    it('preserves original rejection values through exclusive dispatch and logs once', async () => {
+      const warn = spyOn(console, 'warn');
+      const cases = [
+        { type: 'TEST/FAIL_NULL', failure: null as any, logged: 'unknown' },
+        { type: 'TEST/FAIL_UNDEF', failure: undefined as any, logged: 'unknown' },
+        { type: 'TEST/FAIL_ERROR', failure: new Error('plain boom'), logged: 'plain boom' },
+      ];
+
+      for (const { type, failure, logged } of cases) {
+        const t = thunk(
+          type,
+          () => async () => { throw failure; },
+        );
+        registerTestModule({ t });
+
+        const { dispatch } = createHarness('exclusive');
+        let rejected: any = 'resolved';
+        try {
+          await dispatch(t() as any);
+        } catch (err) {
+          rejected = err;
+        }
+        expect(rejected).toBe(failure);
+
+        const messages = warn.calls.all().map(c => String(c.args[0]));
+        expect(messages.some(m => m.includes(logged) && m.includes(type))).toBeTrue();
+      }
+
+      expect(warn.calls.all().length).toBe(cases.length);
+    });
+
+    it('blocks external actions until a triggered workflow fully completes', async () => {
+      const order: string[] = [];
+      let release!: () => void;
+      const gate = new Promise<void>(resolve => { release = resolve; });
+
+      const workflow = thunk(
+        'TEST/WORKFLOW',
+        () => async (dispatch: any) => {
+          order.push('workflow-start');
+          await dispatch({ type: 'TEST/WORKFLOW_STEP' });
+          await gate;
+          order.push('workflow-end');
+        },
+        ['TEST/GO'],
+      );
+      registerTestModule({ workflow });
+
+      const { dispatch, overlaps } = createHarness('exclusive');
+      const trigger = dispatch({ type: 'TEST/GO' });
+      await new Promise(resolve => setTimeout(resolve));   // let the workflow start
+      const external = dispatch({ type: 'TEST/LATER' });
+      await new Promise(resolve => setTimeout(resolve));
+      expect(order).toEqual(['workflow-start']);
+      expect(overlaps.length).toBe(0);
+
+      release();
+      await trigger;
+      await external;
+      expect(order).toEqual(['workflow-start', 'workflow-end']);
+    });
+
+    it('keeps the queue working after a failing action', async () => {
+      const { dispatch } = createHarness('exclusive');
+      const t = thunk(
+        'TEST/BOOM_THEN_OK',
+        (n: number) => async () => {
+          if (n === 1) throw new Error('first fails');
+          return 'ok';
+        },
+      );
+      registerTestModule({ t });
+
+      await expectAsync(dispatch(t(1) as any)).toBeRejectedWithError('first fails');
+      const result = await dispatch(t(2) as any);
+      expect(result).toBe('ok');
+    });
+  });
+
   const registerTestModule = (actions: Record<string, any>) => {
     const module = { actions } as any;
     registerThunks(module, currentRegistry);

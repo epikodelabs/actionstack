@@ -60,7 +60,9 @@ export function createActionHandler(
       const runThunk = async () =>
         (action as AsyncAction)(
           async (dispatchedAction: Action | AsyncAction) => {
-            await handleAction(dispatchedAction, next, true);
+            // The child's result flows back to the parent thunk: awaiting an
+            // injected child dispatch resolves with the child thunk's return.
+            return await handleAction(dispatchedAction, next, true);
           },
           getState,
           dependencies()
