@@ -4,6 +4,7 @@
 
 Backported the 5.x awaitable-action contract and lifecycle fixes to the 4.x line.
 
+- Thunk results propagate through every dispatch path: awaiting an injected `dispatch(childThunk)` inside a thunk resolves with the child's return value in both strategies, and a thunk forwarded past the starter by middleware still resolves the dispatch promise with its result.
 - Module action methods return the dispatch promise: `await module.actions.someAction(...)` waits for processing to complete, a thunk's return value becomes the dispatch resolution, and a failing handler or thunk rejects the promise after the starter logs it. Automatically triggered thunk failures stay log-only and never fail their triggering action. Types: `FeatureModule.actions` is now `BoundActions<Actions>`, and `AsyncAction` gained a `TResult` parameter.
 - `store.loadModule` performs its already-loaded check and `module.configure` inside the store queue, fixing reloads being skipped when an unload was still queued and duplicate registration from simultaneous loads. Await `store.loadModule(module)` before using module actions or selectors.
 - `store.unloadModule` destroys the module lifecycle (disposed `data$` streams, cleared store reference). After reloading, acquire fresh `module.data$` streams.
