@@ -103,9 +103,10 @@ export type ThunkTrigger<TAction extends Action<any> = Action<any>> =
 /**
  * An async thunk action (function) with attached metadata used by the starter middleware.
  */
-export type ThunkAction<TState = any, TDependencies = any> = AsyncAction<
+export type ThunkAction<TState = any, TDependencies = any, TResult = any> = AsyncAction<
   TState,
-  TDependencies
+  TDependencies,
+  TResult
 > & {
   type: string;
   toString: () => string;
@@ -132,8 +133,9 @@ export type ThunkCreator<
   TType extends string = string,
   TState = any,
   TDependencies = any,
-  TArgs extends readonly any[] = any[]
-> = ((...args: TArgs) => ThunkAction<TState, TDependencies>) & {
+  TArgs extends readonly any[] = any[],
+  TResult = any
+> = ((...args: TArgs) => ThunkAction<TState, TDependencies, TResult>) & {
   type: TType;
   toString: () => TType;
   match: (action: unknown) => action is Action<any>;
@@ -302,12 +304,15 @@ export type Streams<S extends Record<string, (state: any) => any>> = {
  * A module action method bound to its store: called with the creator's
  * arguments, it dispatches and returns the dispatch promise, which resolves
  * when processing completes (and rejects when the handler or thunk fails).
- * Creator metadata (`.type`, `.match`, `.toString`) is preserved at runtime
- * and surfaced through the intersection.
+ * A thunk's return value becomes the promise resolution, and creator metadata
+ * (`.type`, `.match`, `.toString`) is preserved at runtime and surfaced
+ * through the intersection.
  */
-export type BoundAction<T> = T extends (...args: infer A) => any
-  ? ((...args: A) => Promise<any>) & T
-  : never;
+export type BoundAction<T> = T extends ThunkAction<infer _State, infer _Dependencies, infer TResult>
+  ? ((...args: Parameters<T>) => Promise<TResult>) & T
+  : T extends (...args: infer A) => any
+    ? ((...args: A) => Promise<any>) & T
+    : never;
 
 /**
  * Maps a module's action creators to their store-bound methods.

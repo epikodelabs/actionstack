@@ -222,25 +222,32 @@ export function createThunk<
   type: TType,
   thunkBodyCreator: (...args: TArgs) => AsyncAction<TState, TDependencies>,
   triggers?: ReadonlyArray<ThunkTrigger>
-): ThunkCreator<TType, TState, TDependencies, TArgs> {
+): ThunkCreator<TType, TState, TDependencies, TArgs>;
+export function createThunk<
+  TType extends string,
+  TState = any,
+  TDependencies = any,
+  TArgs extends readonly any[] = [],
+  TResult = any
+>(
+  type: TType,
+  thunkBodyCreator: (...args: TArgs) => AsyncAction<TState, TDependencies, TResult>,
+  triggers?: ReadonlyArray<ThunkTrigger>
+): ThunkCreator<TType, TState, TDependencies, TArgs, TResult> {
   const match = (action: unknown): action is Action<any> =>
     isAction(action) && action.type === type;
 
   const thunkCreator = ((...args: TArgs) => {
     const thunk = thunkBodyCreator(...args);
 
-    const wrappedThunk: AsyncAction<TState, TDependencies> = async (
+    const wrappedThunk: AsyncAction<TState, TDependencies, TResult> = async (
       dispatch,
       getState,
       dependencies
     ) => {
-      try {
-        return await thunk(dispatch, getState, dependencies);
-      } catch (error: any) {
-        const message = error?.message ?? String(error);
-        console.warn(`Error in thunk action "${type}": ${message}.`);
-        throw error;
-      }
+      // The starter logs processing failures with the action type; rethrowing
+      // here lets the dispatch promise reject for awaiting callers.
+      return await thunk(dispatch, getState, dependencies);
     };
 
     const thunkWithProps = Object.assign(wrappedThunk, {
@@ -252,7 +259,7 @@ export function createThunk<
     });
 
     return thunkWithProps as ThunkAction<TState, TDependencies>;
-  }) as ThunkCreator<TType, TState, TDependencies, TArgs>;
+  }) as ThunkCreator<TType, TState, TDependencies, TArgs, TResult>;
 
   return Object.assign(thunkCreator, {
     type,
