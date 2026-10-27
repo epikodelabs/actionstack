@@ -11,7 +11,7 @@ import {
 
 describe("module", () => {
   it("namespaces action creator types and dispatches via module.actions", () => {
-    const dispatch = jasmine.createSpy("dispatch");
+    const dispatch = jasmine.createSpy("dispatch").and.resolveTo(undefined);
     const store: any = {
       dispatch,
       select: () => {
@@ -31,13 +31,13 @@ describe("module", () => {
     mod.configure(store);
 
     const returned = (mod.actions as any).set(5);
-    expect(returned).toEqual({ type: "counter/SET", payload: 5 });
+    expect(returned).toBeInstanceOf(Promise);
     expect(dispatch).toHaveBeenCalledWith({ type: "counter/SET", payload: 5 });
     expect(String((mod.actions as any).set)).toBe("counter/SET");
   });
 
   it("namespaces thunk triggers and thunk type", () => {
-    const dispatch = jasmine.createSpy("dispatch");
+    const dispatch = jasmine.createSpy("dispatch").and.resolveTo(undefined);
     const store: any = {
       dispatch,
       select: () => {
@@ -65,9 +65,10 @@ describe("module", () => {
       "other/ALREADY_NAMESPACED",
     ]);
 
-    const dispatchedThunk = (mod.actions as any).run();
-    expect(dispatchedThunk.type).toBe("feature/IGNORED_ORIGINAL_TYPE");
-    expect(dispatch).toHaveBeenCalledWith(dispatchedThunk);
+    const returned = (mod.actions as any).run();
+    expect(returned).toBeInstanceOf(Promise);
+    const dispatched = dispatch.calls.mostRecent().args[0];
+    expect(dispatched.type).toBe("feature/IGNORED_ORIGINAL_TYPE");
   });
 
   it("destroy() unloads by default and disables actions until reconfigured", () => {
@@ -509,7 +510,7 @@ describe("module", () => {
   });
 
   it("namespaces thunk triggers while preserving predicate triggers", () => {
-    const dispatch = jasmine.createSpy("dispatch");
+    const dispatch = jasmine.createSpy("dispatch").and.resolveTo(undefined);
     const store: any = {
       dispatch,
       select: () => {

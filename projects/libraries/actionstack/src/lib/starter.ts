@@ -66,8 +66,8 @@ export function createActionHandler(
           dependencies()
         );
 
-      await runThunk();
-      return;
+      // The thunk's return value becomes the dispatch promise's resolution.
+      return runThunk();
     } else {
       const run = () =>
         queue.enqueue(() => next(action), {
@@ -199,9 +199,14 @@ export const createStarter = () => {
     return (next: Function) => async (action: { type: string }) => {
       return queue.enqueue(async () => {
         try {
-          await handler(action as any, next, true);
+          // `return await` so thunk results resolve the dispatch promise while
+          // the catch below still converts failures into rejections.
+          return await handler(action as any, next, true);
         } catch (err: any) {
           onError(`[starter] [exclusive] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${err.message}`);
+          // Directly dispatched actions reject the dispatch promise; triggered
+          // thunks above stay log-only so they never fail their trigger.
+          throw err;
         }
       });
     };
@@ -257,23 +262,13 @@ export const createStarter = () => {
       // expose helpers on the returned function (non-enumerable to be unobtrusive)
       const fn = async (action: { type: string }) => {
         // DO NOT await; return quickly for true concurrency
-        const p = (async () => {
-          try {
-            // handle main action
-            await handler(action, next);
-          } catch (err: any) {
-            const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
-            onError(
-              `[starter] [concurrent] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${msg}`
-            );
-            return;
-          }
-
-        })();
+        const p = (async () =>
+          // handle main action; rejection and thunk results flow to the caller
+          handler(action, next))();
 
         inflight.add(p);
 
-        // ensure cleanup + error reporting
+        // ensure cleanup + error reporting; the rejection still reaches the caller
         p.catch(err => {
           const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
           onError(

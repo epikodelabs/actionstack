@@ -4,7 +4,7 @@ import {
 } from '@epikodelabs/streamix';
 import { createCurrentSource } from './current-source';
 import { isAction } from '../lib';
-import type { ActionCreator, FeatureModule, Store, Streams, Selector, ViewAttachment } from '../lib';
+import type { ActionCreator, BoundActions, FeatureModule, Store, Streams, Selector, ViewAttachment } from '../lib';
 
 /**
  * Creates a feature module that encapsulates a slice of state, its actions, selectors,
@@ -91,7 +91,7 @@ function createModule<
     loaded$,
     destroyed$,
     data$: {} as Streams<Selectors>,
-    actions: {} as Actions,
+    actions: {} as BoundActions<Actions>,
     selectors: processedSelectors as any,
     attachView(view: ViewAttachment) {
       attachedViews.add(view);
@@ -499,8 +499,9 @@ function initializeActions<Actions extends Record<string, any>>(
       }
 
       const actionToDispatch = actionCreator(...args);
-      store.dispatch(actionToDispatch);
-      return actionToDispatch;
+      // Awaiting the method must await processing: handler, reducers, and
+      // thunk completion. The promise rejects when the handler or thunk fails.
+      return store.dispatch(actionToDispatch);
     };
 
     // Preserve metadata from original function (e.g. type)

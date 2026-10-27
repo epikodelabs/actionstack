@@ -235,7 +235,7 @@ export function createThunk<
       dependencies
     ) => {
       try {
-        await thunk(dispatch, getState, dependencies);
+        return await thunk(dispatch, getState, dependencies);
       } catch (error: any) {
         const message = error?.message ?? String(error);
         console.warn(`Error in thunk action "${type}": ${message}.`);

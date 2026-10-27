@@ -59,8 +59,11 @@ export type Store<TState = any, TDependencies = any> = {
     };
 
     select: {
-        <R = any>(selector: (state: Readonly<TState>) => R, defaultValue?: R): Atom<R>;
+        // The Promise overload must come first: TypeScript tries overloads in
+        // order, and an async selector otherwise infers Atom<Promise<T>> against
+        // this runtime's Atom<T> emissions.
         <R = any>(selector: (state: Readonly<TState>) => Promise<R>, defaultValue?: R): Atom<R>;
+        <R = any>(selector: (state: Readonly<TState>) => R, defaultValue?: R): Atom<R>;
     };
 
     populate: (...modules: FeatureModule[]) => Promise<void>;
@@ -381,13 +384,13 @@ export function createStore<T = any>(
    * and a `moduleLoaded` action is dispatched once the module is successfully loaded.
    */
   const loadModule = async (module: FeatureModule): Promise<void> => {
-    if (modules.some((m) => m.slice === module.slice)) {
-      return Promise.resolve(); // Already loaded
-    }
-
-    module.configure(store);
-
     return queue.enqueue(async () => {
+      if (modules.some((m) => m.slice === module.slice)) {
+        return; // Already loaded
+      }
+
+      module.configure(store);
+
       // Register the module
       modules = [...modules, module];
 
@@ -399,7 +402,17 @@ export function createStore<T = any>(
 
       const slicePath = (module.slice || 'main').split('/');
       if (getProperty(state, slicePath) === undefined) {
-        state = setProperty(state, slicePath, module.initialState);
+        try {
+          state = setProperty(state, slicePath, module.initialState);
+        } catch (error) {
+          // Roll back partial registration so a repaired retry starts clean
+          // instead of hitting the already-loaded shortcut without state.
+          modules = modules.filter((m) => m.slice !== module.slice);
+          unregisterActionHandlers(module, registry);
+          unregisterThunks(module, registry);
+          module.loaded$.fail(error);
+          throw error;
+        }
       }
 
       sysActions.moduleLoaded(module);
@@ -442,7 +455,11 @@ export function createStore<T = any>(
       }
       // Dispatch module unloaded action
       sysActions.moduleUnloaded(module);
-      module.destroyed$.next();
+      if (typeof module.destroy === 'function') {
+        module.destroy(false);
+      } else {
+        module.destroyed$.next();
+      }
       currentState.next(state);
     });
   };
@@ -585,6 +602,8 @@ export function createStore<T = any>(
    * Initializes the store with system actions and state setup
    */
   const initializeStore = (storeInstance: Store<any>) => {
+    // System actions are used immediately, before queued module registration runs.
+    systemModule.configure(storeInstance);
     // Bind system actions using the store's dispatch method
     registerModule(storeInstance, systemModule);
 

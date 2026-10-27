@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.0.7 - 2026-10-27
+
+Backported the 5.x awaitable-action contract and lifecycle fixes to the 4.x line.
+
+- Module action methods return the dispatch promise: `await module.actions.someAction(...)` waits for processing to complete, a thunk's return value becomes the dispatch resolution, and a failing handler or thunk rejects the promise after the starter logs it. Automatically triggered thunk failures stay log-only and never fail their triggering action. Types: `FeatureModule.actions` is now `BoundActions<Actions>`, and `AsyncAction` gained a `TResult` parameter.
+- `store.loadModule` performs its already-loaded check and `module.configure` inside the store queue, fixing reloads being skipped when an unload was still queued and duplicate registration from simultaneous loads. Await `store.loadModule(module)` before using module actions or selectors.
+- `store.unloadModule` destroys the module lifecycle (disposed `data$` streams, cleared store reference). After reloading, acquire fresh `module.data$` streams.
+- A failure while applying a module's initial state rolls back the partial registration (modules, handlers, thunks) and fails `loaded$`, so a repaired retry loads cleanly.
+- Async selections no longer deliver a stale cached value to subscribers attaching while a re-evaluation is pending, not only to the reactivating one.
+- `store.select` overloads restored to Promise-first so async selectors infer `Atom<T>`.
+
 ## 4.0.6 - 2026-10-25
 
 - Aligned Streamix and Actionstack dependencies, bumping Streamix to 3.0.10 and updating Actionstack's peer dependency requirement to >=3.0.10.

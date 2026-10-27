@@ -168,6 +168,151 @@ describe('store', () => {
     expect(count).toBe(1);
   });
 
+  it('awaits module action methods until processing completes', async () => {
+    const store = createStore();
+    let thunkDone = false;
+    const module = createModule({
+      slice: 'awaited',
+      initialState: { count: 0 },
+      actions: {
+        inc: action('INC', (state: { count: number }) => ({ ...state, count: state.count + 1 })),
+        finish: thunk('FINISH', () => async () => {
+          await new Promise(resolve => setTimeout(resolve, 20));
+          thunkDone = true;
+          return 'payload';
+        }),
+      },
+    });
+    await store.loadModule(module);
+    await flush(store);
+
+    await module.actions.inc();
+    expect(await readState<any>(store, 'awaited')).toEqual({ count: 1 });
+
+    const result = await (module.actions as any).finish();
+    expect(thunkDone).toBeTrue();
+    expect(result).toBe('payload');
+  });
+
+  it('rejects failed module actions after logging', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'failing',
+      initialState: { count: 0 },
+      actions: {
+        boom: action('BOOM', () => { throw new Error('handler failed'); }),
+      },
+    });
+    await store.loadModule(module);
+    await flush(store);
+
+    await expectAsync((module.actions as any).boom()).toBeRejectedWithError('handler failed');
+    await expectAsync((module.actions as any).boom()).toBeRejectedWithError('handler failed');
+  });
+
+  it('resolves thunk actions with their return value in both processing modes', async () => {
+    for (const exclusiveActionProcessing of [false, true]) {
+      const store = createStore({ exclusiveActionProcessing });
+      const module = createModule({
+        slice: 'answered',
+        initialState: {},
+        actions: { answer: thunk('ANSWER', () => async () => 42) },
+      });
+      await store.loadModule(module);
+      expect(await (module.actions as any).answer()).toBe(42);
+    }
+  });
+
+  it('reloads after an unload that is still queued', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'reload-race',
+      initialState: { count: 0 },
+      actions: { inc: action('INC', (state: any) => ({ ...state, count: state.count + 1 })) },
+      selectors: { count: (state: any) => state.count },
+    });
+    await store.loadModule(module);
+    await flush(store);
+
+    const unload = store.unloadModule(module, true);
+    await store.loadModule(module);
+    await unload;
+
+    await store.dispatch({ type: 'reload-race/INC' });
+    expect(await readState<any>(store, 'reload-race')).toEqual({ count: 1 });
+  });
+
+  it('rolls back registration when initial state cannot be applied', async () => {
+    const store = createStore();
+    const module: any = createModule({
+      slice: 'rollback',
+      initialState: { ok: true },
+      actions: { ping: action('PING', () => {}) },
+    });
+    Object.defineProperty(module, 'initialState', {
+      get() { throw new Error('initial state unavailable'); },
+    });
+
+    await expectAsync(store.loadModule(module)).toBeRejectedWithError('initial state unavailable');
+
+    const repaired: any = createModule({
+      slice: 'rollback',
+      initialState: { ok: true },
+      actions: { ping: action('PING', () => {}) },
+    });
+    await store.loadModule(repaired);
+    expect(await readState<any>(store, 'rollback')).toEqual({ ok: true });
+  });
+
+  it('destroys the module lifecycle when unloaded', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'destroyed',
+      initialState: { count: 0 },
+      actions: { inc: action('INC', (state: any) => ({ ...state, count: state.count + 1 })) },
+    });
+    await store.loadModule(module);
+    await store.unloadModule(module, true);
+    expect(module.destroyed).toBeTrue();
+
+    await store.loadModule(module);
+    expect(module.destroyed).toBeFalse();
+  });
+
+  it('never delivers the stale cached value to subscribers attaching during a pending async selection', async () => {
+    const store = createStore();
+    const module = createModule({
+      slice: 'stale',
+      initialState: { n: 0 },
+      actions: { bump: action('BUMP', (state: any) => ({ ...state, n: 1 })) },
+      selectors: { current: (state: any) => state.n },
+    });
+    await store.loadModule(module);
+    await flush(store);
+
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    let observed!: () => void;
+    const pending = new Promise<void>(resolve => { observed = resolve; });
+    let started = false;
+    const sub1 = store.select(async (state: any) => {
+      if (started) { observed(); await gate; }
+      return state.stale.n;
+    }).subscribe(() => {});
+
+    started = true;
+    const dispatch = store.dispatch({ type: 'stale/BUMP' });
+    await pending;   // the fresh evaluation is now in flight
+    // Attach while the re-evaluation is pending: the cache still holds 0.
+    const second: number[] = [];
+    const sub2 = store.select((state: any) => state.stale.n, -1).subscribe(v => second.push(v));
+    release();
+    await dispatch;
+    expect(second).toEqual([1]);
+    await sub2();
+    await sub1();
+  });
+
   it('dispatch applies action handlers and is serialized via internal queue', async () => {
     const store = createStore();
     const firstStarted = deferred<void>();

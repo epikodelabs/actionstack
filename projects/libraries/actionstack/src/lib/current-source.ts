@@ -136,11 +136,13 @@ export function createCurrentSource<T>(
       }
     }
 
-    // When the activating current value is async, cache may still contain the
-    // value from the previous connection. Streamix would replay that stale value
-    // immediately, so suppress exactly that replay and wait for the pending
-    // current selection to resolve.
-    const suppressStaleReplay = activating && pendingResolution && hasValue;
+    // While a current selection is still pending, the cache may hold the value
+    // from a previous connection or resolution. Streamix would replay that
+    // stale value immediately to ANY subscriber attaching now, so suppress
+    // exactly that replay and let the pending selection deliver instead. If
+    // the pending value dedupes against the cache, the cache was already
+    // current, so a suppressed subscriber has not missed anything.
+    const suppressStaleReplay = pendingResolution && hasValue;
     let firstDelivery = true;
 
     const innerSubscription = cache.subscribe((value, previous) => {
