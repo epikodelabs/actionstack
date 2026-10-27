@@ -884,6 +884,26 @@ describe('store', () => {
     expect((await readState<any>(store, 'res')).ok).toBe(1);
   });
 
+  it('preserves thunk return values when middleware forwards thunks past the starter', async () => {
+    const forwarding = thunk(
+      'TEST/STORE_FORWARD',
+      () => async () => 'forwarded payload'
+    );
+
+    // Middleware sits between the starter and raw dispatch; forwarding a thunk
+    // to next() exercises the raw dispatch function branch.
+    const store = createStore(
+      applyMiddleware(
+        () => (next: any) => (action: any) =>
+          action?.type === 'TEST/STORE_FORWARD_MARKER' ? next(forwarding()) : next(action)
+      )
+    );
+
+    await expectAsync(store.dispatch({ type: 'TEST/STORE_FORWARD_MARKER' } as any)).toBeResolvedTo(
+      'forwarded payload'
+    );
+  });
+
   describe('edge cases', () => {
     it('select handles complete and unsubscribe properly', async () => {
       const store: any = createStore({ awaitStatePropagation: true });

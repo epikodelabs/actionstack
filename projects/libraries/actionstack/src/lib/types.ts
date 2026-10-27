@@ -35,7 +35,7 @@ export interface Action<T = any> {
  */
 export type Dispatch<TState = any, TDependencies = any> = (
   action: Action | AsyncAction<TState, TDependencies>
-) => Promise<void>;
+) => Promise<any>;
 
 /**
  * Getter function for the current store state.

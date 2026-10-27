@@ -85,6 +85,22 @@ describe('starter', () => {
       expect(result).toBe(42);
     });
 
+    it('resolves a concurrent parent with the awaited child thunk result', async () => {
+      const child = thunk(
+        'TEST/CHILD_CONC',
+        () => async () => 'concurrent payload',
+      );
+      const parent = thunk(
+        'TEST/PARENT_CONC',
+        () => async (dispatch: any) => await dispatch(child() as any),
+      );
+      registerTestModule({ child, parent });
+
+      const { dispatch } = createHarness('concurrent');
+      const result = await (dispatch(parent() as any) as any);
+      expect(result).toBe('concurrent payload');
+    });
+
     it('preserves original rejection values through exclusive dispatch and logs once', async () => {
       const warn = spyOn(console, 'warn');
       const cases = [

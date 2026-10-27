@@ -11,7 +11,7 @@ import type { Action, ActionRegistry, AsyncAction } from './types';
  * It's the `config` parameter received by middleware functions like `exclusive` and `concurrent`.
  */
 export interface MiddlewareConfig<TState = any, TDependencies extends Record<string, any> = Record<string, any>> {
-  dispatch: (action: Action | AsyncAction) => Promise<void>;
+  dispatch: (action: Action | AsyncAction) => Promise<any>;
   getState: () => TState;
   dependencies: () => TDependencies;
   queue: ActionQueue;
@@ -76,17 +76,21 @@ export function createActionHandler(
           inlineIfRunning: lockThunks && isNestedDispatch,
         });
 
+      // Preserve `next`'s resolution (undefined for plain actions, a thunk's
+      // value when a middleware forwards one) while triggered thunks still
+      // run log-only after it.
+      let result: any;
       if (lockThunks && isNestedDispatch && nestedQueue) {
-        await nestedQueue.enqueue(run);
+        result = await nestedQueue.enqueue(run);
       } else {
-        await run();
+        result = await run();
       }
 
       if (afterAction) {
         await afterAction(action, next, isNestedDispatch);
       }
 
-      return;
+      return result;
     }
   };
 

@@ -193,12 +193,13 @@ export function createStore<T = any>(
    */
   let dispatch: Dispatch<T, any> = async (action) => {
     if (typeof action === 'function') {
-      await (action as AsyncAction<T, any>)(
+      // Preserve the thunk's return value so a thunk forwarded past the starter
+      // still resolves the dispatch promise with its result.
+      return await (action as AsyncAction<T, any>)(
         (nestedAction) => store.dispatch(nestedAction as any),
         () => state,
         pipeline.dependencies
       );
-      return;
     }
 
     if (!action || typeof action !== 'object' || typeof (action as any).type !== 'string') {
