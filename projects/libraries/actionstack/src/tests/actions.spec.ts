@@ -68,7 +68,7 @@ describe("actions", () => {
   });
 
   describe("createThunk", () => {
-    it("wraps errors with a warning and rethrows", async () => {
+    it("rethrows thunk errors without logging (the starter owns error logging)", async () => {
       const t = createThunk("TEST/THUNK_FAIL", () => async () => {
         throw new Error("boom");
       });
@@ -80,9 +80,7 @@ describe("actions", () => {
         expect(err.message).toBe("boom");
       }
 
-      expect((console.warn as any).calls.any()).toBeTrue();
-      const msg = String((console.warn as any).calls.mostRecent().args[0]);
-      expect(msg).toContain('Error in thunk action "TEST/THUNK_FAIL": boom.');
+      expect((console.warn as any).calls.any()).toBeFalse();
     });
   });
 

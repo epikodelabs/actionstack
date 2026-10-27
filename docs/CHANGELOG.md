@@ -10,6 +10,8 @@ Backported the 5.x awaitable-action contract and lifecycle fixes to the 4.x line
 - A failure while applying a module's initial state rolls back the partial registration (modules, handlers, thunks) and fails `loaded$`, so a repaired retry loads cleanly.
 - Async selections no longer deliver a stale cached value to subscribers attaching while a re-evaluation is pending, not only to the reactivating one.
 - `store.select` overloads restored to Promise-first so async selectors infer `Atom<T>`.
+- Thunk result types are inferred end to end: `ThunkCreator` and `BoundAction` carry `TResult`, so awaited bound thunks are typed by what the thunk returns.
+- Dispatching on a destroyed or unconfigured module rejects the action's promise instead of throwing synchronously, and thunk failures are logged once by the starter (the thunk wrapper no longer double-logs), giving processing failures a single channel.
 
 ## 4.0.6 - 2026-10-25
 

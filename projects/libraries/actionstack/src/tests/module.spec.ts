@@ -71,7 +71,7 @@ describe("module", () => {
     expect(dispatched.type).toBe("feature/IGNORED_ORIGINAL_TYPE");
   });
 
-  it("destroy() unloads by default and disables actions until reconfigured", () => {
+  it("destroy() unloads by default and disables actions until reconfigured", async () => {
     const dispatch = jasmine.createSpy("dispatch");
     const unloadModule = jasmine.createSpy("unloadModule").and.resolveTo();
 
@@ -86,7 +86,8 @@ describe("module", () => {
     mod.destroy();
 
     expect(unloadModule).toHaveBeenCalledWith(mod, true);
-    expect(() => (mod.actions as any).set(1)).toThrowError(/cannot be dispatched before configuration/i);
+    await expectAsync((mod.actions as any).set(1))
+      .toBeRejectedWithError(/cannot be dispatched before configuration/i);
   });
 
   it("destroy(false) does not unload from store", () => {

@@ -492,10 +492,12 @@ function initializeActions<Actions extends Record<string, any>>(
       // Access store via getter at runtime
       const store = getStore();
       if (!store || moduleInstance.destroying || moduleInstance.destroyed) {
-        throw new Error(
+        // Same failure channel as processing errors: callers can uniformly
+        // `await` and catch instead of guarding a synchronous throw.
+        return Promise.reject(new Error(
           `Module "${slice}" actions cannot be dispatched before configuration. ` +
           `Call module.configure(store) first.`
-        );
+        ));
       }
 
       const actionToDispatch = actionCreator(...args);

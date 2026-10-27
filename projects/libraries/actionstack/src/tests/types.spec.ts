@@ -177,3 +177,31 @@ describe("isAsync", () => {
   });
 });
 
+
+describe("BoundAction and ThunkCreator inference", () => {
+  it("infers thunk result types through bound module actions", async () => {
+    const { createThunk } = await import("@epikodelabs/actionstack");
+    const creator = createThunk("TYPES/ANSWER", () => async () => 42);
+    // Runtime assigns the creator's metadata onto the dispatch function, so the
+    // intersection below matches what Object.defineProperties produces.
+    const bound = Object.assign(async () => 42, { type: "TYPES/ANSWER" }) as unknown as import("@epikodelabs/actionstack").BoundAction<typeof creator>;
+
+    const value: number = await bound();
+    expect(value).toBe(42);
+    expect(bound.type).toBe("TYPES/ANSWER");
+  });
+
+  it("preserves creator argument types", async () => {
+    const { createThunk } = await import("@epikodelabs/actionstack");
+    const creator = createThunk("TYPES/ECHO", (text: string) => async () => text.length);
+    const bound = Object.assign(
+      async (text: string) => text.length,
+      { type: "TYPES/ECHO" }
+    ) as unknown as import("@epikodelabs/actionstack").BoundAction<typeof creator>;
+
+    // @ts-expect-error — the bound method keeps the creator's argument contract
+    bound(123);
+    const length: number = await bound("abcd");
+    expect(length).toBe(4);
+  });
+});
