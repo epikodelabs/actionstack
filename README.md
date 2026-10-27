@@ -149,14 +149,19 @@ Replace the example reporter with your application service. Returning or awaitin
 
 Store settings include `awaitStatePropagation`, `dispatchSystemActions`, `enableGlobalReducers`, and `exclusiveActionProcessing`. Choose execution behavior explicitly when sequencing matters; check the API reference before relying on a particular concurrency policy.
 
+Module action methods return promises. Await them to observe completion and catch direct handler or thunk failures; a thunk's result is the promise's value. Inside an exclusive thunk, use its supplied `dispatch` for child actions so they run within the active workflow's queue lock. Awaiting another store-bound module method there queues behind the parent and cannot complete. Automatically triggered thunk failures are logged once and do not reject their triggering action.
+
+On the 4.x line, `awaitStatePropagation` waits for the browser idle boundary; it does not wait for arbitrary async selectors or subscriber effects. `dispatchSystemActions: false` disables all observable system actions while internal store readiness remains available.
+
 ## Packages and project structure
 
 | Entry point | Includes |
 | --- | --- |
-| `@epikodelabs/actionstack` | Store, feature modules, actions, thunks, selectors, middleware utilities, and Angular's `atomToSignal` helper. |
+| `@epikodelabs/actionstack` | Store, feature modules, actions, thunks, selectors, and middleware utilities. |
 | `@epikodelabs/actionstack/tools` | Logging, state-freezing, and performance middleware. |
+| `@epikodelabs/actionstack/angular` | Angular `atomToSignal` adapter; requires the optional `@angular/core` peer. |
 
-Angular helpers currently ship from the core entry point. The repository also contains a React demo; it does not define separate `/react` or `/vue` package entry points.
+Angular helpers ship from the separate `@epikodelabs/actionstack/angular` entry point. The repository also contains a React demo; it does not define separate `/react` or `/vue` package entry points.
 
 ```text
 projects/

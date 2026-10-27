@@ -191,12 +191,10 @@ export function createStore<T = any>(
    * If any validation fails, a warning is logged to the console and the action is not dispatched.
    * After validation, the action is processed by the reducer, and the global state is updated accordingly.
    */
-  let dispatch: Dispatch<T, any> = async (action) => {
+  let dispatch: Dispatch<T, any> = async (action: Action | AsyncAction<T, any>): Promise<any> => {
     if (typeof action === 'function') {
-      // Preserve the thunk's return value so a thunk forwarded past the starter
-      // still resolves the dispatch promise with its result.
       return await (action as AsyncAction<T, any>)(
-        (nestedAction) => store.dispatch(nestedAction as any),
+        (nestedAction: Action | AsyncAction<T, any>): Promise<any> => store.dispatch(nestedAction),
         () => state,
         pipeline.dependencies
       );
@@ -231,7 +229,7 @@ export function createStore<T = any>(
             newState = maybeUpdatedState;
           }
         } catch (err: any) {
-          console.warn(`Error in meta-reducer ${i}:`, err.message ?? err);
+          console.warn(`Error in meta-reducer ${i}:`, err?.message ?? err);
         }
       }
     }
@@ -271,32 +269,22 @@ export function createStore<T = any>(
     processed: any = {},
     origin: string = ''
   ): any => {
-    if (Array.isArray(source)) {
-      return source.map((item) => processDependencies(item, processed));
-    }
+    if (Array.isArray(source)) return source.map(item => processDependencies(item, {}, origin));
+    if (source === null || typeof source !== 'object') return source;
+    const prototype = Object.getPrototypeOf(source);
+    if (prototype !== Object.prototype && prototype !== null) return source;
 
-    if (source && typeof source === 'object') {
-      // Check if the source is a plain object
-      if (
-        typeof source.constructor === 'function' &&
-        source.constructor !== Object
-      ) {
-        return source;
+    for (const [key, value] of Object.entries(source)) {
+      if (!Object.hasOwn(processed, key)) {
+        Object.defineProperty(processed, key, {
+          value: processDependencies(value, {}, origin),
+          enumerable: true, writable: true, configurable: true,
+        });
       } else {
-        for (const [key, value] of Object.entries(source)) {
-          if (!processed.hasOwnProperty(key)) {
-            processed[key] = processDependencies(value, processed, origin);
-          } else {
-            console.warn(
-              `Overlapping property '${key}' found in dependencies from module: ${origin}. The existing value will be preserved.`
-            );
-          }
-        }
-        return processed; // Assume it's a class instance or other non-plain object
+        console.warn(`Overlapping property '${key}' found in dependencies from module: ${origin}. The existing value will be preserved.`);
       }
     }
-
-    return source;
+    return processed;
   };
 
   /**
@@ -324,104 +312,53 @@ export function createStore<T = any>(
     pipeline.dependencies = remainingDependencies;
   };
 
-  /**
-   * Populates the store with an array of feature modules.
-   * This method ensures modules are initialized and loaded into the store.
-   */
-  const populate = async (...moduleList: FeatureModule[]): Promise<void> => {
-    return queue.enqueue(async () => {
-      // Load modules sequentially within the same queue operation
-      for (const module of moduleList) {
-        if (modules.some((m) => m.slice === module.slice)) {
-          console.warn(`Module ${module.slice} already loaded, skipping`);
-          continue;
-        }
-
-        try {
-          if (typeof module.configure === 'function') {
-            module.configure(store);
-          }
-
-          // Register the module first
-          modules = [...modules, module];
-
-          // Register action handlers
-          registerActionHandlers(module, registry);
-          registerThunks(module, registry);
-
-          // Inject dependencies
-          injectDependencies();
-
-          // Initialize state if not already present
-          const slicePath = (module.slice || 'main').split('/');
-          if (getProperty(state, slicePath) === undefined) {
-            state = setProperty(state, slicePath, module.initialState);
-          }
-          
-          // Dispatch system action
-          sysActions.moduleLoaded(module);
-          // Update current state
-          currentState.next(state);
-          // Signal that module state and selectors are ready
-          module.loaded$.next();
-        } catch (error) {
-          console.warn(`Failed to load module ${module.slice}:`, error);
-
-          // Clean up on failure
-          modules = modules.filter((m) => m.slice !== module.slice);
-
-          // Signal error on loaded$ atom
-          module.loaded$.fail(error);
-
-          throw error; // Re-throw to let caller handle
-        }
+  /** Installs one module inside the store queue, with registration rollback. */
+  const installModule = async (module: FeatureModule, warnDuplicate = false): Promise<void> => {
+    if (modules.some(m => m.slice === module.slice)) {
+      if (warnDuplicate) console.warn(`Module ${module.slice} already loaded, skipping`);
+      return;
+    }
+    const previousModules = modules;
+    const previousDependencies = pipeline.dependencies;
+    const previousHandlers = new Map(registry.actionHandlers);
+    const previousThunks = new Map(registry.registeredThunks);
+    let nextState = state;
+    try {
+      if (typeof module.configure === 'function') module.configure(store);
+      const slicePath = (module.slice || 'main').split('/');
+      if (getProperty(state, slicePath) === undefined) {
+        nextState = setProperty(state, slicePath, module.initialState);
       }
-    });
-  };
-
-  /**
-   * Loads a new feature module into the store if it isn't already loaded.
-   * It ensures that dependencies are injected, the global state is updated,
-   * and a `moduleLoaded` action is dispatched once the module is successfully loaded.
-   */
-  const loadModule = async (module: FeatureModule): Promise<void> => {
-    return queue.enqueue(async () => {
-      if (modules.some((m) => m.slice === module.slice)) {
-        return; // Already loaded
-      }
-
-      module.configure(store);
-
-      // Registration, dependencies, and state install share one failure
-      // boundary: any failure unwinds all of it so a repaired retry
-      // starts clean instead of hitting the already-loaded shortcut.
       modules = [...modules, module];
+      registerActionHandlers(module, registry);
+      registerThunks(module, registry);
+      injectDependencies();
+    } catch (error) {
+      modules = previousModules;
+      pipeline.dependencies = previousDependencies;
+      registry.actionHandlers.clear();
+      for (const [type, handler] of previousHandlers) registry.actionHandlers.set(type, handler);
+      registry.registeredThunks.clear();
+      for (const [type, thunk] of previousThunks) registry.registeredThunks.set(type, thunk);
+      try { module.loaded$.fail(error); } catch { /* Preserve the installation error. */ }
+      try { module.destroy?.(false); } catch { /* Preserve the installation error. */ }
+      throw error;
+    }
 
-      try {
-        registerActionHandlers(module, registry);
-        registerThunks(module, registry);
-
-        // Inject dependencies
-        injectDependencies();
-
-        const slicePath = (module.slice || 'main').split('/');
-        if (getProperty(state, slicePath) === undefined) {
-          state = setProperty(state, slicePath, module.initialState);
-        }
-      } catch (error) {
-        modules = modules.filter((m) => m.slice !== module.slice);
-        unregisterActionHandlers(module, registry);
-        unregisterThunks(module, registry);
-        ejectDependencies(module);
-        module.loaded$.fail(error);
-        throw error;
-      }
-
-      sysActions.moduleLoaded(module);
-      currentState.next(state);
-      module.loaded$.next();
-    });
+    state = nextState;
+    if (settings.dispatchSystemActions) void sysActions.moduleLoaded(module).catch(() => {});
+    // Observer failures cannot roll back state another observer has already seen.
+    try { currentState.next(state); } catch (error) { console.warn('Error notifying state observers:', error); }
+    try { module.loaded$.next(); } catch (error) { console.warn('Error notifying module observers:', error); }
   };
+
+  const populate = async (...moduleList: FeatureModule[]): Promise<void> =>
+    queue.enqueue(async () => {
+      for (const module of moduleList) await installModule(module, true);
+    });
+
+  const loadModule = async (module: FeatureModule): Promise<void> =>
+    queue.enqueue(() => installModule(module));
 
   /**
    * Unloads a feature module from the store, optionally clearing its state.
@@ -456,7 +393,7 @@ export function createStore<T = any>(
         state = setProperty(state, slicePath, undefined);
       }
       // Dispatch module unloaded action
-      sysActions.moduleUnloaded(module);
+      if (settings.dispatchSystemActions) void sysActions.moduleUnloaded(module).catch(() => {});
       if (typeof module.destroy === 'function') {
         module.destroy(false);
       } else {
@@ -611,11 +548,10 @@ export function createStore<T = any>(
 
     sysActions = systemModule.actions;
 
-    // Initialize state and mark store as initialized. Internal lifecycle bookkeeping
-    // (initial state) always runs; the observable system actions honor the setting.
-    sysActions.initializeState();
+    // Disabling system actions leaves their public readiness markers unset.
     if (settings.dispatchSystemActions) {
-      sysActions.storeInitialized();
+      void sysActions.initializeState().catch(() => {});
+      void sysActions.storeInitialized().catch(() => {});
     }
 
     console.log(
@@ -636,7 +572,7 @@ export function createStore<T = any>(
 
   store = enhancer(() => store)(settings);
   let originalDispatch = store.dispatch;
-  store.dispatch = (action) => {
+  store.dispatch = (action: Action | AsyncAction<T, any>): Promise<any> => {
     // Fast path: avoid creating closures/promises if no tracking is needed
     if (!settings.awaitStatePropagation) {
       return originalDispatch(action);

@@ -329,27 +329,31 @@ function initializeDataStreams<
 
     const createSelectorSource = () => {
       const destroyed$ = getDestroyed$();
-      // Set when the store-side selection is still resolving: the cache below
-      // can be stale, so its synchronous replay must be skipped.
-      let upstreamPending = false;
+      let selectorSource: any;
 
       const source = createCurrentSource<any>({
-        connect: (emit) => {
-          let selectorSource: any;
+        isPending: () => selectorSource?.isPending?.() ?? false,
+        connect: (emit, fail) => {
+          let connectionSource: any;
           let selectorSubscription: any;
+          let confirmationSubscription: any;
+          let errorSubscription: any;
           let loadedSubscription: any;
+          let closed = false;
 
           const connectToStore = () => {
             const nextStore = getStore();
-            if (!nextStore || selectorSubscription) {
+            if (closed || !nextStore || selectorSubscription) {
               return false;
             }
 
-            selectorSource = nextStore.select(selectorFn);
-            selectorSubscription = selectorSource.subscribe((value: any) => {
-              emit(value);
-            });
-            upstreamPending = (selectorSource as any).isPending?.() ?? false;
+            connectionSource = nextStore.select(selectorFn);
+            selectorSource = connectionSource;
+            confirmationSubscription = connectionSource.onCurrent?.(emit);
+            errorSubscription = connectionSource.onError?.(fail);
+            selectorSubscription = connectionSource.subscribe(
+              confirmationSubscription ? undefined : emit
+            );
 
             return true;
           };
@@ -362,27 +366,25 @@ function initializeDataStreams<
           });
 
           connectToStore();
+          // loaded$ can replay synchronously before loadedSubscription is
+          // assigned. Remove that now-obsolete listener after subscribe returns.
+          if (selectorSubscription) {
+            void loadedSubscription?.();
+            loadedSubscription = undefined;
+          }
 
-          return createSubscription(async () => {
-            await loadedSubscription?.();
-            await selectorSubscription?.();
-            selectorSource?.dispose?.();
+          return createSubscription(() => {
+            closed = true;
+            if (selectorSource === connectionSource) selectorSource = undefined;
+            const loadedCleanup = loadedSubscription?.();
+            const selectorCleanup = selectorSubscription?.();
+            const confirmationCleanup = confirmationSubscription?.();
+            const errorCleanup = errorSubscription?.();
+            connectionSource?.dispose?.();
+            return Promise.all([loadedCleanup, selectorCleanup, confirmationCleanup, errorCleanup]).then(() => undefined);
           });
         },
       });
-
-      // Skip the synchronous cached replay while the upstream selection is
-      // pending: it can be stale, and the fresh value arrives when it settles.
-      const rawSubscribe = source.subscribe.bind(source);
-      source.subscribe = (callback?: (value: any, previous: any) => void) => {
-        let subscribing = true;
-        const inner = rawSubscribe((value: any, previous: any) => {
-          if (upstreamPending && subscribing) return;
-          callback?.(value, previous);
-        });
-        subscribing = false;
-        return inner;
-      };
 
       const disposeSource = source.dispose.bind(source);
       let destroyedSubscription: any;
@@ -505,7 +507,7 @@ function initializeActions<Actions extends Record<string, any>>(
   for (const key in processedActions) {
     const actionCreator = processedActions[key];
 
-    (moduleInstance.actions as any)[key] = (...args: any[]) => {
+    (moduleInstance.actions as any)[key] = async (...args: any[]) => {
       // Access store via getter at runtime
       const store = getStore();
       if (!store || moduleInstance.destroying || moduleInstance.destroyed) {

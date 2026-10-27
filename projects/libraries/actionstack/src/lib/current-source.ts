@@ -9,6 +9,8 @@ export type CurrentValue<T> = T | PromiseLike<T> | typeof NO_CURRENT_VALUE;
 export interface CurrentSourceOptions<T> {
   /** Preserve repeated equal upstream emissions when false. Defaults to true. */
   dedupe?: boolean;
+  /** Internal readiness bridge for wrappers around another current-value source. */
+  isPending?: () => boolean;
   /** Reads the latest value when a subscriber attaches if connect does not provide one. */
   read?: () => CurrentValue<T>;
   /** Connects to current and future changes while at least one subscriber is attached. */
@@ -39,23 +41,31 @@ export function createCurrentSource<T>(
   let pendingResolution = false;
   let activeSubscriptions = 0;
   let upstreamSubscription: Subscription | undefined;
-  // Subscribers that attached while a resolution was pending and skipped the
-  // stale cache replay. Resolutions bypass dedupe while any exist, so a value
-  // equal to the cache still reaches them instead of arriving never.
-  let staleReplaySubscribers = 0;
+  let connected = false;
+  let connectionVersion = 0;
+  type Observer = { active: boolean; waiting: boolean; hasValue: boolean; value?: T };
+  const waiting = new Set<Observer>();
+  // Wrappers need confirmation of a current value even when the ordinary
+  // subscribers suppress an equal result. This stays internal to the source.
+  const currentListeners = new Set<(value: T) => void>();
+  const isPending = (): boolean => pendingResolution || options.isPending?.() === true;
+  const equals = (previous: T, next: T): boolean =>
+    options.dedupe !== false && Object.is(previous, next);
 
   const publish = (value: T): void => {
     if (cache.disposed) return;
-    // Subscribers waiting past a stale replay must receive the pending value
-    // even when it equals the cache; delivering it ends their wait.
-    const bypassDedupe = staleReplaySubscribers > 0;
-    if (!bypassDedupe && options.dedupe !== false && hasValue && Object.is(cache.safeValue, value)) {
-      return;
+    // A waiting subscriber still needs its first confirmed value when the
+    // selection equals the cache. Per-observer dedupe prevents duplicate
+    // delivery to existing subscribers when that confirmation is broadcast.
+    const version = resolutionVersion;
+    if (!(hasValue && equals(cache.safeValue as T, value) && waiting.size === 0)) {
+      hasValue = true;
+      cache.next(value);
     }
-
-    staleReplaySubscribers = 0;
-    hasValue = true;
-    cache.next(value);
+    for (const listener of [...currentListeners]) {
+      if (cache.disposed || version !== resolutionVersion) break;
+      listener(value);
+    }
   };
 
   const fail = (error: unknown): void => {
@@ -96,21 +106,35 @@ export function createCurrentSource<T>(
   };
 
   const connect = (): void => {
-    if (upstreamSubscription || !options.connect || cache.disposed) return;
+    if (connected || !options.connect || cache.disposed) return;
 
+    connected = true;
+    const version = ++connectionVersion;
     try {
-      upstreamSubscription = options.connect(accept, fail) ?? undefined;
+      const subscription = options.connect(
+        candidate => { if (connected && version === connectionVersion) accept(candidate); },
+        error => { if (connected && version === connectionVersion) fail(error); }
+      ) ?? undefined;
+      // A synchronous emission may dispose or disconnect this source before
+      // connect() returns its teardown. Do not retain that obsolete connection.
+      if (connected && version === connectionVersion && !cache.disposed) {
+        upstreamSubscription = subscription;
+      } else {
+        void subscription?.();
+      }
     } catch (error) {
       fail(error);
     }
   };
 
-  const disconnect = (): void => {
+  const disconnect = (): void | Promise<void> => {
     resolutionVersion++;
     pendingResolution = false;
+    connected = false;
+    connectionVersion++;
     const upstream = upstreamSubscription;
     upstreamSubscription = undefined;
-    upstream?.();
+    return upstream?.();
   };
 
   const refresh = (): void => {
@@ -124,16 +148,13 @@ export function createCurrentSource<T>(
   };
 
   const source = Object.create(cache) as Atom<T>;
-  // True while an accepted selection is still resolving: subscribers attaching
-  // now will skip the stale cache replay, and wrappers can suppress theirs too.
-  (source as any).isPending = () => pendingResolution;
 
   source.subscribe = (callback) => {
     if (cache.disposed) {
       return createSubscription(() => {});
     }
 
-    const activating = activeSubscriptions === 0;
+    const activating = activeSubscriptions++ === 0;
 
     if (activating) {
       // Streamix 3 atoms replay synchronously on subscribe, so connecting first
@@ -147,48 +168,50 @@ export function createCurrentSource<T>(
       }
     }
 
-    // While a current selection is still pending, the cache may hold the value
-    // from a previous connection or resolution. Streamix would replay that
-    // stale value immediately to ANY subscriber attaching now, so suppress
-    // exactly that replay and let the pending selection deliver instead.
-    // Resolutions bypass dedupe while suppressed subscribers exist, so the
-    // pending value always reaches them even when it equals the cache.
-    const suppressStaleReplay = pendingResolution && hasValue;
-    let firstDelivery = true;
-    if (suppressStaleReplay) staleReplaySubscribers++;
+    const observer: Observer = { active: true, waiting: isPending(), hasValue: false };
+    let skipReplay = observer.waiting && hasValue;
+    if (observer.waiting) waiting.add(observer);
 
     const innerSubscription = cache.subscribe((value, previous) => {
-      if (suppressStaleReplay && firstDelivery) {
-        // The stale replay is skipped; the counter stays raised so the
-        // pending resolution bypasses dedupe and reaches this subscriber.
-        firstDelivery = false;
+      if (!observer.active) return;
+      if (skipReplay) {
+        skipReplay = false;
         return;
       }
 
-      firstDelivery = false;
-      callback?.(value, previous);
+      observer.waiting = false;
+      waiting.delete(observer);
+      if (observer.hasValue && equals(observer.value as T, value)) return;
+      observer.hasValue = true;
+      observer.value = value;
+      return callback?.(value, previous);
     });
 
-    activeSubscriptions++;
-
-    return createSubscription(async () => {
-      await innerSubscription();
+    return createSubscription(() => {
+      observer.active = false;
+      waiting.delete(observer);
       activeSubscriptions = Math.max(0, activeSubscriptions - 1);
-
-      if (suppressStaleReplay && firstDelivery) {
-        // Detached before the pending resolution arrived; its bypass dies here.
-        staleReplaySubscribers = Math.max(0, staleReplaySubscribers - 1);
-      }
-
-      if (activeSubscriptions === 0) {
-        disconnect();
-      }
+      const inner = innerSubscription();
+      const upstream = activeSubscriptions === 0 ? disconnect() : undefined;
+      return Promise.all([inner, upstream]).then(() => undefined);
     });
+  };
+
+  // True while an accepted selection is still resolving: subscribers attaching
+  // now will skip the stale cache replay, and wrappers can suppress theirs too.
+  (source as any).isPending = isPending;
+  (source as any).onCurrent = (listener: (value: T) => void): Subscription => {
+    if (cache.disposed) return createSubscription(() => {});
+    currentListeners.add(listener);
+    if (hasValue && !isPending()) listener(cache.safeValue as T);
+    return createSubscription(() => { currentListeners.delete(listener); });
   };
 
   source.dispose = () => {
     if (cache.disposed) return;
-    disconnect();
+    void disconnect();
+    waiting.clear();
+    currentListeners.clear();
     cache.dispose();
   };
 

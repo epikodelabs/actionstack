@@ -2,6 +2,12 @@
 
 ## 4.0.7 - 2026-10-27
 
+- Final release checks fix pending async subscription delivery and wrapper readiness without duplicate emissions to established subscribers; cancelled subscribers and old connections cannot leak values into a fresh connection.
+- `populate` and `loadModule` share transactional registration and dependency rollback, resetting failed module lifecycles before retry. Observer failures after a successful install do not undo visible state.
+- Typed results flow through direct and injected dispatch as well as bound thunk methods. Action-creator failures reject the bound action promise, and exclusive workflows retain their queue lock through nested work.
+- Internal initialization now honors disabled observable system actions; package lock metadata and Angular adapter documentation match the release layout.
+- Literal dotted reducer keys remain distinct from nested reducer paths.
+
 Backported the 5.x awaitable-action contract and lifecycle fixes to the 4.x line.
 
 - Thunk results propagate through every dispatch path: awaiting an injected `dispatch(childThunk)` inside a thunk resolves with the child's return value in both strategies, and a thunk forwarded past the starter by middleware still resolves the dispatch promise with its result.
