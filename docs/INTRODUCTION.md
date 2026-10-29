@@ -14,7 +14,7 @@ Built on <a href="https://epikodelabs.github.io/streamix" target="_blank" rel="n
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack"><img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square&color=0ea5e9" alt="npm version"></a>
   <a href="https://codecov.io/gh/epikodelabs/actionstack"><img src="https://codecov.io/gh/epikodelabs/actionstack/graph/badge.svg?style=flat-square" alt="coverage"></a>
   <a href="https://bundlephobia.com/package/@epikodelabs/actionstack">
-    <img src="https://raw.githubusercontent.com/epikodelabs/epikodelabs.github.io/161dea3e83f7bb6c27dcee0e33d615ba91cc5c5b/actionstack/bundle-size.svg" alt="Bundle Size">
+    <img src="https://raw.githubusercontent.com/epikodelabs/epikodelabs.github.io/refs/heads/main/streamix/bundle-size.svg" alt="Bundle Size">
   </a>
 </div>
 
