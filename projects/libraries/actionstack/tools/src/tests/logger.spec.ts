@@ -210,6 +210,31 @@ describe("createLogger", () => {
     expect(actionLevel).toHaveBeenCalled();
   });
 
+  it("logs isolated, deeply frozen state snapshots", async () => {
+    const custom = makeLogger();
+    const mw = createLogger({ logger: custom } as any);
+    const state = { nested: { count: 0 } };
+    const api = { getState: () => state } as any;
+    const next = async () => {
+      state.nested.count = 1;
+    };
+
+    await (mw as any)(api)(next)({ type: "TEST/IMMUTABLE_SNAPSHOTS" });
+
+    const logCalls = custom.log.calls.allArgs();
+    const prevState = logCalls.find(([label]) => label === "%c prev state")?.[2] as typeof state;
+    const nextState = logCalls.find(([label]) => label === "%c next state")?.[2] as typeof state;
+
+    expect(prevState.nested.count).toBe(0);
+    expect(nextState.nested.count).toBe(1);
+    expect(Object.isFrozen(prevState)).toBeTrue();
+    expect(Object.isFrozen(prevState.nested)).toBeTrue();
+    expect(Object.isFrozen(nextState)).toBeTrue();
+    expect(Object.isFrozen(nextState.nested)).toBeTrue();
+    expect(Object.isFrozen(state)).toBeFalse();
+    expect(Object.isFrozen(state.nested)).toBeFalse();
+  });
+
   it("uses colors for prevState when provided", async () => {
     const custom = makeLogger();
     const mw = createLogger({
@@ -429,4 +454,3 @@ describe("createLogger", () => {
     expect(custom.group).toHaveBeenCalled();
   });
 });
-

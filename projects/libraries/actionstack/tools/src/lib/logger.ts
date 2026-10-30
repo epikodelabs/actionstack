@@ -242,6 +242,26 @@ const pad = (num: number, maxLength: number): string =>
 const formatTime = (time: Date): string =>
   `${pad(time.getHours(), 2)}:${pad(time.getMinutes(), 2)}:${pad(time.getSeconds(), 2)}.${pad(time.getMilliseconds(), 3)}`;
 
+function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
+  if (value === null || typeof value !== 'object' || seen.has(value)) {
+    return value;
+  }
+
+  seen.add(value);
+  Reflect.ownKeys(value).forEach((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor && 'value' in descriptor) {
+      deepFreeze(descriptor.value, seen);
+    }
+  });
+
+  return Object.freeze(value);
+}
+
+function createStateSnapshot(state: unknown): unknown {
+  return deepFreeze(structuredClone(state));
+}
+
 const timer =
   typeof performance !== 'undefined' && performance !== null && typeof performance.now === 'function'
     ? performance
@@ -280,7 +300,7 @@ export const createLogger = (options: CreateLoggerOptions = {}): LoggerMiddlewar
 
       logEntry.started = timer.now();
       logEntry.startedTime = new Date();
-      logEntry.prevState = stateTransformer!(api.getState());
+      logEntry.prevState = createStateSnapshot(stateTransformer!(api.getState()));
       logEntry.action = action;
 
       let returnedValue: unknown;
@@ -295,7 +315,7 @@ export const createLogger = (options: CreateLoggerOptions = {}): LoggerMiddlewar
       }
 
       logEntry.took = timer.now() - logEntry.started;
-      logEntry.nextState = stateTransformer!(api.getState());
+      logEntry.nextState = createStateSnapshot(stateTransformer!(api.getState()));
 
       printBuffer(logBuffer, loggerOptions);
       logBuffer.length = 0;
