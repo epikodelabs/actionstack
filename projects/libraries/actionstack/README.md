@@ -2,247 +2,240 @@
   <img src="https://raw.githubusercontent.com/epikodelabs/epikodelabs.github.io/refs/heads/main/actionstack/LOGO.png" alt="Actionstack" width="420">
 </p>
 
-<h3 align="center">State, actions, and async work. One feature at a time.</h3>
+<h3 align="center">State management without the ceremony.</h3>
+
 <p align="center">
-  Modules for features. Actions for changes. Selectors for views.<br>
-  Built on Streamix to keep application state reactive and feature logic together.
+  Mutable state. Immutable snapshots. Precise reactivity.<br>
+  Transactional updates and feature-oriented architecture, powered by Streamix.
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@epikodelabs/actionstack"><img src="https://img.shields.io/npm/v/@epikodelabs/actionstack.svg?style=flat-square&color=0ea5e9" alt="npm version"></a>
   <a href="https://codecov.io/gh/epikodelabs/actionstack"><img src="https://codecov.io/gh/epikodelabs/actionstack/graph/badge.svg?style=flat-square" alt="coverage"></a>
+  <a href="https://github.com/epikodelabs/actionstack/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT License"></a>
 </p>
 
 <p align="center">
   <a href="https://epikodelabs.github.io/actionstack">Documentation</a> ·
-  <a href="https://epikodelabs.github.io/actionstack/api">API reference</a> ·
+  <a href="https://epikodelabs.github.io/actionstack/api">API Reference</a> ·
   <a href="https://github.com/epikodelabs/actionstack/discussions">Discussions</a> ·
   <a href="https://github.com/epikodelabs/actionstack/issues">Issues</a>
 </p>
 
 ## Why Actionstack?
 
-Application state gets harder to follow when a feature's actions, async work, and derived data live in unrelated places.
+State management shouldn't require copying objects just to tell your application something changed.
 
-Actionstack groups them into **feature modules**. Each module owns a state slice, action handlers, selectors, and dependencies. A store coordinates dispatch and module loading; Streamix supplies the reactive foundation.
+Actionstack combines **mutable state, transactional updates, and dependency-tracked selectors** in a modular architecture built on [Streamix](https://github.com/epikodelabs/streamix).
 
-- **Features have a home.** Keep state, actions, selectors, and dependencies together.
-- **Actions describe changes.** Define a handler alongside its action creator instead of maintaining a separate reducer switch.
-- **Selectors feed views.** Read selected state through reactive sources exposed by `data$`.
-- **Thunks handle async work.** Use dispatch, state access, and injected dependencies inside an async action.
-- **Modules can come and go.** Load features when needed and unload them when their work is done.
-- **Stores stay isolated.** Each store has its own action and thunk registries.
+* **Mutate naturally.** Update objects and arrays without spreading or cloning state.
+* **Commit atomically.** Changes are staged and applied transactionally.
+* **Preserve references.** In-place mutations retain existing object identities.
+* **React precisely.** Selectors track dependencies and update only when relevant state changes.
+* **Keep immutable snapshots.** Capture isolated, read-only state histories for debugging.
+* **Organize by feature.** Group state, actions, selectors, and dependencies into modules.
+* **Handle async work.** Coordinate asynchronous workflows with thunks and injected services.
 
-Start with one feature. Add middleware and execution settings when the application needs them.
+**Less copying. Less orchestration. More application logic.**
 
 ## Get started
-
-### Mutable handlers and selective updates
-
-Action handlers and global reducers receive a temporary proxy draft. Mutate it
-and return nothing (or the draft), or return replacement state without mutating.
-Existing replacement-return handlers remain supported. Review promise-returning module actions and live state references when upgrading:
-
-```ts
-const addItem = action('ADD_ITEM', (state: { items: string[] }, item: string) => {
-  state.items.push(item);
-});
-```
-
-Writes stay private until the action succeeds. Committing updates existing
-objects and arrays in place; explicit replacements replace their values.
-Retained state references therefore observe later commits. Never mutate state
-outside a handler, mutate state from a selector, or retain a handler's draft:
-drafts are revoked when the handler finishes. A failing global reducer loses
-its own writes while earlier successful stages are retained.
-
-Store-backed custom selectors track their reads and rerun once per relevant
-action. Whole-object selections emit after nested changes even if their reference
-is unchanged. Primitive results still suppress equal values. Any change beneath
-an array invalidates selectors reading that array, including `length`, an index,
-or iteration; individual array operations are not exposed as public patches.
-
-Async selectors read live state and can observe later commits after an `await`.
-Commits while an evaluation is pending discard its result and coalesce into a
-fresh evaluation when it settles. With `awaitStatePropagation: true`, dispatch
-also waits for selector evaluations and delivery to their sources, followed by
-the browser idle boundary; arbitrary asynchronous subscriber effects are not awaited.
-
-State must be a tree of plain objects, arrays, `Map`, `Set`, and `Date` values
-with data properties; cyclic or shared mutable references and accessors are
-rejected. `Map`, `Set`, and `Date` support their read methods through proxies
-and mutate through them inside handlers (`map.set`, `set.add`, `date.setMonth`),
-with any change invalidating selectors reading that value as a whole. Class
-instances and accessor-based values stay opaque: replace them instead of
-mutating. Direct in-place commits require writable state; do not combine
-mutable handlers with the `storeFreeze` meta-reducer.
-
-Tree validation includes Map keys/values and Set members. Native collections
-cannot have custom own properties; subclasses remain opaque. Draft methods and
-iterators expire with their reducer, and nested member edits are visible to
-later reducer stages before commit.
 
 ```bash
 npm install @epikodelabs/actionstack @epikodelabs/streamix
 ```
 
-Streamix is a peer dependency of Actionstack. The current package declares support for Streamix `^3.0.3`.
-
 ### 1. Define a feature
 
-```ts
+```typescript
 import {
   action,
   createModule,
   createStore,
-  selector,
+  selector
 } from '@epikodelabs/actionstack';
+
+interface CounterState {
+  count: number;
+}
 
 const increment = action(
   'increment',
-  (state: number, amount: number) => state + amount,
+  (state: CounterState, amount: number) => {
+    state.count += amount;
+  }
 );
 
 const counter = createModule({
   slice: 'counter',
-  initialState: 0,
+  initialState: { count: 0 },
+
   actions: { increment },
+
   selectors: {
-    count: selector((state: number) => state),
-    doubled: selector((state: number) => state * 2),
-  },
+    count: selector((state: CounterState) => state.count),
+    doubled: selector((state: CounterState) => state.count * 2)
+  }
 });
 
 const store = createStore();
+
 await store.loadModule(counter);
-
-const unsubscribe = counter.data$.count().subscribe(value => {
-  console.log('Count:', value);
-});
-
-counter.actions.increment(5);
 ```
 
-Loading configures the module with its store. Module action calls dispatch automatically, so do not dispatch the same result a second time. Action methods return the dispatch promise: awaiting one waits for processing to finish, a thunk's return value becomes the resolution, and a failing handler or thunk rejects it. Automatically triggered thunks stay log-only and never fail their triggering action. The selector source supplies the current value and subsequent updates; consume it reactively rather than assuming dispatch has already updated every observer.
+No reducers to maintain. No immutable updates to construct.
 
-### 2. Derive what the view needs
+Actions describe changes directly.
 
-The module already exposes `count` and `doubled`. Subscribe to the value the view needs:
+### 2. Observe reactive state
 
-```ts
-const stopDoubled = counter.data$.doubled().subscribe(value => {
-  console.log('Doubled:', value);
-});
+```typescript
+const unsubscribe = counter.data$.doubled().subscribe(
+  value => console.log('Doubled:', value)
+);
+
+await counter.actions.increment(5); // Doubled: 10
+await counter.actions.increment(3); // Doubled: 16
 ```
 
-Selectors describe calculations over a module's state slice. Keep derived values in selectors instead of storing another copy that must be synchronized.
+Selectors automatically track the state they read.
 
-### 3. Give the feature a lifecycle
+When a mutation commits, Actionstack identifies affected dependencies and propagates relevant updates through Streamix.
 
-When the feature is removed, release its subscriptions and unload its state:
+### 3. Clean up
 
-```ts
+```typescript
 await unsubscribe();
-await stopDoubled();
 await store.unloadModule(counter, true);
 ```
 
-Use `store.populate(...modules)` to load several features. The store's load, populate, and unload methods return promises when you need to await lifecycle completion. The convenience helpers `registerModule`, `populateStore`, and `unregisterModule` return module arrays instead.
+Modules own their features and can be loaded or unloaded dynamically.
 
-## Let asynchronous work have a place
+## Mutable state. Immutable snapshots.
 
-Use `thunk(type, factory)` for work that needs to wait, fetch, or coordinate multiple actions. The factory receives your arguments and returns a function with `dispatch`, `getState`, and `dependencies`:
+Actionstack separates **how state changes** from **how changes are observed**.
 
-```ts
-import { createModule, thunk } from '@epikodelabs/actionstack';
+### Mutable by design
 
-const reportMessage = thunk('reportMessage', (message: string) =>
-  async (_dispatch, _getState, dependencies) => {
-    await dependencies.reporter.send(message);
-  },
+```typescript
+const updateUser = action(
+  'updateUser',
+  (state: UserState, name: string) => {
+    state.user.profile.name = name;
+  }
 );
-
-const reports = createModule({
-  slice: 'reports',
-  initialState: {},
-  actions: { reportMessage },
-  dependencies: {
-    reporter: {
-      async send(message: string) {
-        console.log('Report:', message);
-      },
-    },
-  },
-});
-
-await store.loadModule(reports);
-reports.actions.reportMessage('Counter feature is ready');
 ```
 
-Replace the example reporter with your application service. Returning or awaiting asynchronous work inside the thunk lets the store observe its completion. Thunks also support action triggers; see the API reference for execution and error-handling details.
+Action handlers receive temporary proxy drafts.
+
+Mutations are recorded, validated, and committed transactionally. Existing objects and arrays are updated in place, preserving their references.
+
+If processing fails before commit, staged changes are not partially applied to live state.
+
+### Immutable when it matters
+
+Live state remains mutable through controlled actions, while logging tools can capture independent, deeply frozen snapshots.
+
+| Live state                    | Immutable snapshots              |
+| ----------------------------- | -------------------------------- |
+| Updated transactionally       | Capture historical values        |
+| Preserves object identity     | Preserve historical contents     |
+| Supports reactive observation | Support debugging and inspection |
+| Avoids unnecessary cloning    | Created when needed              |
+
+**Mutability for execution. Immutability for history.**
+
+### Precise reactivity
+
+Consider two selectors:
+
+```typescript
+const name = selector(
+  (state: UserState) => state.user.name
+);
+
+const age = selector(
+  (state: UserState) => state.user.age
+);
+```
+
+Changing `user.name` doesn't require reevaluating a selector that only depends on `user.age`.
+
+Actionstack tracks accessed state paths and uses recorded mutations to invalidate affected selectors.
+
+No manual dependency declarations. No reference comparisons required to detect changes.
+
+## Async work belongs in the feature
+
+Thunks coordinate asynchronous operations using dispatch, state access, and injected dependencies.
+
+```typescript
+import { thunk } from '@epikodelabs/actionstack';
+
+const saveUser = thunk(
+  'saveUser',
+  (user: User) =>
+    async (_dispatch, _getState, dependencies) => {
+      await dependencies.api.save(user);
+    }
+);
+```
+
+Register the thunk in a module's `actions` and provide its dependencies through the module configuration.
+
+Module action methods return promises, allowing callers to await processing and handle failures.
 
 ## Under the hood
 
-| Concept | Responsibility |
-| --- | --- |
-| **Store** | Coordinate state, dispatch, feature registration, and middleware. |
-| **Module** | Group one state slice with its actions, selectors, and dependencies. |
-| **Action** | Describe a change and provide its state handler. |
-| **Selector** | Project state into values a consumer needs. |
-| **Thunk** | Run asynchronous logic with access to dispatch, state, and dependencies. |
-| **Streamix** | Supply the reactive sources beneath store and selector updates. |
+| Concept             | Responsibility                                                 |
+| ------------------- | -------------------------------------------------------------- |
+| **Store**           | Coordinate state, dispatch, middleware, and feature lifecycles |
+| **Module**          | Group state, actions, selectors, and dependencies              |
+| **Action**          | Describe a state transition                                    |
+| **Mutation engine** | Track changes and commit them transactionally                  |
+| **Selector**        | Derive values from tracked state dependencies                  |
+| **Thunk**           | Coordinate asynchronous workflows                              |
+| **Streamix**        | Provide the reactive foundation                                |
 
-Store settings include `awaitStatePropagation`, `dispatchSystemActions`, `enableGlobalReducers`, and `exclusiveActionProcessing`. Choose execution behavior explicitly when sequencing matters; check the API reference before relying on a particular concurrency policy.
+Actionstack supports configurable execution behavior, including exclusive action processing, global reducers, and state-propagation waiting.
 
-## Packages and project structure
+The mutation engine avoids traversing untouched state during ordinary commits and supports constant-time no-op dispatches.
 
-| Entry point | Includes |
-| --- | --- |
-| `@epikodelabs/actionstack` | Store, feature modules, actions, thunks, selectors, and middleware utilities. |
-| `@epikodelabs/actionstack/angular` | Optional Angular adapter exposing `atomToSignal`; requires Angular 16 or later. |
-| `@epikodelabs/actionstack/tools` | Logging, state-freezing, and performance middleware. |
+## Use it where you build
 
-Angular helpers ship from the separate `@epikodelabs/actionstack/angular` entry point, which optionally peers with `@angular/core`. The repository also contains a React demo; it does not define separate `/react` or `/vue` package entry points.
+Actionstack is framework-independent at its core.
 
-```text
-projects/
-├── libraries/
-│   └── actionstack/
-│       ├── src/lib/
-│       │   ├── store.ts           # Store and dispatch coordination
-│       │   ├── module.ts          # Feature registration and lifecycle
-│       │   ├── actions.ts         # Action creators, thunks, and registries
-│       │   ├── selectors.ts       # Selector composition
-│       │   ├── current-source.ts  # Current-value reactive sources
-│       │   ├── queue.ts           # Execution queue
-│       │   ├── starter.ts         # Thunk middleware
-│       │   ├── angular.ts         # Angular signal bridge
-│       │   └── types.ts           # Shared contracts
-│       └── tools/src/lib/         # Logger, freeze, and performance tools
-└── apps/
-    ├── app1/                      # Angular demo
-    └── app2/                      # React + Vite demo
-```
+| Entry point                        | Includes                                        |
+| ---------------------------------- | ----------------------------------------------- |
+| `@epikodelabs/actionstack`         | Store, modules, actions, selectors, thunks      |
+| `@epikodelabs/actionstack/angular` | Angular signal integration                      |
+| `@epikodelabs/actionstack/tools`   | Logging, state freezing, performance middleware |
+
+The repository includes Angular and React demonstration applications.
+
+Streamix provides the reactive foundation without requiring a particular UI framework.
 
 ## Learn more
 
-- [Full documentation](https://epikodelabs.github.io/actionstack)
-- [API reference](https://epikodelabs.github.io/actionstack/api)
-- [Streamix documentation](https://epikodelabs.github.io/streamix) — the reactive foundation
-- [Source code](https://github.com/epikodelabs/actionstack)
+* [Full documentation](https://epikodelabs.github.io/actionstack)
+* [API reference](https://epikodelabs.github.io/actionstack/api)
+* [Mutation guide](https://github.com/epikodelabs/actionstack/blob/main/docs/MUTATIONS.md)
+* [Streamix documentation](https://epikodelabs.github.io/streamix)
+* [Source code](https://github.com/epikodelabs/actionstack)
 
 ## Come build with us
 
-Have a feature that is awkward to model, an async edge case, or a useful example? We'd like to hear about it.
+Have an interesting state-management challenge, an async edge case, or an idea for improving the mutation engine? We'd love to hear about it.
 
-- [Start a discussion](https://github.com/epikodelabs/actionstack/discussions) for questions and ideas.
-- [Open an issue](https://github.com/epikodelabs/actionstack/issues) with a minimal reproduction for bugs.
-- [Star the repository](https://github.com/epikodelabs/actionstack) if Actionstack helps you.
+* [Start a discussion](https://github.com/epikodelabs/actionstack/discussions) for questions and ideas.
+* [Open an issue](https://github.com/epikodelabs/actionstack/issues) with a reproducible problem.
+* [Star the repository](https://github.com/epikodelabs/actionstack) if Actionstack helps you.
 
-## License and support
+**Write changes. Not copies.**
 
-Actionstack is available at no charge under the [MIT License](https://github.com/epikodelabs/actionstack/blob/main/LICENSE). Optional paid support, consulting, and custom delivery are available by separate written agreement.
+## License
 
-[Pricing](https://epikodelabs.github.io/actionstack/PRICING) · [Terms of Service](https://epikodelabs.github.io/actionstack/TERMS-OF-SERVICE) · [Privacy Policy](https://epikodelabs.github.io/actionstack/PRIVACY-POLICY) · [Refund Policy](https://epikodelabs.github.io/actionstack/REFUND-POLICY)
+MIT
 
-Module action methods return promises: await them for processing completion and catch failures. This changes the old action-object return contract. Within an exclusive thunk, use its injected `dispatch` and `getState` for nested work so it runs inside the active workflow. Async selector reads are live; 5.x `awaitStatePropagation` waits for selector settlement and the browser idle boundary, but does not await arbitrary subscriber side effects.
+Optional commercial support, consulting, and custom development are available under separate agreements.
+
+[Pricing](https://epikodelabs.github.io/actionstack/PRICING) · [Terms](https://epikodelabs.github.io/actionstack/TERMS-OF-SERVICE) · [Privacy](https://epikodelabs.github.io/actionstack/PRIVACY-POLICY)
