@@ -1,24 +1,46 @@
-/* HeroDetailComponent's private CSS styles */
-label {
-  color: #435960;
-  font-weight: bold;
+.profile {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
-input {
-  font-size: 1em;
-  padding: .5rem;
+
+.profile__head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
 }
-button {
-  margin-top: 20px;
-  background-color: #eee;
-  padding: 1rem;
-  border-radius: 4px;
-  font-size: 1rem;
+
+.profile__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
-button:hover {
-  background-color: #cfd8dc;
+
+.profile__identity h1 {
+  font-size: 1.5rem;
+  line-height: 1.2;
 }
-button:disabled {
-  background-color: #eee;
-  color: #ccc;
-  cursor: auto;
+
+.profile__identity .pill {
+  align-self: flex-start;
+}
+
+.profile__form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-top: 20px;
+}
+
+.profile__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }

@@ -1,7 +1,19 @@
-<h1>{{title}}</h1>
-<nav>
-  <a routerLink="/dashboard">Dashboard</a>
-  <a routerLink="/heroes">Heroes</a>
-</nav>
-<router-outlet></router-outlet>
-<app-messages></app-messages>
+<header class="masthead">
+  <div class="masthead__inner">
+    <a class="logotype" routerLink="/dashboard">
+      <span class="logotype__mark" aria-hidden="true"></span>
+      <span class="logotype__name">{{ title }}</span>
+      <span class="logotype__tag">actionstack demo</span>
+    </a>
+
+    <nav class="route-nav" aria-label="Primary">
+      <a routerLink="/dashboard" routerLinkActive="is-active">/dashboard</a>
+      <a routerLink="/heroes" routerLinkActive="is-active">/heroes</a>
+    </nav>
+  </div>
+</header>
+
+<main class="app-main">
+  <router-outlet></router-outlet>
+  <app-messages></app-messages>
+</main>

@@ -1,21 +1,108 @@
-/* AppComponent's private CSS styles */
-h1 {
-  margin-bottom: 0;
-}
-nav a {
-  padding: 1rem;
-  text-decoration: none;
-  margin-top: 10px;
-  display: inline-block;
-  background-color: #e8e8e8;
-  color: #3d3d3d;
-  border-radius: 4px;
+:host {
+  display: block;
 }
 
-nav a:hover {
-  color: white;
-  background-color: #42545C;
+.masthead__inner {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 30px 20px 20px;
+  border-bottom: 1px solid var(--line);
 }
-nav a:active {
-  background-color: black;
+
+.logotype {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  text-transform: lowercase;
+}
+
+.logotype__mark {
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.16);
+  transform: rotate(45deg);
+}
+
+.logotype__name {
+  white-space: nowrap;
+}
+
+.logotype__tag {
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.route-nav {
+  display: flex;
+  gap: 22px;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+}
+
+.route-nav a {
+  padding-bottom: 4px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  text-decoration: none;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.route-nav a:hover {
+  color: var(--ink);
+}
+
+.route-nav a.is-active {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.app-main {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 24px 20px 56px;
+}
+
+@media (max-width: 560px) {
+  .logotype__tag {
+    display: none;
+  }
+
+  .masthead__inner {
+    padding: 20px 16px 14px;
+  }
+
+  .logotype {
+    font-size: 1.15rem;
+  }
+
+  .route-nav {
+    font-size: 0.85rem;
+    gap: 16px;
+  }
+
+  .app-main {
+    padding: 18px 16px 48px;
+  }
 }

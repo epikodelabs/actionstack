@@ -57,13 +57,27 @@ export const loadHero = thunk("LOAD_HEROES", (id: number) => async (dispatch: an
     }
   });
 
+export const renameHeroSuccess = action(
+  'RENAME_HERO_SUCCESS',
+  (state: HeroDetailsState, { hero }: { hero: Hero }) => ({
+    ...state,
+    hero
+  })
+);
+
+export const renameHero = thunk("RENAME_HERO", (id: number, name: string) => async (dispatch: any, getState: any, { heroService }: any) => {
+    const hero = await heroService.renameHero(id, name) as Hero;
+    heroDetailsModule.actions.renameHeroSuccess({ hero });
+    messagesModule.actions.addMessage(`HeroService: renamed hero id=${id} to ${name}`);
+  });
+
 // Selectors
 export const heroSelector = selector((state) => state.hero);
 
 export const heroDetailsModule = createModule({
   slice,
   initialState,
-  actions: { loadHeroRequest, loadHeroSuccess, loadHeroFailure, loadHero },
+  actions: { loadHeroRequest, loadHeroSuccess, loadHeroFailure, loadHero, renameHeroSuccess, renameHero },
   selectors: { heroSelector },
   dependencies: { heroService: new HeroService() }
 });

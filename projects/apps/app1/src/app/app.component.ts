@@ -13,7 +13,6 @@ import { MessagesModule } from './messages/messages.module';
 })
 export class AppComponent implements OnInit, OnDestroy {
   title = 'Tour of Heroes';
-  constructor() {}
 
   ngOnInit() {
   }

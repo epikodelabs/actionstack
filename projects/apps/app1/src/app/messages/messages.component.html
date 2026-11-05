@@ -1,9 +1,28 @@
-<div *atom="messages as messages">
-  <div *ngIf="messages.length">
-    <h2>Messages</h2>
-    <button type="button"
-            class="clear"
-            (click)="clearMessages()">Clear messages</button>
-    <div *atom="let message of messages"> {{message}} </div>
-  </div>
-</div>
+<ng-container *atom="messages as messages">
+  <section class="activity" aria-live="polite">
+    <header class="activity__head">
+      <span class="activity__signal" [class.is-live]="messages?.length" aria-hidden="true"></span>
+      <h2 class="activity__title">Activity log</h2>
+      <span class="pill">{{ messages?.length ?? 0 }}</span>
+      <span class="activity__spacer"></span>
+      <button
+        type="button"
+        class="btn btn--ghost btn--sm"
+        [disabled]="!messages?.length"
+        (click)="clearMessages()"
+      >
+        Clear
+      </button>
+    </header>
+
+    @if (messages?.length) {
+      <ol class="activity__list">
+        @for (message of messages; track $index) {
+          <li>{{ message }}</li>
+        }
+      </ol>
+    } @else {
+      <p class="activity__quiet">No activity yet — hero lookups and renames will show up here.</p>
+    }
+  </section>
+</ng-container>

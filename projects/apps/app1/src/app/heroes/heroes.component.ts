@@ -5,6 +5,7 @@ import { unregisterModule } from '@epikodelabs/actionstack';
 import type { Atom } from '@epikodelabs/streamix';
 import { store } from '../app.module';
 import type { Hero } from '../hero';
+import { heroHue, heroInitials } from '../hero-presentation';
 import { heroesModule } from './heroes.slice';
 
 @Component({
@@ -15,9 +16,10 @@ import { heroesModule } from './heroes.slice';
 })
 export class HeroesComponent implements OnInit, OnDestroy {
   heroes?: Atom<Hero[]>;
-  private readonly changeDetector = inject(ChangeDetectorRef);
+  readonly hue = heroHue;
+  readonly initials = heroInitials;
 
-  constructor() {}
+  private readonly changeDetector = inject(ChangeDetectorRef);
 
   async ngOnInit() {
     await store.loadModule(heroesModule);

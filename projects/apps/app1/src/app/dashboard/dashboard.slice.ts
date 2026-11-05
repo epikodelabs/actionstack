@@ -15,7 +15,9 @@ export interface DashboardState {
 
 export const initialState: DashboardState = {
   heroes: [],
-  loading: false,
+  // The dashboard loads its heroes on mount; start in the loading state so the
+  // skeleton shows instead of a one-frame empty state.
+  loading: true,
   error: null
 };
 
@@ -63,6 +65,7 @@ export const loadHeroes = thunk(
 
 // Selectors remain the same
 export const selectTopHeroes = selector(state => state.heroes.slice(1, 5));
+export const selectLoading = selector((state: DashboardState) => state.loading);
 
 // Export for registration
 export const dashboardModule = createModule({
@@ -75,7 +78,8 @@ export const dashboardModule = createModule({
     loadHeroes
   },
   selectors: {
-    selectTopHeroes
+    selectTopHeroes,
+    selectLoading
   },
   dependencies: {
     heroService: new HeroService()

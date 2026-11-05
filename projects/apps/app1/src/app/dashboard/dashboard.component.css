@@ -1,50 +1,64 @@
-/* DashboardComponent's private CSS styles */
-
-h2 {
-  text-align: center;
+.hero-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(228px, 1fr));
 }
 
-.heroes-menu {
-  padding: 0;
-  margin: auto;
-  max-width: 1000px;
-
-  /* flexbox */
+.hero-card {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: space-around;
-  align-content: flex-start;
-  align-items: flex-start;
-}
-
-a {
-  background-color: #3f525c;
-  border-radius: 2px;
-  padding: 1rem;
-  font-size: 1.2rem;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: inherit;
   text-decoration: none;
-  display: inline-block;
-  color: #fff;
-  text-align: center;
-  width: 100%;
-  min-width: 70px;
-  margin: .5rem auto;
-  box-sizing: border-box;
-
-  /* flexbox */
-  order: 0;
-  flex: 0 1 auto;
-  align-self: auto;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
 
-@media (min-width: 600px) {
-  a {
-    width: 18%;
-    box-sizing: content-box;
-  }
+.hero-card:hover {
+  transform: translateY(-2px);
+  border-color: #bae6fd;
+  box-shadow: var(--shadow);
 }
 
-a:hover {
-  background-color: #000;
+.hero-card:hover .hero-card__arrow {
+  transform: translateX(3px);
+  color: var(--accent);
+}
+
+.hero-card__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.hero-card__body strong {
+  overflow: hidden;
+  font-size: 0.98rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.hero-card__body small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.hero-card__arrow {
+  color: var(--muted);
+  transition:
+    transform 0.15s ease,
+    color 0.15s ease;
+}
+
+.hero-card.skeleton {
+  pointer-events: none;
 }

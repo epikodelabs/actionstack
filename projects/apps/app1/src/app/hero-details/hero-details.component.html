@@ -1,13 +1,41 @@
-<div *atom="hero as hero">
-  <h2>{{ hero.name | uppercase }} Details</h2>
-  <div><span>id: </span>{{ hero.id }}</div>
-  <div>
-    <label for="hero-name">Hero name: </label>
-    <input
-      id="hero-name"
-      [(ngModel)]="hero.name"
-      placeholder="Hero name"
-    />
-  </div>
-  <button type="button" (click)="goBack()">go back</button>
-</div>
+<ng-container *atom="hero as hero">
+  @if (hero) {
+    <section class="profile">
+      <header class="profile__head">
+        <span class="avatar avatar--lg" [style.--hue]="hue(hero.id)">{{ initials(hero.name) }}</span>
+        <div class="profile__identity">
+          <p class="eyebrow">Hero profile</p>
+          <h1>{{ hero.name }}</h1>
+          <span class="pill">#{{ hero.id }}</span>
+        </div>
+      </header>
+
+      <form class="profile__form" (ngSubmit)="save(draftName ?? hero.name)">
+        <label class="field">
+          <span class="field__label">Hero name</span>
+          <input
+            name="heroName"
+            autocomplete="off"
+            [ngModel]="draftName ?? hero.name"
+            (ngModelChange)="draftName = $event"
+          />
+        </label>
+
+        <div class="profile__actions">
+          <button
+            type="submit"
+            class="btn btn--primary"
+            [disabled]="!canSave(draftName ?? hero.name, hero.name)"
+          >
+            Save changes
+          </button>
+          <button type="button" class="btn btn--ghost" (click)="goBack()">
+            Go back
+          </button>
+        </div>
+      </form>
+    </section>
+  } @else {
+    <div class="empty">Loading hero…</div>
+  }
+</ng-container>
