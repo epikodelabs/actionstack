@@ -135,6 +135,7 @@ Changes to transactional mutation handling should preserve:
 
 * Correct draft isolation and revocation
 * Consistent commits
+* Immutable commits that share untouched branches and freeze committed state
 * Stable references for in-place mutations
 * Correct handling of replacement state
 * Failure isolation

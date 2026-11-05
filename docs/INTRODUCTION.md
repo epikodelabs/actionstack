@@ -206,7 +206,8 @@ for await (const data of dashboardData$) {
 const store = createStore({
   dispatchSystemActions: true,
   enableGlobalReducers: false,
-  exclusiveActionProcessing: false
+  exclusiveActionProcessing: false,
+  preserveImmutableState: true // default; false commits in place
 }, applyMiddleware(logger, devtools));
 ```
 

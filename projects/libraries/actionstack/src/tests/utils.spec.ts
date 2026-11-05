@@ -1,7 +1,7 @@
 // utils.spec.ts - Jasmine Tests
 
 import type { StoreCreator, StoreEnhancer } from '@epikodelabs/actionstack';
-import { applyMiddleware, combineEnhancers, combineReducers, deepMerge, getProperty, setProperty } from '@epikodelabs/actionstack';
+import { applyChange, applyMiddleware, combineEnhancers, combineReducers, deepMerge, getProperty, setProperty } from '@epikodelabs/actionstack';
 import { atom } from '@epikodelabs/streamix';
 
 describe('getProperty', () => {
@@ -498,7 +498,54 @@ describe('combineEnhancers', () => {
 });
 
 describe('applyChange', () => {
-  // Note: applyChange is not exported in your code, but we can test through combineReducers
+  it('should replace a top-level value and share untouched branches', () => {
+    const untouched = { stable: true };
+    const state = { a: { value: 1 }, untouched };
+
+    const next = applyChange(state, ['a'], { value: 2 }, {});
+
+    expect(next).not.toBe(state);
+    expect(next.a).toEqual({ value: 2 });
+    expect(next.untouched).toBe(untouched);
+    expect(state.a.value).toBe(1);
+  });
+
+  it('should clone only the ancestors along the path', () => {
+    const sibling = { stable: true };
+    const state = { app: { user: { name: 'old' }, sibling } };
+
+    const next = applyChange(state, ['app', 'user'], { name: 'new' }, {});
+
+    expect(next.app).not.toBe(state.app);
+    expect(next.app.user).toEqual({ name: 'new' });
+    expect(next.app.sibling).toBe(sibling);
+    expect(state.app.user.name).toBe('old');
+  });
+
+  it('should clone arrays as arrays along the path', () => {
+    const state = { items: [{ n: 1 }, { n: 2 }] };
+
+    const next = applyChange(state, ['items', '1'], { n: 3 }, {});
+
+    expect(Array.isArray(next.items)).toBeTrue();
+    expect(next.items[1]).toEqual({ n: 3 });
+    expect(next.items[0]).toBe(state.items[0]);
+    expect(state.items[1]).toEqual({ n: 2 });
+  });
+
+  it('should reuse branches cloned earlier in the same change tree', () => {
+    const state = { app: { count: 0, other: 0 } };
+    const tree: any = {};
+
+    const first = applyChange(state, ['app', 'count'], 1, tree);
+    const second = applyChange(first, ['app', 'other'], 2, tree);
+
+    expect(second.app).toBe(first.app);
+    expect(second.app.count).toBe(1);
+    expect(second.app.other).toBe(2);
+    expect(state.app.count).toBe(0);
+  });
+
   it('should apply changes immutably through combineReducers', async () => {
     const reducer = (state = { value: 0 }, action: any) => {
       if (action.type === 'UPDATE') {
@@ -509,10 +556,10 @@ describe('applyChange', () => {
 
     const rootReducer = combineReducers({ data: reducer });
     const initialState = await rootReducer(undefined, { type: '@@INIT' });
-    
-    const updatedState = await rootReducer(initialState, { 
-      type: 'UPDATE', 
-      payload: 42 
+
+    const updatedState = await rootReducer(initialState, {
+      type: 'UPDATE',
+      payload: 42
     });
 
     expect(updatedState).not.toBe(initialState);

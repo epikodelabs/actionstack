@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.0.4 - 2026-11-05
+
+- Added the `preserveImmutableState` store setting, on by default: every commit builds a new state tree that shares untouched branches and deeply freezes committed state, so held snapshots stay valid and accidental writes throw. Set `preserveImmutableState: false` to commit in place with stable object identities.
+- Restored the public `applyChange` utility: replacing a value at a nested path now clones only that path, and it powers immutable slice installation as well as `combineReducers`.
+- Selector invalidation is unchanged by the new default: the same committed change paths drive the same selective reruns in both commit modes.
+
 ## 5.0.3 - 2026-10-27
 
 - Preserve results from injected nested thunk dispatches while keeping exclusive workflows locked until their awaited work finishes.

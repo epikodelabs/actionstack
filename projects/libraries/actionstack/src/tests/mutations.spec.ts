@@ -145,3 +145,84 @@ describe('mutation transactions', () => {
     expect(state.secret.n).toBe(3);
   });
 });
+
+describe('immutable commits', () => {
+  it('stages a new tree and never writes to the committed one', async () => {
+    const state = { user: { name: 'old' }, count: 0 };
+    const user = state.user;
+    const batch = new MutationBatch(state, true);
+    await batch.run([], draft => { draft.user.name = 'new'; draft.count = 1; });
+    const next = batch.commit();
+    expect(next).not.toBe(state);
+    expect(next.user).not.toBe(user);
+    expect(next).toEqual({ user: { name: 'new' }, count: 1 });
+    expect(state).toEqual({ user: { name: 'old' }, count: 0 });
+    expect(state.user).toBe(user);
+  });
+
+  it('freezes the new tree and the previous origin', async () => {
+    const state = { nested: { n: 1 } };
+    const batch = new MutationBatch(state, true);
+    await batch.run([], draft => { draft.nested.n = 2; });
+    const next = batch.commit();
+    expect(Object.isFrozen(next)).toBeTrue();
+    expect(Object.isFrozen(next.nested)).toBeTrue();
+    expect(Object.isFrozen(state)).toBeTrue();
+    expect(Object.isFrozen(state.nested)).toBeTrue();
+    expect(() => { next.nested.n = 3; }).toThrow();
+  });
+
+  it('installs a slice along its path, sharing untouched branches', async () => {
+    const untouched = { stable: true };
+    const state = { app: { user: { name: 'a' }, settings: { theme: 'light' } }, untouched };
+    const batch = new MutationBatch(state, true);
+    await batch.run(['app', 'user'], draft => { draft.name = 'b'; });
+    const next = batch.commit();
+    expect(next).not.toBe(state);
+    expect(next.app).not.toBe(state.app);
+    expect(next.app.user).toEqual({ name: 'b' });
+    expect(next.app.settings).toBe(state.app.settings);
+    expect(next.untouched).toBe(untouched);
+    expect(state.app.user.name).toBe('a');
+  });
+
+  it('applies successive stages on top of each other', async () => {
+    const state = { a: { n: 0 }, b: { n: 0 } };
+    const batch = new MutationBatch(state, true);
+    await batch.run(['a'], draft => { draft.n = 1; });
+    await batch.run(['b'], draft => { draft.n = 2; });
+    const next = batch.commit();
+    expect(next).toEqual({ a: { n: 1 }, b: { n: 2 } });
+    expect(state).toEqual({ a: { n: 0 }, b: { n: 0 } });
+  });
+
+  it('keeps successful stages and rolls back a failing one', async () => {
+    const state = { slice: { count: 0 } };
+    const batch = new MutationBatch(state, true);
+    await batch.run(['slice'], draft => { draft.count++; });
+    await expectAsync(batch.run([], draft => {
+      expect(draft.slice.count).toBe(1);
+      draft.slice.count = 100;
+      throw new Error('failed');
+    })).toBeRejectedWithError('failed');
+    await batch.run([], draft => { draft.slice.count++; });
+    const next = batch.commit();
+    expect(next.slice.count).toBe(2);
+    expect(state.slice.count).toBe(0);
+  });
+
+  it('replaces collections and arrays without touching the origin', async () => {
+    const state = { m: new Map([['k', { n: 1 }]]), list: [1] };
+    const batch = new MutationBatch(state, true);
+    await batch.run([], draft => {
+      draft.m.set('k', { n: 2 });
+      draft.list.push(2);
+    });
+    const next = batch.commit();
+    expect(next).not.toBe(state);
+    expect(next.m.get('k')).toEqual({ n: 2 });
+    expect(next.list).toEqual([1, 2]);
+    expect(state.m.get('k')).toEqual({ n: 1 });
+    expect(state.list).toEqual([1]);
+  });
+});

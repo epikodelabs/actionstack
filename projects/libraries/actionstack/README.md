@@ -5,7 +5,7 @@
 <h3 align="center">State management without the ceremony.</h3>
 
 <p align="center">
-  Mutable state. Immutable snapshots. Precise reactivity.<br>
+  Mutable drafts. Immutable commits. Precise reactivity.<br>
   Transactional updates and feature-oriented architecture, powered by Streamix.
 </p>
 
@@ -26,13 +26,13 @@
 
 State management shouldn't require copying objects just to tell your application something changed.
 
-Actionstack combines **mutable state, transactional updates, and dependency-tracked selectors** in a modular architecture built on [Streamix](https://github.com/epikodelabs/streamix).
+Actionstack combines **mutable drafts, immutable commits, and dependency-tracked selectors** in a modular architecture built on [Streamix](https://github.com/epikodelabs/streamix).
 
 * **Mutate naturally.** Update objects and arrays without spreading or cloning state.
-* **Commit atomically.** Changes are staged and applied transactionally.
-* **Preserve references.** In-place mutations retain existing object identities.
+* **Commit immutably.** Every commit builds a new tree: untouched branches keep their references and committed state is frozen.
+* **Switch modes.** `preserveImmutableState: false` commits in place, preserving object identities.
 * **React precisely.** Selectors track dependencies and update only when relevant state changes.
-* **Keep immutable snapshots.** Capture isolated, read-only state histories for debugging.
+* **Keep history.** Every committed snapshot stays valid and read-only, ready for debugging.
 * **Organize by feature.** Group state, actions, selectors, and dependencies into modules.
 * **Handle async work.** Coordinate asynchronous workflows with thunks and injected services.
 
@@ -110,11 +110,11 @@ await store.unloadModule(counter, true);
 
 Modules own their features and can be loaded or unloaded dynamically.
 
-## Mutable state. Immutable snapshots.
+## Mutable drafts. Immutable commits.
 
 Actionstack separates **how state changes** from **how changes are observed**.
 
-### Mutable by design
+### Mutable drafts
 
 ```typescript
 const updateUser = action(
@@ -127,22 +127,27 @@ const updateUser = action(
 
 Action handlers receive temporary proxy drafts.
 
-Mutations are recorded, validated, and committed transactionally. Existing objects and arrays are updated in place, preserving their references.
+Mutations are recorded, validated, and committed transactionally.
 
 If processing fails before commit, staged changes are not partially applied to live state.
 
-### Immutable when it matters
+### Immutable commits
 
-Live state remains mutable through controlled actions, while logging tools can capture independent, deeply frozen snapshots.
+Every commit builds a new state tree: written branches become fresh objects, untouched branches keep their previous references, and the committed tree is frozen.
 
-| Live state                    | Immutable snapshots              |
-| ----------------------------- | -------------------------------- |
-| Updated transactionally       | Capture historical values        |
-| Preserves object identity     | Preserve historical contents     |
-| Supports reactive observation | Support debugging and inspection |
-| Avoids unnecessary cloning    | Created when needed              |
+```typescript
+const store = createStore();                                     // immutable commits (default)
+const inPlace = createStore({ preserveImmutableState: false });  // in-place commits
+```
 
-**Mutability for execution. Immutability for history.**
+| Immutable commits (default)              | In-place commits (`preserveImmutableState: false`) |
+| ---------------------------------------- | -------------------------------------------------- |
+| New tree per commit                      | Updates objects where they live                    |
+| Untouched branches keep their references | Every object keeps its identity                    |
+| Previous snapshots stay valid            | Held references observe later commits              |
+| Accidental writes to state throw         | Discipline required to avoid escapes               |
+
+**Mutability for writing. Immutability for history.**
 
 ### Precise reactivity
 
@@ -196,7 +201,7 @@ Module action methods return promises, allowing callers to await processing and 
 | **Thunk**           | Coordinate asynchronous workflows                              |
 | **Streamix**        | Provide the reactive foundation                                |
 
-Actionstack supports configurable execution behavior, including exclusive action processing, global reducers, and state-propagation waiting.
+Actionstack supports configurable execution behavior, including immutable or in-place commits, exclusive action processing, global reducers, and state-propagation waiting.
 
 The mutation engine avoids traversing untouched state during ordinary commits and supports constant-time no-op dispatches.
 

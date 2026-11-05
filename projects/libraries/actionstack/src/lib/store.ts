@@ -1,25 +1,25 @@
 import type { Atom } from '@epikodelabs/streamix';
-import { MutationBatch, type StatePath } from './mutations';
-import { createSelectorRegistry } from './tracked-selectors';
 import { action, createActionRegistry, getActionHandlers, registerActionHandlers, registerThunks, unregisterActionHandlers, unregisterThunks } from './actions';
 import { waitForBrowserIdle } from './idle';
 import { createModule, registerModule } from './module';
+import { MutationBatch, type StatePath } from './mutations';
 import { createQueue } from './queue';
 import { starter } from './starter';
+import { createSelectorRegistry } from './tracked-selectors';
 import type {
-    Action,
-    AsyncAction,
-    AsyncReducer,
-    Dispatch,
-    FeatureModule,
-    Middleware,
-    MiddlewareAPI,
-    Reducer,
-    StoreEnhancer,
+  Action,
+  AsyncAction,
+  AsyncReducer,
+  Dispatch,
+  FeatureModule,
+  Middleware,
+  MiddlewareAPI,
+  Reducer,
+  StoreEnhancer,
 } from './types';
 import {
-    combineEnhancers,
-    getProperty,
+  combineEnhancers,
+  getProperty,
 } from './utils';
 
 /**
@@ -31,6 +31,7 @@ export type StoreSettings = {
   dispatchSystemActions?: boolean;
   enableGlobalReducers?: boolean;
   exclusiveActionProcessing?: boolean;
+  preserveImmutableState?: boolean;
 };
 
 /**
@@ -42,6 +43,7 @@ const defaultStoreSettings: StoreSettings = {
   dispatchSystemActions: true,
   enableGlobalReducers: true,
   exclusiveActionProcessing: false,
+  preserveImmutableState: true,
 };
 
 /**
@@ -217,7 +219,7 @@ export function createStore<T = any>(
     }
 
     // Starter middleware already serializes this transaction through the store queue.
-    const batch = new MutationBatch(state);
+    const batch = new MutationBatch(state, settings.preserveImmutableState);
     const handler = getActionHandlers(action.type, registry);
 
     if (handler) {
@@ -333,7 +335,7 @@ export function createStore<T = any>(
       if (typeof module.configure === 'function') module.configure(store);
       const slicePath = (module.slice || 'main').split('/');
       if (getProperty(state, slicePath) === undefined) {
-        batch = new MutationBatch(state);
+        batch = new MutationBatch(state, settings.preserveImmutableState);
         await batch.run([], draft => {
           let parent = draft;
           for (const key of slicePath.slice(0, -1)) parent = parent[key] ??= {};
@@ -407,7 +409,7 @@ export function createStore<T = any>(
 
       const slicePath = normalizePath(module.slice || 'main');
       if (clearState) {
-        const batch = new MutationBatch(state);
+        const batch = new MutationBatch(state, settings.preserveImmutableState);
         await batch.run([], draft => {
           let parent = draft;
           for (const key of slicePath.slice(0, -1)) {

@@ -37,18 +37,30 @@ Everything a handler writes is journaled privately while the action runs. Nothin
 
 - **One commit per action.** The slice handler and every global reducer run against the same batch; their writes commit together after all of them settle.
 - **Failures stay contained.** A global reducer that throws loses only its own writes. Stages that succeeded earlier in the same action are retained.
-- **Commits update in place.** Existing objects and arrays are updated where they live rather than being cloned into new references. A reference you hold to state observes later commits.
 - **Explicit replacements replace.** Assigning a whole new value to a property (or returning replacement state) swaps the value in place of the old one.
+- **Commits are immutable by default.** Each commit builds a new state tree: written branches become fresh objects, untouched branches keep their reference, and the committed tree is deeply frozen.
 
-The in-place model is why mutable handlers cannot be combined with the `storeFreeze` meta-reducer: committing means writing to existing state objects, and frozen objects refuse those writes.
+### 🧊 Immutable or in place
+
+| Mode | Commit behavior | State references | Held snapshots |
+| --- | --- | --- | --- |
+| `preserveImmutableState: true` (default) | Builds a new tree with structural sharing | Change only along written paths | Stay valid and read-only |
+| `preserveImmutableState: false` | Updates existing objects where they live | Never change; observe later commits | Observe later commits too |
+
+```typescript
+const store = createStore();                                      // immutable commits
+const inPlace = createStore({ preserveImmutableState: false });   // in-place commits
+```
+
+In-place commits cannot be combined with the `storeFreeze` meta-reducer: committing means writing to existing state objects, and frozen objects refuse those writes. Immutable commits already freeze committed state, so `storeFreeze` adds nothing in that mode.
 
 ## 🎯 Selectors rerun only for what they read
 
 Store-backed selectors — `store.select(...)` and module `data$` accessors — now track the state paths each evaluation actually reads. When a commit lands, a selector reruns only if one of the changed paths overlaps something it read. A selector reading `state.user.name` ignores a commit that touched `state.items`.
 
-Two emission rules follow from in-place commits:
+Two emission rules keep subscribers precise:
 
-- **Object selections emit on nested changes.** If a selector returns an object from state and a property inside it is committed, subscribers fire even though the reference is identical. You no longer need to rebuild references to be notified.
+- **Object selections emit on nested changes.** If a selector returns an object from state and a property inside it is committed, subscribers fire — with the new branch reference under immutable commits, or the same reference in place. You no longer need to rebuild references to be notified.
 - **Primitive results still suppress equal values.** Selectors returning numbers, strings, and booleans dedupe as before.
 
 Arrays get conservative treatment: any change beneath an array — its `length`, one index, or iteration over it — invalidates selectors reading that array. Individual array operations are not exposed as public patches, so a `push` and a manual `length` bump look the same to dependents.
@@ -64,7 +76,7 @@ With `awaitStatePropagation: true`, dispatch additionally waits for selector eva
 The mutation engine tracks writes by path, which requires state to be a plain tree:
 
 - **Plain objects, arrays, and native collections.** Cycles, shared mutable references, and accessor properties (getters/setters) are rejected with explicit errors, including inside Map keys/values and Set members.
-- **Mutate only inside handlers.** Never mutate state outside a handler, never mutate from a selector, and never keep a handler's draft.
+- **Mutate only inside handlers.** Never mutate state outside a handler, never mutate from a selector, and never keep a handler's draft. With immutable commits this rule is enforced: committed state is frozen, so writes outside a handler throw.
 
 ## 🗺️ Map, Set, and Date values
 
@@ -85,7 +97,7 @@ const expire = action('EXPIRE', (state: { until: Date }) => {
 | `Set` | `has`, `size`, iteration | `add`, `delete`, `clear` | Entire set |
 | `Date` | Getters and formatting methods | `setTime`, `setDate`, other setters | Entire date |
 
-Inside a handler, these methods operate on a private copy that is journaled with the rest of the action and replayed onto the original instance at commit — the same visibility rules as everything else: nothing escapes until the action succeeds, and a failed stage rolls its collection operations back. Map values and Set members are wrapped as well, so writing through `map.get('user').name = ...` is tracked rather than escaping the transaction.
+Inside a handler, these methods operate on a private copy that is journaled with the rest of the action. Immutable stores commit a fresh collection; in-place stores replay the recorded operations onto the original instance. Either way the same visibility rules apply: nothing escapes until the action succeeds, and a failed stage rolls its collection operations back. Map values and Set members are wrapped as well, so writing through `map.get('user').name = ...` is tracked rather than escaping the transaction.
 
 Each successful reducer stage carries its nested member edits into the next stage's working state. Map keys retain their committed identity for lookup. Draft collection methods and iterators expire when the reducer finishes, including extracted method references. Replacement collections recursively unwrap draft members before commit.
 
@@ -100,7 +112,7 @@ Class instances and accessor-based values remain opaque: their methods can touch
 Replacement-return handlers remain supported. Module actions now return dispatch promises rather than action objects; await completion and handle rejected promises. Import Angular helpers from `@epikodelabs/actionstack/angular`. Also review these state and selector differences:
 
 - Selectors that return whole state objects now re-emit when nested properties change, even without a reference change. If you relied on reference inequality to filter emissions, rely on the value instead.
-- Commits write in place, so state references remain stable across updates. Memoization keyed on state identity should key on content.
+- Commits are immutable by default: written branches get new references, untouched branches keep theirs, and committed state is deeply frozen. Memoization keyed on state identity keeps working for untouched branches; pass `preserveImmutableState: false` to restore in-place commits with stable references everywhere.
 
 When you want the shorter syntax, convert a handler by deleting the spread and returning nothing — the draft does the rest.
 

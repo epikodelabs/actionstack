@@ -1,4 +1,8 @@
 /** Private transaction machinery. Journals are for commits, paths for invalidation. */
+// Type-only: this module stays import-free so the mutation benchmark can run it
+// through Node's type stripping.
+import type { Tree } from './types';
+
 export type StatePath = PropertyKey[];
 export type Write = { target: any; key: PropertyKey; value?: any; remove?: boolean; op?: CollectionOp };
 
@@ -86,13 +90,65 @@ export const prefix = (a: StatePath, b: StatePath): boolean =>
   a.length <= b.length && a.every((key, index) => key === b[index]);
 export const overlaps = (a: StatePath, b: StatePath): boolean => prefix(a, b) || prefix(b, a);
 
+/**
+ * Updates a nested state object by applying a change to the specified path and value.
+ * Ensures that intermediate nodes in the state are properly cloned or created, preserving immutability
+ * for unchanged branches. Tracks visited nodes in the provided object tree to avoid redundant updates.
+ *
+ * Re-exported publicly from the utils module. Also powers the store's immutable
+ * commits (`preserveImmutableState: true`): a replaced slice is installed along
+ * its path without touching the previous tree.
+ *
+ * @param initialState - The state tree to update.
+ * @param path - Path to the value being replaced, relative to the state root.
+ * @param value - The new value for the leaf.
+ * @param objTree - Change tree tracking cloned branches; pass `{}` for a fresh change set.
+ * @returns A new state tree that shares every unchanged branch with `initialState`.
+ */
+export function applyChange(initialState: any, path: string[], value: any, objTree: Tree<boolean>): any {
+  // Arrays clone via slice so paths through arrays keep working as arrays.
+  const clone = (node: any): any =>
+    Array.isArray(node) ? node.slice() : { ...node };
+  let currentState: any = Object.keys(objTree).length > 0 ? initialState : clone(initialState);
+  let currentObj: any = currentState;
+
+  for (let i = 0; i < path.length; i++) {
+    const key = path[i];
+    if (i === path.length - 1) {
+      // Reached the leaf node, update its value
+      currentObj[key] = value;
+      objTree[key] = true;
+    } else {
+      // Continue traversal
+      currentObj = currentObj[key] = objTree[key] ? currentObj[key] : clone(currentObj[key]);
+      objTree = (objTree[key] = objTree[key] ?? {}) as any;
+    }
+  }
+  return currentState;
+}
+
+/** Freezes committed state for immutable stores: containers freeze deeply, while
+ * collections and class instances stay method-based. Every commit stages fresh
+ * collection instances, so historical snapshots keep their contents regardless. */
+function deepFreezeState(value: any): any {
+  if (value === null || typeof value !== 'object') return value;
+  if (isCollection(value) || !isContainer(value)) return value;
+  if (Object.isFrozen(value)) return value;
+  for (const key of keys(value)) deepFreezeState(dataValue(value, key));
+  return Object.freeze(value);
+}
+
 export class MutationBatch {
   private identities = new WeakMap<object, any>();
   private writes: Write[] = [];
   /** Slots where this batch placed a new object: commit resolves exactly these, not the whole tree. */
   private placements = new Map<object, Set<PropertyKey>>();
   readonly changes: StatePath[] = [];
-  constructor(public state: any) {}
+  /** State at batch start. Immutable commits freeze it too, so held snapshots stay read-only. */
+  private readonly origin: any;
+  constructor(public state: any, private immutable: boolean = false) {
+    this.origin = state;
+  }
 
   private place(parent: object, key: PropertyKey): void {
     let keys = this.placements.get(parent);
@@ -391,7 +447,8 @@ export class MutationBatch {
         finalized.set(value, result);
         // Fresh collections commit as their rebuilt form: mapping back to the
         // original would restore its pre-stage content (and any proxies in it).
-        if (result !== value && (node || this.identities.has(value)) && !fresh.has(value))
+        // Immutable commits never resolve staged references in-place.
+        if (!this.immutable && result !== value && (node || this.identities.has(value)) && !fresh.has(value))
           this.identities.set(result, this.live(value));
         return result;
       }
@@ -409,13 +466,14 @@ export class MutationBatch {
         if (child !== previous) {
           if (result === value) result = copy(value);
           Object.defineProperty(result, key, { value: child, writable: true, enumerable: true, configurable: true });
-          this.place(result, key);
+          if (!this.immutable) this.place(result, key);
         }
       }
       finalized.set(value, result);
       // Fresh containers commit as their finalized form: the raw original may
       // still hold draft proxies, and nothing else references its content.
-      if (result !== value && (node || this.identities.has(value)) && !fresh.has(value))
+      // Immutable commits never resolve staged references in-place.
+      if (!this.immutable && result !== value && (node || this.identities.has(value)) && !fresh.has(value))
         this.identities.set(result, this.live(value));
       return result;
     };
@@ -436,19 +494,26 @@ export class MutationBatch {
       let root = next;
       const installs: Write[] = [];
       if (path.length) {
-        const install = (source: any, index: number): any => {
-          const original = isContainer(source) ? source : {};
-          const result = copy(original);
-          this.identities.set(result, this.live(original));
-          const key = path[index];
-          const child = index === path.length - 1 ? next : install(original[key], index + 1);
-          Object.defineProperty(result, key, { value: child, writable: true, configurable: true, enumerable: true });
-          this.place(result, key);
-          if (index === path.length - 1 ? replacement && !Object.is(next, base) : !isContainer(original[key]))
-            installs.push({ target: original, key, value: child });
-          return result;
-        };
-        root = install(this.state, 0);
+        if (this.immutable) {
+          // Immutable stores install the staged slice along its path: ancestors
+          // are cloned, everything else keeps its committed reference. Nothing
+          // is written back, so no journal or identity work is needed.
+          root = applyChange(this.state, path as string[], next, {});
+        } else {
+          const install = (source: any, index: number): any => {
+            const original = isContainer(source) ? source : {};
+            const result = copy(original);
+            this.identities.set(result, this.live(original));
+            const key = path[index];
+            const child = index === path.length - 1 ? next : install(original[key], index + 1);
+            Object.defineProperty(result, key, { value: child, writable: true, configurable: true, enumerable: true });
+            this.place(result, key);
+            if (index === path.length - 1 ? replacement && !Object.is(next, base) : !isContainer(original[key]))
+              installs.push({ target: original, key, value: child });
+            return result;
+          };
+          root = install(this.state, 0);
+        }
       }
       // Unchanged stages keep the committed tree untouched; only real edits need the walk.
       if (writes.length || replacement) validateTree(root, new WeakSet(), this.live);
@@ -471,6 +536,13 @@ export class MutationBatch {
   }
 
   commit(): any {
+    if (this.immutable) {
+      // No writes touch the previous tree: the staged tree already shares
+      // unchanged branches and holds fresh objects on changed paths. Freeze
+      // both trees so accidental writes to live state or held snapshots throw.
+      deepFreezeState(this.origin);
+      return deepFreezeState(this.state);
+    }
     // Preflight all targets before the first write, avoiding partial commits.
     for (const write of this.writes) {
       const target = this.live(write.target);

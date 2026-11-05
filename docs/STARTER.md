@@ -27,6 +27,8 @@ By using a robust locking mechanism, the middleware guarantees state is isolated
 |------------------------------|---------|--------------------------------------------|-----------------------------------------------|
 | **exclusiveActionProcessing** | `false` | Concurrent - actions run in parallel       | Independent operations, UI updates, fetching   |
 | **exclusiveActionProcessing** | `true`  | Exclusive - one action at a time           | Sequential workflows, critical updates         |
+| **preserveImmutableState**    | `true` (default) | Immutable - each commit builds a new frozen tree with structural sharing | Snapshots, memoization, safe state |
+| **preserveImmutableState**    | `false` | In place - commits update existing objects  | Stable references, mutation-heavy workloads    |
 
 ## 🤝 Thunks vs Callable Thunks
 

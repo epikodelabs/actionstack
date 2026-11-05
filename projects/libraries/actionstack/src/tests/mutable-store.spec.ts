@@ -24,7 +24,7 @@ describe('mutable store integration', () => {
   }
 
   it('commits one action in place and notifies both store and module selections', async () => {
-    const store = createStore();
+    const store = createStore({ preserveImmutableState: false });
     const module = feature();
     await store.loadModule(module);
     await store.dispatch({ type: 'FLUSH' });
@@ -47,7 +47,7 @@ describe('mutable store integration', () => {
   });
 
   it('retains successful handler changes when a global reducer fails', async () => {
-    const store = createStore();
+    const store = createStore({ preserveImmutableState: false });
     await store.loadModule(feature());
     store.addReducer((s, a: any) => { if (a.type === 'mutable/COUNT') s.mutable.count++; });
     store.addReducer((s, a: any) => {
@@ -62,7 +62,7 @@ describe('mutable store integration', () => {
 
   for (const exclusiveActionProcessing of [false, true]) {
     it(`serializes async drafts with exclusive=${exclusiveActionProcessing}`, async () => {
-      const store = createStore({ exclusiveActionProcessing });
+      const store = createStore({ exclusiveActionProcessing, preserveImmutableState: false });
       let started!: () => void;
       let release!: () => void;
       const began = new Promise<void>(resolve => { started = resolve; });
@@ -92,7 +92,7 @@ describe('mutable store integration', () => {
     });
 
     it(`supports nested thunk dispatch with exclusive=${exclusiveActionProcessing}`, async () => {
-      const store = createStore({ exclusiveActionProcessing });
+      const store = createStore({ exclusiveActionProcessing, preserveImmutableState: false });
       await store.loadModule(feature());
       await store.dispatch(async dispatch => {
         await dispatch({ type: 'mutable/COUNT' });
@@ -103,7 +103,7 @@ describe('mutable store integration', () => {
   }
 
   it('awaits module action methods until processing completes', async () => {
-    const store = createStore();
+    const store = createStore({ preserveImmutableState: false });
     let thunkDone = false;
     const module = createModule({
       slice: 'awaited',
@@ -130,7 +130,7 @@ describe('mutable store integration', () => {
 
   it('resolves module thunk actions with their return value in both processing modes', async () => {
     for (const exclusiveActionProcessing of [false, true]) {
-      const store = createStore({ exclusiveActionProcessing });
+      const store = createStore({ exclusiveActionProcessing, preserveImmutableState: false });
       const module = createModule({
         slice: 'answered',
         initialState: {},
@@ -142,7 +142,7 @@ describe('mutable store integration', () => {
   });
 
   it('never delivers the stale cached value to subscribers attaching during a pending async selection', async () => {
-    const store = createStore();
+    const store = createStore({ preserveImmutableState: false });
     const module = createModule({
       slice: 'stale',
       initialState: { n: 0 },
@@ -177,7 +177,7 @@ describe('mutable store integration', () => {
   });
 
   it('rejects failed module actions but keeps triggered thunk failures log-only', async () => {
-    const store = createStore();
+    const store = createStore({ preserveImmutableState: false });
     const module = createModule({
       slice: 'failing',
       initialState: { count: 0 },
@@ -200,7 +200,7 @@ describe('mutable store integration', () => {
   });
 
   it('delivers the pending selection to reconnecting subscribers even when it equals the cache', async () => {
-    const store = createStore();
+    const store = createStore({ preserveImmutableState: false });
     const module = createModule({
       slice: 'same',
       initialState: { n: 7, other: 0 },
@@ -246,7 +246,7 @@ describe('mutable store integration', () => {
   });
 
   it('awaits affected async selectors but permits later reducer commits', async () => {
-    const store = createStore({ awaitStatePropagation: true });
+    const store = createStore({ awaitStatePropagation: true, preserveImmutableState: false });
     await store.loadModule(feature());
     await store.dispatch({ type: 'FLUSH' });
     let release!: () => void;
@@ -275,7 +275,7 @@ describe('mutable store integration', () => {
   });
 
   it('invalidates selections for module loading, clearing, and root replacement', async () => {
-    const store = createStore();
+    const store = createStore({ preserveImmutableState: false });
     await store.dispatch({ type: 'FLUSH' });
     const values: any[] = [];
     const sub = store.select((s: any) => s.mutable, null).subscribe(v => values.push(v));
