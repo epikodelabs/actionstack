@@ -49,11 +49,11 @@ function SearchComponent() {
     );
 
     // Subscribe to search results and loading state from module
-    const resultsSub = searchModule.data$.results().subscribe(items => {
+    const resultsSub = searchModule.data$.results.subscribe(items => {
       setResults(items);
     });
     
-    const loadingSub = searchModule.data$.loading().subscribe(isLoading => {
+    const loadingSub = searchModule.data$.loading.subscribe(isLoading => {
       setLoading(isLoading);
     });
 

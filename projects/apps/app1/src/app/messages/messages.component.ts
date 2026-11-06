@@ -9,7 +9,7 @@ import { messagesModule } from './messages.slice';
   standalone: false
 })
 export class MessagesComponent {
-  readonly messages: Atom<string[]> = messagesModule.data$.selectMessages();
+  readonly messages: Atom<string[]> = messagesModule.data$.selectMessages;
 
   clearMessages(): void {
     void messagesModule.actions.clearMessages();

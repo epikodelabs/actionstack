@@ -82,7 +82,7 @@ counterModule.actions.increment(5);  // Counter: 5
 counterModule.actions.reset();       // Counter: 0
 
 // Subscribe to changes
-counterModule.data$.count().subscribe(count => {
+counterModule.data$.count.subscribe(count => {
   console.log('Counter:', count);
 });
 ```
@@ -152,7 +152,7 @@ registerModule(store, todoModule);
 todoModule.actions.fetchTodos();
 
 // Reactive UI updates
-todoModule.data$.selectActiveTodos().subscribe(activeTodos => {
+todoModule.data$.selectActiveTodos.subscribe(activeTodos => {
   renderTodos(activeTodos);
 });
 ```
@@ -184,9 +184,9 @@ import { combineLatest, map, pipe } from '@epikodelabs/streamix';
 // Combine data from multiple modules
 const dashboardData$ = pipe(
   combineLatest(
-    userModule.data$.selectCurrentUser(),
-    todoModule.data$.selectActiveTodos(),
-    notificationModule.data$.selectUnread()
+    userModule.data$.selectCurrentUser,
+    todoModule.data$.selectActiveTodos,
+    notificationModule.data$.selectUnread
   ),
   map(([user, todos, notifications]) => ({
     user,

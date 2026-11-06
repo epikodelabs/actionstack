@@ -33,7 +33,7 @@ export class HeroDetailsComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     await store.loadModule(heroDetailsModule);
-    this.hero = heroDetailsModule.data$.heroSelector();
+    this.hero = heroDetailsModule.data$.heroSelector;
     this.changeDetector.markForCheck();
 
     this.heroId = Number(this.route.snapshot.paramMap.get('id'));

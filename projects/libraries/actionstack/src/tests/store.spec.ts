@@ -234,7 +234,7 @@ describe('store', () => {
       selectors: { count: (state: any) => state.count },
     });
     await store.loadModule(mod);
-    const oldStream = mod.data$.count();
+    const oldStream = mod.data$.count;
     const unload = store.unloadModule(mod, true);
     await store.loadModule(mod);
     await unload;
@@ -243,7 +243,7 @@ describe('store', () => {
     expect(mod.destroyed).toBeFalse();
     await store.dispatch({ type: 'reload-race/INC' });
     expect(await readState(store, 'reload-race')).toEqual({ count: 1 });
-    expect(await firstValueFrom(mod.data$.count())).toBe(1);
+    expect(await firstValueFrom(mod.data$.count)).toBe(1);
   });
 
   it('serializes simultaneous loads of the same module', async () => {

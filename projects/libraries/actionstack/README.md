@@ -89,7 +89,7 @@ Actions describe changes directly.
 ### 2. Observe reactive state
 
 ```typescript
-const unsubscribe = counter.data$.doubled().subscribe(
+const unsubscribe = counter.data$.doubled.subscribe(
   value => console.log('Doubled:', value)
 );
 

@@ -34,7 +34,7 @@ describe('mutable store integration', () => {
     const moduleValues: any[] = [];
     const count = jasmine.createSpy().and.callFake((s: any) => s.mutable.count);
     const subs = [store.select((s: any) => s.mutable.items).subscribe(v => values.push(v)),
-      module.data$.items().subscribe(v => moduleValues.push(v)),
+      module.data$.items.subscribe(v => moduleValues.push(v)),
       store.select(count).subscribe(() => {})];
     await store.dispatch({ type: 'mutable/CHANGE' });
     expect(store.middlewareAPI.getState()).toBe(root);

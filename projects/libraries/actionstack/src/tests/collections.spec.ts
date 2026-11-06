@@ -204,7 +204,7 @@ describe('collection drafts and selections', () => {
     await store.loadModule(module);
     await store.dispatch({ type: 'FLUSH' });
     const values: (string | undefined)[] = [];
-    const sub = module.data$.first().subscribe(v => values.push(v));
+    const sub = module.data$.first.subscribe(v => values.push(v));
     await store.dispatch({ type: 'index/RENAME' });
     expect(values).toEqual(['old', 'new']);
     await store.dispatch({ type: 'index/REPLACE' });

@@ -165,12 +165,12 @@ const store = createStore();
 todoModule.init(store);
 
 // React to changes like a civilized human being
-todoModule.data$.selectActiveTodos().subscribe(todos => {
+todoModule.data$.selectActiveTodos.subscribe(todos => {
   console.log(`You have ${todos.length} tasks that are judging you silently.`);
   updateUI(todos);
 });
 
-todoModule.data$.selectAnxietyLevel().subscribe(level => {
+todoModule.data$.selectAnxietyLevel.subscribe(level => {
   document.getElementById('anxiety-meter').textContent = level;
   if (level.includes("break")) {
     showCatVideos();

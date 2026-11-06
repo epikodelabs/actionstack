@@ -296,11 +296,12 @@ export type ProcessingStrategy = "exclusive" | "concurrent";
 export type SliceStrategy = "persistent" | "temporary";
 
 /**
- * Maps selector definitions to atom factory functions. Async selectors emit
- * their resolved value, so `Awaited` unwraps promised returns.
+ * Maps selector definitions to the reactive atoms exposed on `module.data$`.
+ * Async selectors emit their resolved value, so `Awaited` unwraps promised
+ * returns.
  */
 export type Streams<S extends Record<string, (state: any) => any>> = {
-  [K in keyof S]: () => Atom<Awaited<ReturnType<S[K]>>>;
+  [K in keyof S]: Atom<Awaited<ReturnType<S[K]>>>;
 };
 
 /**

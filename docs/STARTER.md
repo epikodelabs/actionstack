@@ -89,7 +89,7 @@ const store = createStore({ exclusiveActionProcessing: false });
 await store.populate(userModule);
 
 // Subscribe to state changes
-userModule.data$.getUser().subscribe((state) => console.log('User state:', state));
+userModule.data$.getUser.subscribe((state) => console.log('User state:', state));
 
 // Call thunk method — module actions return the dispatch promise, so awaiting
 // waits for completion and errors propagate to the caller

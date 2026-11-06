@@ -26,7 +26,7 @@ subscriptions.push(
   // Only allow decrement if count > 9
   pipe(
     decrementClicks$,
-    withLatestFrom(counter.data$.count()),
+    withLatestFrom(counter.data$.count),
     filter(([, value]) => value > 9),
     tap(() => counter.actions.decrement(1))
   ).subscribe(() => {}),

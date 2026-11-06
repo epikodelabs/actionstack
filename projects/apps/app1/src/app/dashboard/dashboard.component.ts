@@ -27,8 +27,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     await store.loadModule(dashboardModule);
-    this.heroes = dashboardModule.data$.selectTopHeroes();
-    this.loading = dashboardModule.data$.selectLoading();
+    this.heroes = dashboardModule.data$.selectTopHeroes;
+    this.loading = dashboardModule.data$.selectLoading;
     this.changeDetector.markForCheck();
 
     void dashboardModule.actions.loadHeroes();

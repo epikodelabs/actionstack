@@ -27,7 +27,7 @@ describe('module current source readiness', () => {
   for (const next of [2, 3]) {
     it(`waits for the confirmed async value on reconnect (${next})`, async () => {
       const { module, pause } = await feature();
-      const source = module.data$.n();
+      const source = module.data$.n;
       const initial: number[] = [];
       const first = source.subscribe(value => initial.push(value));
       await settle(); await first();
@@ -45,7 +45,7 @@ describe('module current source readiness', () => {
 
   it('confirms equal pending results for joining subscribers without duplicating existing ones', async () => {
     const { module, pause } = await feature();
-    const source = module.data$.n();
+    const source = module.data$.n;
     const a: number[] = [];
     const first = source.subscribe(value => a.push(value));
     await settle();
@@ -65,7 +65,7 @@ describe('module current source readiness', () => {
 
   it('does not dispose a replacement connection while prior teardown is settling', async () => {
     const { module } = await feature();
-    const source = module.data$.n();
+    const source = module.data$.n;
     const first = source.subscribe(() => {});
     await settle();
     const cleanup = first();
@@ -81,7 +81,7 @@ describe('module current source readiness', () => {
     const upstream = atom(1);
     const module = createModule({ slice: 'errors', initialState: 1, selectors: { n: (n: number) => n } });
     module.configure({ select: () => upstream } as any);
-    const source = module.data$.n();
+    const source = module.data$.n;
     const values: number[] = [];
     const errors: unknown[] = [];
     const errorSub = source.onError(error => errors.push(error));

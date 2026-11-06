@@ -222,11 +222,11 @@ describe("module", () => {
       await store.loadModule(mod);
       await store.dispatch({ type: "TEST/FLUSH" });
 
-      expect(await nextValue<number>(mod.data$.count())).toBe(0);
+      expect(await nextValue<number>(mod.data$.count)).toBe(0);
       await store.dispatch({ type: "mdata/INC" });
-      expect(await nextValue<number>(mod.data$.count())).toBe(1);
+      expect(await nextValue<number>(mod.data$.count)).toBe(1);
 
-      const stream = mod.data$.count();
+      const stream = mod.data$.count;
 
       const sub = stream.subscribe(() => {});
 
@@ -237,7 +237,7 @@ describe("module", () => {
       sub();
     });
 
-    it("exposes data$ selector factories before the module is configured", async () => {
+    it("exposes data$ atoms before the module is configured", async () => {
       const store = createStore<any>();
 
       const mod = createModule({
@@ -251,7 +251,7 @@ describe("module", () => {
         },
       });
 
-      const stream = mod.data$.count();
+      const stream = mod.data$.count;
       const firstValue = nextValue<number>(stream);
 
       await store.loadModule(mod);
@@ -262,7 +262,7 @@ describe("module", () => {
       expect(await nextValue<number>(stream)).toBe(3);
     });
 
-    it("creates fresh selector streams after unload and reload", async () => {
+    it("creates fresh data$ atoms after unload and reload", async () => {
       const store = createStore<any>();
 
       const mod = createModule({
@@ -276,7 +276,7 @@ describe("module", () => {
         },
       });
 
-      const firstLifecycleStream = mod.data$.count();
+      const firstLifecycleStream = mod.data$.count;
 
       await store.loadModule(mod);
       await store.dispatch({ type: "TEST/FLUSH" });
@@ -289,7 +289,7 @@ describe("module", () => {
       await store.loadModule(mod);
       await store.dispatch({ type: "TEST/FLUSH" });
 
-      const secondLifecycleStream = mod.data$.count();
+      const secondLifecycleStream = mod.data$.count;
       expect(secondLifecycleStream).not.toBe(firstLifecycleStream);
       expect(await nextValue<number>(secondLifecycleStream)).toBe(4);
       await store.dispatch({ type: "reconfigured/INC" });
@@ -313,10 +313,10 @@ describe("module", () => {
       await store.loadModule(mod);
       await store.dispatch({ type: "TEST/FLUSH" });
 
-      expect(await nextValue<number>(mod.data$.value())).toBe(1);
+      expect(await nextValue<number>(mod.data$.value)).toBe(1);
 
       await store.dispatch({ type: "nest/child/SET", payload: 5 });
-      expect(await nextValue<number>(mod.data$.value())).toBe(5);
+      expect(await nextValue<number>(mod.data$.value)).toBe(5);
     });
 
     it("notifies attached views after selector emissions", async () => {
@@ -341,7 +341,7 @@ describe("module", () => {
       await store.dispatch({ type: "TEST/FLUSH" });
 
       const values: number[] = [];
-      const unsubscribe = mod.data$.count().subscribe((value: number) => {
+      const unsubscribe = mod.data$.count.subscribe((value: number) => {
         values.push(value);
       });
 
@@ -373,7 +373,7 @@ describe("module", () => {
       await store.loadModule(mod);
       await store.dispatch({ type: "TEST/FLUSH" });
 
-      const stream = mod.data$.count();
+      const stream = mod.data$.count;
       const firstValues: number[] = [];
       const unsubscribeFirst = stream.subscribe((value: number) => {
         firstValues.push(value);
@@ -413,7 +413,7 @@ describe("module", () => {
       await store.loadModule(mod);
       await store.dispatch({ type: "TEST/FLUSH" });
 
-      expect(await nextValue<number>(mod.data$.count())).toBe(1);
+      expect(await nextValue<number>(mod.data$.count)).toBe(1);
       expect(cdr.markForCheck).not.toHaveBeenCalled();
     });
 
@@ -464,7 +464,7 @@ describe("module", () => {
       ).toThrowError(/selector factories are not supported/i);
     });
 
-    it("throws from data$ streams when store becomes unavailable", async () => {
+    it("disposes data$ atoms when the store becomes unavailable", () => {
       const store: any = {
         dispatch: () => {},
         select: () => {
@@ -482,14 +482,12 @@ describe("module", () => {
         },
       });
 
+      const stream = mod.data$.count;
       mod.configure(store);
-      mod.destroy(false);
+      expect(stream.disposed).toBeFalse();
 
-      const stream = mod.data$.count();
-      const error = await new Promise<unknown>((resolve) => {
-        stream.onError((e: unknown) => resolve(e));
-      });
-      expect(String(error)).toMatch(/store not available/i);
+      mod.destroy(false);
+      expect(stream.disposed).toBeTrue();
     });
 
     it("registerModule returns early when no modules are provided", () => {

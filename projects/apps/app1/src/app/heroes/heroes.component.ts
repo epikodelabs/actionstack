@@ -23,7 +23,7 @@ export class HeroesComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     await store.loadModule(heroesModule);
-    this.heroes = heroesModule.data$.selectHeroes();
+    this.heroes = heroesModule.data$.selectHeroes;
     this.changeDetector.markForCheck();
 
     this.getHeroes();

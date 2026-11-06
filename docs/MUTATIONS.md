@@ -56,7 +56,7 @@ In-place commits cannot be combined with the `storeFreeze` meta-reducer: committ
 
 ## 🎯 Selectors rerun only for what they read
 
-Store-backed selectors — `store.select(...)` and module `data$` accessors — now track the state paths each evaluation actually reads. When a commit lands, a selector reruns only if one of the changed paths overlaps something it read. A selector reading `state.user.name` ignores a commit that touched `state.items`.
+Store-backed selectors — `store.select(...)` and module `data$` atoms — now track the state paths each evaluation actually reads. When a commit lands, a selector reruns only if one of the changed paths overlaps something it read. A selector reading `state.user.name` ignores a commit that touched `state.items`.
 
 Two emission rules keep subscribers precise:
 

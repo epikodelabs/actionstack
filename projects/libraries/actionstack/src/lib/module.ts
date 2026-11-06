@@ -11,8 +11,8 @@ import type { ActionCreator, BoundActions, FeatureModule, Store, Streams, Select
  * dependencies, and reactive data streams.
  *
  * Feature modules can be configured with a store instance via `.configure(store)` and
- * expose strongly-typed actions and selectors. Data streams (`data$`) are deferred until
- * the module is loaded, and stop emitting when the module is destroyed.
+ * expose strongly-typed actions and selectors. Data atoms (`data$`) are created with the
+ * module, attach to the store when it is loaded, and are disposed when it is destroyed.
  *
  * @template State The type of the module's state slice.
  * @template ActionTypes The union type of action string constants for this module.
@@ -63,11 +63,23 @@ function createModule<
   );
   let store: Store<any> | undefined;
 
+  const createDataAtoms = (moduleInstance: any) => {
+    initializeDataStreams(
+      moduleInstance,
+      processedSelectors,
+      () => loaded$,
+      () => destroyed$,
+      () => attachedViews,
+      () => store
+    );
+  };
+
   const recreateLifecycleAtoms = (moduleInstance: any) => {
     loaded$ = atom<void>();
     destroyed$ = atom<void>();
     moduleInstance.loaded$ = loaded$;
     moduleInstance.destroyed$ = destroyed$;
+    createDataAtoms(moduleInstance);
   };
 
   const finalizeDestroy = () => {
@@ -122,7 +134,7 @@ function createModule<
       destroyed = false;
       store = storeInstance;
 
-      // Initialize data$ streams and actions with the store
+      // Initialize actions with the store
       initializeActions(this, processedActions, slice, () => store);
 
       return this;
@@ -151,16 +163,7 @@ function createModule<
     }
   };
 
-  initializeDataStreams(
-    module,
-    processedSelectors,
-    () => loaded$,
-    () => destroyed$,
-    () => destroying,
-    () => destroyed,
-    () => attachedViews,
-    () => store
-  );
+  createDataAtoms(module);
 
   return module as FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
 }
@@ -283,11 +286,12 @@ function processSelectors<
 }
 
 /**
- * Initializes reactive data atoms (`data$`) for all module selectors.
+ * Creates the reactive data atoms (`data$`) for all module selectors.
  *
- * Atoms are available as soon as the module is created. When the module has not
- * been configured yet, each selector atom waits for `loaded$` before attaching
- * to the store, and automatically completes when `destroyed$` emits.
+ * Atoms are available as soon as the module is created and are rebuilt for
+ * each lifecycle. When the module has not been configured yet, each atom waits
+ * for `loaded$` before attaching to the store, and it is disposed when
+ * `destroyed$` emits.
  *
  * @template State Module state type.
  * @template Selectors Shape of the processed selectors.
@@ -295,8 +299,7 @@ function processSelectors<
  * @param {Selectors} processedSelectors Processed selectors.
  * @param {() => import('@epikodelabs/streamix').Writable<void>} getLoaded$ Returns the current loaded atom.
  * @param {() => import('@epikodelabs/streamix').Writable<void>} getDestroyed$ Returns the current destroyed atom.
- * @param {() => boolean} isDestroying Returns whether module destruction is in progress.
- * @param {() => boolean} isDestroyed Returns whether the module has been destroyed.
+ * @param {() => Set<ViewAttachment>} getAttachedViews Returns the views attached to the module.
  * @param {() => Store<State> | undefined} getStore Function that returns the store instance.
  */
 function initializeDataStreams<
@@ -307,129 +310,88 @@ function initializeDataStreams<
   processedSelectors: Selectors,
   getLoaded$: () => any,
   getDestroyed$: () => any,
-  isDestroying: () => boolean,
-  isDestroyed: () => boolean,
   getAttachedViews: () => Set<ViewAttachment>,
   getStore: () => Store<State> | undefined
 ) {
   for (const key in processedSelectors) {
     const selectorFn = processedSelectors[key];
+    const destroyed$ = getDestroyed$();
+    let selectorSource: any;
 
-    let lifecycleDestroyed$: any;
-    let lifecycleSource: any;
+    const source = createCurrentSource<any>({
+      // Store-backed objects can be updated in place between emissions.
+      equals: (previous, next) => (next === null || typeof next !== 'object') && Object.is(previous, next),
+      isPending: () => selectorSource?.isPending?.() ?? false,
+      connect: (emit, fail) => {
+        let connectionSource: any;
+        let selectorSubscription: any;
+        let confirmationSubscription: any;
+        let errorSubscription: any;
+        let loadedSubscription: any;
+        let closed = false;
 
-    const unavailableAtom = () => {
-      const failed = atom<any>();
-      failed.fail(
-        new Error(
-          `Module "${moduleInstance.slice}" store not available for data$ streams`
-        )
-      );
-      return failed;
-    };
-
-    const createSelectorSource = () => {
-      const destroyed$ = getDestroyed$();
-      let selectorSource: any;
-
-      const source = createCurrentSource<any>({
-        // Store-backed objects can be updated in place between emissions.
-        equals: (previous, next) => (next === null || typeof next !== 'object') && Object.is(previous, next),
-        isPending: () => selectorSource?.isPending?.() ?? false,
-        connect: (emit, fail) => {
-          let connectionSource: any;
-          let selectorSubscription: any;
-          let confirmationSubscription: any;
-          let errorSubscription: any;
-          let loadedSubscription: any;
-          let closed = false;
-
-          const connectToStore = () => {
-            const nextStore = getStore();
-            if (closed || !nextStore || selectorSubscription) {
-              return false;
-            }
-
-            connectionSource = nextStore.select(selectorFn);
-            selectorSource = connectionSource;
-            confirmationSubscription = connectionSource.onCurrent?.(emit);
-            errorSubscription = connectionSource.onError?.(fail);
-            selectorSubscription = connectionSource.subscribe(
-              confirmationSubscription ? undefined : emit
-            );
-
-            return true;
-          };
-
-          loadedSubscription = getLoaded$().subscribe(() => {
-            if (connectToStore()) {
-              loadedSubscription?.();
-              loadedSubscription = undefined;
-            }
-          });
-
-          connectToStore();
-          // loaded$ can replay synchronously before loadedSubscription is
-          // assigned. Remove that now-obsolete listener after subscribe returns.
-          if (selectorSubscription) {
-            void loadedSubscription?.();
-            loadedSubscription = undefined;
+        const connectToStore = () => {
+          const nextStore = getStore();
+          if (closed || !nextStore || selectorSubscription) {
+            return false;
           }
 
-          return createSubscription(() => {
-            closed = true;
-            if (selectorSource === connectionSource) selectorSource = undefined;
-            const loadedCleanup = loadedSubscription?.();
-            const selectorCleanup = selectorSubscription?.();
-            const confirmationCleanup = confirmationSubscription?.();
-            const errorCleanup = errorSubscription?.();
-            connectionSource?.dispose?.();
-            return Promise.all([loadedCleanup, selectorCleanup, confirmationCleanup, errorCleanup]).then(() => undefined);
-          });
-        },
-      });
+          connectionSource = nextStore.select(selectorFn);
+          selectorSource = connectionSource;
+          confirmationSubscription = connectionSource.onCurrent?.(emit);
+          errorSubscription = connectionSource.onError?.(fail);
+          selectorSubscription = connectionSource.subscribe(
+            confirmationSubscription ? undefined : emit
+          );
 
-      const disposeSource = source.dispose.bind(source);
-      let destroyedSubscription: any;
+          return true;
+        };
 
-      source.dispose = () => {
-        if (source.disposed) return;
+        loadedSubscription = getLoaded$().subscribe(() => {
+          if (connectToStore()) {
+            loadedSubscription?.();
+            loadedSubscription = undefined;
+          }
+        });
 
-        const subscription = destroyedSubscription;
-        destroyedSubscription = undefined;
-        subscription?.();
-        disposeSource();
-      };
+        connectToStore();
+        // loaded$ can replay synchronously before loadedSubscription is
+        // assigned. Remove that now-obsolete listener after subscribe returns.
+        if (selectorSubscription) {
+          void loadedSubscription?.();
+          loadedSubscription = undefined;
+        }
 
-      destroyedSubscription = destroyed$.subscribe(() => {
-        source.dispose();
-      });
+        return createSubscription(() => {
+          closed = true;
+          if (selectorSource === connectionSource) selectorSource = undefined;
+          const loadedCleanup = loadedSubscription?.();
+          const selectorCleanup = selectorSubscription?.();
+          const confirmationCleanup = confirmationSubscription?.();
+          const errorCleanup = errorSubscription?.();
+          connectionSource?.dispose?.();
+          return Promise.all([loadedCleanup, selectorCleanup, confirmationCleanup, errorCleanup]).then(() => undefined);
+        });
+      },
+    });
 
-      lifecycleDestroyed$ = destroyed$;
-      lifecycleSource = bindViewNotifications(source, getAttachedViews);
-      return lifecycleSource;
+    const disposeSource = source.dispose.bind(source);
+    let destroyedSubscription: any;
+
+    source.dispose = () => {
+      if (source.disposed) return;
+
+      const subscription = destroyedSubscription;
+      destroyedSubscription = undefined;
+      subscription?.();
+      disposeSource();
     };
 
-    // data$.key() — zero args
-    (moduleInstance.data$ as any)[key] = () => {
-      const store = getStore();
+    destroyedSubscription = destroyed$.subscribe(() => {
+      source.dispose();
+    });
 
-      // During or after destroy, callers should get an unavailable selector source.
-      if (isDestroying() || (!store && isDestroyed())) {
-        return unavailableAtom();
-      }
-
-      const destroyed$ = getDestroyed$();
-      if (
-        lifecycleSource &&
-        lifecycleDestroyed$ === destroyed$ &&
-        !lifecycleSource.disposed
-      ) {
-        return lifecycleSource;
-      }
-
-      return createSelectorSource();
-    };
+    (moduleInstance.data$ as any)[key] = bindViewNotifications(source, getAttachedViews);
   }
 }
 
