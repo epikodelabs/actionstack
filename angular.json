@@ -97,6 +97,64 @@
         }
       }
     },
+    "app2": {
+      "projectType": "application",
+      "root": "projects/apps/app2",
+      "sourceRoot": "projects/apps/app2/src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:application",
+          "options": {
+            "outputPath": "dist/app2",
+            "index": "projects/apps/app2/src/index.html",
+            "browser": "projects/apps/app2/src/main.tsx",
+            "tsConfig": "projects/apps/app2/tsconfig.app.json",
+            "allowedCommonJsDependencies": [
+              "react",
+              "react-dom",
+              "react/jsx-runtime"
+            ],
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "projects/apps/app2/public"
+              }
+            ]
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kb",
+                  "maximumError": "1mb"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular-devkit/build-angular:dev-server",
+          "configurations": {
+            "production": {
+              "buildTarget": "app2:build:production"
+            },
+            "development": {
+              "buildTarget": "app2:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        }
+      }
+    },
     "actionstack": {
       "projectType": "library",
       "root": "projects/libraries/actionstack",

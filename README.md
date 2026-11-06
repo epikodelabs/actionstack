@@ -43,7 +43,7 @@ projects/
 │           └── src/lib/
 └── apps/
     ├── app1/                  # Angular application
-    └── app2/                  # React + Vite application
+    └── app2/                  # React application (Angular CLI build)
 ```
 
 ### Core library
@@ -102,7 +102,7 @@ Application sources:
 
 ### React — `app2`
 
-The React application uses Vite and demonstrates how Actionstack can operate independently of Angular.
+The React application is built with the Angular CLI's esbuild-based application builder and demonstrates how Actionstack can operate independently of Angular.
 
 It provides a reference for:
 
