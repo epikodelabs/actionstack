@@ -1,6 +1,8 @@
 {
   "eslint.enable": true,
   "eslint.nodePath": "./node_modules",
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "always",
     "source.organizeImports": "explicit"
