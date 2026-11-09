@@ -1,5 +1,4 @@
-import type { Atom } from '@epikodelabs/streamix';
-import { createCurrentSource } from './current-source';
+import { atom, createSubscription, NO_INITIAL_VALUE, type Atom, type Subscription } from '@epikodelabs/streamix';
 
 /**
  * A selector extracts a value from state.
@@ -226,57 +225,152 @@ export function selectorAsync(...fns: any[]): any {
 
 
 /**
- * Creates an atom from a selector and a state atom.
+ * Bridges selection to a single native Streamix atom. While observed, the
+ * upstream source is connected; on reconnect its current state is selected
+ * again before the cached value can be replayed to new subscribers.
  *
- * The returned atom emits the selector applied to the current state when the
- * first subscriber attaches, then re-emits whenever the state atom changes.
- *
- * @param selector - A selector function used to derive a value from the state.
- * @param stateAtom - The source atom of state values.
+ * `project` is responsible for resolving async failures; generations prevent
+ * late completions from a previous connection or selection overwriting newer
+ * values. The native atom alone owns value storage and async callback delivery.
  */
-export function selectStream<T, R>(
-  selector: Selector<T, R>,
-  stateAtom: Atom<T>
+function selectFromAtom<T, R>(
+  stateAtom: Atom<T>,
+  project: (state: T) => R | Promise<R>,
 ): Atom<R> {
-  return createCurrentSource<R>({
-    dedupe: false,
-    read: () => selector(stateAtom.value),
-    connect: (emit) =>
-      stateAtom.subscribe((state: T) => {
-        emit(selector(state));
-      }),
-  });
-}
+  const cache = atom<R>();
+  let count = 0;
+  let disposed = false;
+  let generation = 0;
+  let upstream: Subscription | undefined;
+  let pending = false;
 
-/**
- * Creates an atom from an async selector and a state atom.
- *
- * The returned atom emits the awaited selector result for the current state
- * when the first subscriber attaches, then follows state changes. Selector
- * rejections are logged as warnings and resolve to `undefined`.
- *
- * @param selector - An async selector function.
- * @param stateAtom - The source atom of state values.
- */
-export function selectStreamAsync<T, R>(
-  selector: (state: T) => Promise<R>,
-  stateAtom: Atom<T>
-): Atom<R> {
-  const resolve = async (state: T): Promise<R | undefined> => {
-    try {
-      return await selector(state);
-    } catch (err: any) {
-      console.warn(`Error in async selector: ${err?.message ?? err}`);
-      return undefined;
+  const accept = (candidate: R | Promise<R>) => {
+    if (disposed || count === 0) return;
+    const epoch = ++generation;
+    pending = candidate != null && typeof (candidate as PromiseLike<R>).then === 'function';
+    if (pending) {
+      void Promise.resolve(candidate).then(value => {
+        if (disposed || epoch !== generation) return;
+        pending = false;
+        cache.next(value); // selectStream deliberately preserves equal emissions
+      }, error => {
+        if (disposed || epoch !== generation) return;
+        pending = false;
+        cache.fail(error);
+      });
+    } else {
+      cache.next(candidate as R);
     }
   };
 
-  return createCurrentSource<R>({
-    dedupe: false,
-    read: () => resolve(stateAtom.value) as Promise<R>,
-    connect: (emit) =>
-      stateAtom.subscribe((state: T) => {
-        emit(resolve(state) as Promise<R>);
-      }),
+  const start = () => {
+    if (upstream || disposed) return;
+    let received = false;
+    // A Streamix atom replays its value synchronously on subscribe.
+    const subscription = stateAtom.subscribe(state => {
+      received = true;
+      try { accept(project(state)); }
+      catch (error) { cache.fail(error); }
+    });
+    if (disposed || count === 0) {
+      void subscription();
+      return;
+    }
+    upstream = subscription;
+    // Support foreign atom-like sources that don't replay synchronously.
+    if (!received) {
+      try {
+        const value = stateAtom.value;
+        if (value !== NO_INITIAL_VALUE) accept(project(value));
+      } catch (error) { cache.fail(error); }
+    }
+  };
+
+  const source = Object.create(cache) as Atom<R>;
+
+  // Cold selections must be readable synchronously, without requiring a
+  // subscription. There is no upstream listener in this state, so always read
+  // the latest upstream value instead of trusting an old cached projection.
+  const readCold = (safe = false): R => {
+    if (disposed || count > 0) return safe ? cache.safeValue : cache.value;
+    try {
+      const state = stateAtom.value;
+      if (state === NO_INITIAL_VALUE) return safe ? cache.safeValue : NO_INITIAL_VALUE as R;
+      const candidate = project(state);
+      if (candidate != null && typeof (candidate as PromiseLike<R>).then === 'function') {
+        // Async selectors still need a subscription to publish their result.
+        // Consume detached rejection without changing the subscribed error path.
+        void Promise.resolve(candidate).then(() => undefined, () => undefined);
+        return safe ? cache.safeValue : NO_INITIAL_VALUE as R;
+      }
+      if (cache.safeValue === NO_INITIAL_VALUE || !Object.is(cache.safeValue, candidate)) {
+        cache.next(candidate as R);
+      }
+      return cache.value;
+    } catch (error) {
+      cache.fail(error);
+      return safe ? cache.safeValue : cache.value;
+    }
+  };
+  Object.defineProperties(source, {
+    value: { get: () => readCold() },
+    safeValue: { get: () => readCold(true) },
   });
+
+  source.subscribe = callback => {
+    if (disposed) return createSubscription(() => {});
+    count++;
+    if (count === 1) start();
+    const observer = { active: true };
+    const skipStale = pending && cache.safeValue !== NO_INITIAL_VALUE;
+    let replay = skipStale;
+    const inner = cache.subscribe((value, previous) => {
+      if (!observer.active) return;
+      if (replay) { replay = false; return; }
+      return callback?.(value, previous);
+    });
+    return createSubscription(() => {
+      observer.active = false;
+      const result = inner();
+      count--;
+      if (count === 0) {
+        generation++;
+        pending = false;
+        const stop = upstream;
+        upstream = undefined;
+        void stop?.();
+      }
+      return result;
+    });
+  };
+  source.dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    generation++;
+    pending = false;
+    const stop = upstream;
+    upstream = undefined;
+    void stop?.();
+    cache.dispose();
+  };
+  return source;
+}
+
+/** Selects current and future values synchronously, including equal emissions. */
+export function selectStream<T, R>(selector: Selector<T, R>, stateAtom: Atom<T>): Atom<R> {
+  return selectFromAtom(stateAtom, selector);
+}
+
+/** Async selection. Stale promises are ignored; errors warn and yield undefined. */
+export function selectStreamAsync<T, R>(
+  selector: (state: T) => Promise<R>, stateAtom: Atom<T>,
+): Atom<R> {
+  const resolve = async (state: T): Promise<R | undefined> => {
+    try { return await selector(state); }
+    catch (error: any) {
+      console.warn(`Error in async selector: ${error?.message ?? error}`);
+      return undefined;
+    }
+  };
+  return selectFromAtom(stateAtom, resolve as (state: T) => Promise<R>);
 }

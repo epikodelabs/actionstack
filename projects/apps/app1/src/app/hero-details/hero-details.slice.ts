@@ -16,7 +16,7 @@ export interface HeroDetailsState {
 // Initial state
 export const initialState: HeroDetailsState = {
   hero: undefined,
-  loading: false,
+  loading: true,
   error: null,
 };
 
@@ -24,6 +24,8 @@ export const loadHeroRequest = action(
   'LOAD_HERO_REQUEST',
   (state: HeroDetailsState) => ({
     ...state,
+    hero: undefined,
+    error: null,
     loading: true
   })
 );
@@ -33,6 +35,7 @@ export const loadHeroSuccess = action(
   (state: HeroDetailsState, { hero }: { hero: Hero }) => ({
     ...state,
     loading: false,
+    error: null,
     hero
   })
 );
@@ -41,6 +44,7 @@ export const loadHeroFailure = action(
   'LOAD_HERO_FAILURE',
   (state: HeroDetailsState, { error }: { error: Error }) => ({
     ...state,
+    hero: undefined,
     loading: false,
     error
   })
@@ -72,13 +76,14 @@ export const renameHero = thunk("RENAME_HERO", (id: number, name: string) => asy
   });
 
 // Selectors
-export const heroSelector = selector((state) => state.hero);
+export const heroSelector = selector((state: HeroDetailsState) => state.hero);
+// One view-model atom drives the details card; status and hero change together.
+export const profileSelector = selector((state: HeroDetailsState) => state);
 
 export const heroDetailsModule = createModule({
   slice,
   initialState,
   actions: { loadHeroRequest, loadHeroSuccess, loadHeroFailure, loadHero, renameHeroSuccess, renameHero },
-  selectors: { heroSelector },
+  selectors: { heroSelector, profileSelector },
   dependencies: { heroService: new HeroService() }
 });
-

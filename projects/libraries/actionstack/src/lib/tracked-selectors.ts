@@ -1,5 +1,4 @@
-import { createSubscription, type Atom } from '@epikodelabs/streamix';
-import { createCurrentSource } from './current-source';
+import { atom, createSubscription, NO_INITIAL_VALUE, type Atom, type Subscription } from '@epikodelabs/streamix';
 import { DATE_READS, isCollection, isContainer, overlaps, prefix, type StatePath } from './mutations';
 
 type Dependency = { path: StatePath; subtree: boolean };
@@ -18,6 +17,7 @@ export function createSelectorRegistry(getState: () => any) {
     const connectionTasks = new Set<Promise<unknown>>();
     const evaluate = (): R | Promise<R> => {
       const version = generation;
+      const observing = active;
       const reads: Dependency[] = [];
       dependencies = reads;
       dirty = false;
@@ -212,46 +212,176 @@ export function createSelectorRegistry(getState: () => any) {
         if (selected != null && typeof (selected as PromiseLike<R>).then === 'function') {
           const resolution: Promise<R> = Promise.resolve(selected).then(normalize).catch(fallback).then(value => {
             if (task === resolution) task = undefined;
-            if (active && version === generation && dirty) return evaluate();
+            if (observing && active && version === generation && dirty) return evaluate();
             return value;
           });
-          task = resolution;
-          pending.add(resolution);
-          connectionTasks.add(resolution);
-          const remove = () => { pending.delete(resolution); connectionTasks.delete(resolution); };
-          void resolution.then(remove, remove);
+          // A cold synchronous read may encounter an async selector. It is
+          // intentionally not connected: do not put that unresolved pull into
+          // the registry's active work or let it interfere with the first
+          // subscribed evaluation. The promise normalizes its own failures.
+          if (observing) {
+            task = resolution;
+            pending.add(resolution);
+            connectionTasks.add(resolution);
+            const remove = () => { pending.delete(resolution); connectionTasks.delete(resolution); };
+            void resolution.then(remove, remove);
+          }
           return resolution;
         }
         return normalize(selected);
       } catch (error) { return fallback(error); }
     };
-    return createCurrentSource<R>({
-      equals: (previous, next) => (next === null || typeof next !== 'object') && Object.is(previous, next),
-      connect: emit => {
-        active = true;
-        const listen: Listener = changes => {
-          if (task) { dirty = true; return task.then(() => undefined); }
-          if (!dependencies.some(dependency => changes.some(change => dependency.subtree
-            ? overlaps(dependency.path, change) : prefix(change, dependency.path)))) return;
-          const value = evaluate();
-          emit(value);
-          if (value != null && typeof (value as PromiseLike<R>).then === 'function')
-            return Promise.resolve(value).then(() => undefined);
-          return;
-        };
-        listeners.add(listen);
-        emit(evaluate());
-        return createSubscription(() => {
-          active = false;
-          generation++;
-          for (const resolution of connectionTasks) pending.delete(resolution);
-          connectionTasks.clear();
-          task = undefined;
-          dependencies = [];
-          listeners.delete(listen);
+    // Streamix owns the selected value, replay, error channel and subscriber
+    // delivery. Actionstack owns only dependency tracking and connection timing.
+    // There is no second value cache or intermediary current-value source.
+    const cache = atom<R>();
+    let count = 0;
+    let disposed = false;
+    let connection = 0;
+    let pendingSelection = false;
+    const waiting = new Set<{ active: boolean }>();
+
+    const equalPrimitive = (previous: R, next: R) =>
+      (next === null || typeof next !== 'object') && Object.is(previous, next);
+
+    const publish = (candidate: R | Promise<R>, epoch: number): void => {
+      const isPromise = candidate != null && typeof (candidate as PromiseLike<R>).then === 'function';
+      pendingSelection = isPromise;
+      const accept = (value: R) => {
+        if (!active || disposed || epoch !== connection) return;
+        pendingSelection = false;
+        // A confirmed equal result must still reach subscribers who joined
+        // while the result was pending. Their stale cache replay was withheld.
+        if (!waiting.size && cache.safeValue !== NO_INITIAL_VALUE &&
+            equalPrimitive(cache.safeValue, value)) return;
+        cache.next(value);
+      };
+      if (isPromise) {
+        void Promise.resolve(candidate).then(accept, error => {
+          if (active && !disposed && epoch === connection) {
+            pendingSelection = false;
+            cache.fail(error);
+          }
         });
-      },
+      } else {
+        accept(candidate as R);
+      }
+    };
+
+    const evaluateAndPublish = (epoch: number): Promise<void> | void => {
+      const value = evaluate();
+      publish(value, epoch);
+      if (value != null && typeof (value as PromiseLike<R>).then === 'function')
+        return Promise.resolve(value).then(() => undefined);
+    };
+
+    const listen: Listener = changes => {
+      if (!active || disposed) return;
+      if (task) {
+        dirty = true;
+        // The currently resolving evaluation will rerun against the latest
+        // state and publish only the confirmed result.
+        return task.then(() => undefined);
+      }
+      if (!dependencies.some(dependency => changes.some(change => dependency.subtree
+        ? overlaps(dependency.path, change) : prefix(change, dependency.path)))) return;
+      return evaluateAndPublish(connection);
+    };
+
+    const start = () => {
+      if (active || disposed) return;
+      active = true;
+      const epoch = ++connection;
+      listeners.add(listen);
+      evaluateAndPublish(epoch);
+    };
+
+    const stop = () => {
+      if (!active) return;
+      active = false;
+      pendingSelection = false;
+      connection++;
+      generation++;
+      for (const resolution of connectionTasks) pending.delete(resolution);
+      connectionTasks.clear();
+      task = undefined;
+      dependencies = [];
+      listeners.delete(listen);
+      waiting.clear();
+    };
+
+    // This is a facade over the *same* native atom: no additional atom or
+    // selected-value cache is allocated. Only connection ownership is custom.
+    const source = Object.create(cache) as Atom<R>;
+
+    // Reading a cold tracked selector is a pull, not a subscription. Compute
+    // synchronously from the current store state and seed the one native atom;
+    // do not keep path listeners alive when there are no subscribers.
+    // Async selections still have no synchronous value while pending.
+    const readCold = (safe = false): R => {
+      if (disposed || count > 0) return safe ? cache.safeValue : cache.value;
+      const candidate = evaluate();
+      if (candidate != null && typeof (candidate as PromiseLike<R>).then === 'function') {
+        // The selection cannot be resolved synchronously. Its promise already
+        // normalizes errors in evaluate(); only an active subscription may
+        // publish a completion. In particular, a cold read must not race a
+        // subsequent subscribed evaluation or publish stale state.
+        return safe ? cache.safeValue : NO_INITIAL_VALUE as R;
+      }
+      const value = candidate as R;
+      if (cache.safeValue === NO_INITIAL_VALUE || !Object.is(cache.safeValue, value)) {
+        cache.next(value);
+      }
+      return cache.value;
+    };
+    Object.defineProperties(source, {
+      value: { get: () => readCold() },
+      safeValue: { get: () => {
+        try { return readCold(true); }
+        catch { return cache.safeValue; }
+      } },
     });
+
+    source.subscribe = callback => {
+      if (disposed) return createSubscription(() => {});
+      count++;
+      if (count === 1) start();
+      const observer = { active: true };
+      const skipStale = pendingSelection && cache.safeValue !== NO_INITIAL_VALUE;
+      if (skipStale) waiting.add(observer);
+      let replay = skipStale;
+      let hasDelivered = false;
+      let last: R | undefined;
+      // Streamix serializes async callbacks and replays its own current value.
+      const inner: Subscription = cache.subscribe((current, previous) => {
+        if (!observer.active) return;
+        if (replay) { replay = false; return; }
+        waiting.delete(observer);
+        // A primitive can be re-emitted to confirm a pending selection; don't
+        // deliver it again to consumers that already observed that value.
+        if (hasDelivered && equalPrimitive(last as R, current)) return;
+        hasDelivered = true;
+        last = current;
+        return callback?.(current, previous);
+      });
+      return createSubscription(() => {
+        observer.active = false;
+        waiting.delete(observer);
+        const closing = inner();
+        count--;
+        if (count === 0) stop(); // synchronous: old teardown cannot stop a new connection
+        return closing;
+      });
+    };
+    source.dispose = () => {
+      if (disposed) return;
+      disposed = true;
+      stop();
+      cache.dispose();
+    };
+    (source as Atom<R> & { isPending: () => boolean }).isPending = () => pendingSelection;
+    return source;
+
   };
   return {
     track,

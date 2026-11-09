@@ -3,11 +3,11 @@ import type { OnDestroy, OnInit } from '@angular/core';
 import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 
-import type { Atom } from '@epikodelabs/streamix';
+import type { Subscription } from '@epikodelabs/streamix';
 import { store } from '../app.module';
-import type { Hero } from '../hero';
 import { heroHue, heroInitials } from '../hero-presentation';
 import { heroDetailsModule, loadHero } from './hero-details.slice';
+import type { HeroDetailsState } from './hero-details.slice';
 
 @Component({
   selector: 'app-hero-details',
@@ -16,7 +16,9 @@ import { heroDetailsModule, loadHero } from './hero-details.slice';
   standalone: false
 })
 export class HeroDetailsComponent implements OnInit, OnDestroy {
-  hero?: Atom<Hero | undefined>;
+  // Kept as plain component state: one subscription updates content within the
+  // persistent profile card instead of recreating its structural host.
+  profile?: HeroDetailsState;
   /** Unsaved edit; `undefined` shows the committed name. */
   draftName?: string;
 
@@ -24,6 +26,8 @@ export class HeroDetailsComponent implements OnInit, OnDestroy {
   readonly initials = heroInitials;
 
   private heroId = 0;
+  private alive = true;
+  private unsubscribeProfile?: Subscription;
   private readonly changeDetector = inject(ChangeDetectorRef);
 
   constructor(
@@ -31,12 +35,24 @@ export class HeroDetailsComponent implements OnInit, OnDestroy {
     private location: Location
   ) {}
 
-  async ngOnInit() {
+  async ngOnInit(): Promise<void> {
     await store.loadModule(heroDetailsModule);
-    this.hero = heroDetailsModule.data$.heroSelector;
-    this.changeDetector.markForCheck();
+    if (!this.alive) return;
+
+    // One native selector, one subscription, one view-model update per state
+    // emission. The outer <section class="profile"> never gets replaced.
+    this.unsubscribeProfile = heroDetailsModule.data$.profileSelector.subscribe(profile => {
+      if (!this.alive) return;
+      this.profile = profile;
+      this.changeDetector.markForCheck();
+    });
 
     this.heroId = Number(this.route.snapshot.paramMap.get('id'));
+    this.load();
+  }
+
+  load(): void {
+    this.draftName = undefined;
     void store.dispatch(loadHero(this.heroId));
   }
 
@@ -47,19 +63,20 @@ export class HeroDetailsComponent implements OnInit, OnDestroy {
 
   async save(name: string): Promise<void> {
     const next = name?.trim();
-    if (!next) {
-      return;
-    }
+    if (!this.profile?.hero || !next || this.profile.loading) return;
 
     await heroDetailsModule.actions.renameHero(this.heroId, next);
     this.draftName = undefined;
+    this.changeDetector.markForCheck();
   }
 
   goBack(): void {
     this.location.back();
   }
 
-  ngOnDestroy() {
+  ngOnDestroy(): void {
+    this.alive = false;
+    void this.unsubscribeProfile?.();
     void store.unloadModule(heroDetailsModule, true);
   }
 }

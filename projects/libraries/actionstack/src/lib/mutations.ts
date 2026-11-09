@@ -4,10 +4,10 @@
 import type { Tree } from './types';
 
 export type StatePath = PropertyKey[];
-export type Write = { target: any; key: PropertyKey; value?: any; remove?: boolean; op?: CollectionOp };
+type Write = { target: any; key: PropertyKey; value?: any; remove?: boolean; op?: CollectionOp };
 
 /** Replayed on the original instance at commit: Map/Set method calls and Date time changes. */
-export type CollectionOp =
+type CollectionOp =
   | { kind: 'insert'; key?: any; value: any }
   | { kind: 'remove'; key: any }
   | { kind: 'clear' }
@@ -27,7 +27,7 @@ const DATE_WRITES: PropertyKey[] = [
   'setFullYear', 'setUTCFullYear', 'setYear',
 ];
 
-export function applyOp(target: any, op: CollectionOp): void {
+function applyOp(target: any, op: CollectionOp): void {
   if (target instanceof Date) Date.prototype.setTime.call(target, (op as { value: number }).value);
   else if (target instanceof Map) {
     if (op.kind === 'clear') Map.prototype.clear.call(target);

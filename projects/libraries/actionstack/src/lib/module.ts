@@ -1,8 +1,5 @@
-import {
-  atom,
-  createSubscription
-} from '@epikodelabs/streamix';
-import { createCurrentSource } from './current-source';
+import { atom } from '@epikodelabs/streamix';
+import { createSelectorProxy } from './selector-proxy';
 import { isAction } from '../lib';
 import type { ActionCreator, BoundActions, FeatureModule, Store, Streams, Selector, ViewAttachment } from '../lib';
 
@@ -313,86 +310,32 @@ function initializeDataStreams<
   getAttachedViews: () => Set<ViewAttachment>,
   getStore: () => Store<State> | undefined
 ) {
+  const boundSelectors: Record<string, (state: State) => unknown> = {};
   for (const key in processedSelectors) {
     const selectorFn = processedSelectors[key];
     const destroyed$ = getDestroyed$();
-    let selectorSource: any;
 
-    const source = createCurrentSource<any>({
-      // Store-backed objects can be updated in place between emissions.
-      equals: (previous, next) => (next === null || typeof next !== 'object') && Object.is(previous, next),
-      isPending: () => selectorSource?.isPending?.() ?? false,
-      connect: (emit, fail) => {
-        let connectionSource: any;
-        let selectorSubscription: any;
-        let confirmationSubscription: any;
-        let errorSubscription: any;
-        let loadedSubscription: any;
-        let closed = false;
-
-        const connectToStore = () => {
-          const nextStore = getStore();
-          if (closed || !nextStore || selectorSubscription) {
-            return false;
-          }
-
-          connectionSource = nextStore.select(selectorFn);
-          selectorSource = connectionSource;
-          confirmationSubscription = connectionSource.onCurrent?.(emit);
-          errorSubscription = connectionSource.onError?.(fail);
-          selectorSubscription = connectionSource.subscribe(
-            confirmationSubscription ? undefined : emit
-          );
-
-          return true;
-        };
-
-        loadedSubscription = getLoaded$().subscribe(() => {
-          if (connectToStore()) {
-            loadedSubscription?.();
-            loadedSubscription = undefined;
-          }
-        });
-
-        connectToStore();
-        // loaded$ can replay synchronously before loadedSubscription is
-        // assigned. Remove that now-obsolete listener after subscribe returns.
-        if (selectorSubscription) {
-          void loadedSubscription?.();
-          loadedSubscription = undefined;
-        }
-
-        return createSubscription(() => {
-          closed = true;
-          if (selectorSource === connectionSource) selectorSource = undefined;
-          const loadedCleanup = loadedSubscription?.();
-          const selectorCleanup = selectorSubscription?.();
-          const confirmationCleanup = confirmationSubscription?.();
-          const errorCleanup = errorSubscription?.();
-          connectionSource?.dispose?.();
-          return Promise.all([loadedCleanup, selectorCleanup, confirmationCleanup, errorCleanup]).then(() => undefined);
-        });
+    // Proxy only the selector function. The same proxy serves its callable
+    // selector API and the `data$` Atom API, without creating a second cache.
+    const source = createSelectorProxy(selectorFn, {
+      create: () => {
+        const store = getStore();
+        if (!store) throw new Error('Module selector connected without a store.');
+        // Track the original root selector, not the proxy's reactive facade.
+        return store.select(selectorFn);
       },
+      ready: () => Boolean(getStore()),
+      onReady: wake => getLoaded$().subscribe(wake),
     });
 
-    const disposeSource = source.dispose.bind(source);
-    let destroyedSubscription: any;
-
-    source.dispose = () => {
-      if (source.disposed) return;
-
-      const subscription = destroyedSubscription;
-      destroyedSubscription = undefined;
-      subscription?.();
-      disposeSource();
-    };
-
-    destroyedSubscription = destroyed$.subscribe(() => {
+    boundSelectors[key] = source;
+    const stopDestroyed = destroyed$.subscribe(() => {
       source.dispose();
+      void stopDestroyed();
     });
-
     (moduleInstance.data$ as any)[key] = bindViewNotifications(source, getAttachedViews);
   }
+  moduleInstance.selectors = boundSelectors;
 }
 
 function bindViewNotifications<T>(
@@ -418,6 +361,9 @@ function bindViewNotifications<T>(
   };
 
   const wrapped = Object.create(source as object);
+  // `data$` is an Atom, while the callable `selectors[key]` remains a plain
+  // selector function. Both delegate to the same tracked source.
+  Object.defineProperty(wrapped, 'type', { value: 'atom', enumerable: true });
 
   wrapped.subscribe = (nextOrObserver: any) =>
     (source as any).subscribe((value: unknown) => {
@@ -442,11 +388,6 @@ function bindViewNotifications<T>(
       notifyViews();
       return result;
     });
-
-  if (typeof (source as any).pipe === 'function') {
-    wrapped.pipe = (...ops: any[]) =>
-      bindViewNotifications((source as any).pipe(...ops), getAttachedViews);
-  }
 
   return wrapped as T;
 }

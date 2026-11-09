@@ -1,41 +1,60 @@
-<ng-container *atom="hero as hero">
-  @if (hero) {
-    <section class="profile">
-      <header class="profile__head">
-        <span class="avatar avatar--lg" [style.--hue]="hue(hero.id)">{{ initials(hero.name) }}</span>
-        <div class="profile__identity">
-          <p class="eyebrow">Hero profile</p>
-          <h1>{{ hero.name }}</h1>
-          <span class="pill">#{{ hero.id }}</span>
-        </div>
-      </header>
+<!-- Keep the card mounted from the first render; only its contents change. -->
+<section class="profile" [attr.aria-busy]="!profile || profile.loading ? 'true' : null">
+  <header class="profile__head">
+    @if (profile?.hero; as hero) {
+      <span class="avatar avatar--lg" [style.--hue]="hue(hero.id)">{{ initials(hero.name) }}</span>
+    } @else {
+      <span class="avatar avatar--lg skeleton" aria-hidden="true"></span>
+    }
 
-      <form class="profile__form" (ngSubmit)="save(draftName ?? hero.name)">
-        <label class="field">
-          <span class="field__label">Hero name</span>
-          <input
-            name="heroName"
-            autocomplete="off"
-            [ngModel]="draftName ?? hero.name"
-            (ngModelChange)="draftName = $event"
-          />
-        </label>
+    <div class="profile__identity">
+      <p class="eyebrow">Hero profile</p>
+      @if (profile?.hero; as hero) {
+        <h1>{{ hero.name }}</h1>
+        <span class="pill">#{{ hero.id }}</span>
+      } @else {
+        <span class="profile__placeholder profile__placeholder--name skeleton" aria-hidden="true"></span>
+        <span class="profile__placeholder profile__placeholder--badge skeleton" aria-hidden="true"></span>
+      }
+    </div>
+  </header>
 
-        <div class="profile__actions">
-          <button
-            type="submit"
-            class="btn btn--primary"
-            [disabled]="!canSave(draftName ?? hero.name, hero.name)"
-          >
-            Save changes
-          </button>
-          <button type="button" class="btn btn--ghost" (click)="goBack()">
-            Go back
-          </button>
-        </div>
-      </form>
-    </section>
-  } @else {
-    <div class="empty">Loading hero…</div>
+  <form class="profile__form" (ngSubmit)="save(draftName ?? profile?.hero?.name ?? '')">
+    <label class="field">
+      <span class="field__label">Hero name</span>
+      @if (profile?.hero; as hero) {
+        <input
+          name="heroName"
+          autocomplete="off"
+          [ngModel]="draftName ?? hero.name"
+          (ngModelChange)="draftName = $event"
+          [disabled]="profile!.loading"
+        />
+      } @else {
+        <span class="profile__placeholder profile__placeholder--input skeleton" aria-hidden="true"></span>
+      }
+    </label>
+
+    <div class="profile__actions">
+      <button
+        type="submit"
+        class="btn btn--primary"
+        [disabled]="!profile?.hero || profile!.loading || !canSave(draftName ?? profile!.hero!.name, profile!.hero!.name)"
+      >
+        Save changes
+      </button>
+      <button type="button" class="btn btn--ghost" (click)="goBack()">
+        Go back
+      </button>
+    </div>
+  </form>
+
+  @if (profile?.error; as error) {
+    <div class="profile__error" role="alert">
+      Could not load hero: {{ error.message }}
+      <button type="button" class="btn btn--sm btn--ghost" (click)="load()">Retry</button>
+    </div>
+  } @else if (!profile?.hero) {
+    <span class="profile__sr-only" role="status">Loading hero profile…</span>
   }
-</ng-container>
+</section>

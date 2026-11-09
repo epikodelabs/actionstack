@@ -1,10 +1,11 @@
 # Changelog
 
-## 5.0.4 - 2026-11-05
+## 5.0.4 - 2026-11-09
 
-- Added the `preserveImmutableState` store setting, on by default: every commit builds a new state tree that shares untouched branches and deeply freezes committed state, so held snapshots stay valid and accidental writes throw. Set `preserveImmutableState: false` to commit in place with stable object identities.
-- Restored the public `applyChange` utility: replacing a value at a nested path now clones only that path, and it powers immutable slice installation as well as `combineReducers`.
-- Selector invalidation is unchanged by the new default: the same committed change paths drive the same selective reruns in both commit modes.
+- Synchronous selector reads: Selectors now resolve available values immediately, even without subscribers. This applies to module.data$, selector proxies, store.select(), and selectStream(). Async values remain unavailable until resolved.
+- Simplified reactive architecture: Removed current-source.ts. Selectors now rely directly on native Streamix atoms for caching, replay, and delivery, eliminating redundant reactive layers.
+- Immutable state by default: Introduced preserveImmutableState, enabled by default. Commits preserve previous snapshots through structural sharing and deep freezing. Set it to false to retain mutable state and stable object identities.
+- Restored applyChange(): Supports immutable updates along nested paths, sharing unchanged branches. Also used by slice updates and combineReducers().
 
 ## 5.0.3 - 2026-10-27
 

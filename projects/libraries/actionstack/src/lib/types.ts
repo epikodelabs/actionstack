@@ -305,6 +305,23 @@ export type Streams<S extends Record<string, (state: any) => any>> = {
 };
 
 /**
+ * A module selector exposed by `module.selectors`.
+ *
+ * It remains callable with root state, and once the module is configured it
+ * also exposes the reactive Atom surface (`value`, `subscribe`, ...). The
+ * `type` discriminator is deliberately omitted so callable selectors are not
+ * mistaken for Atoms by Streamix.
+ */
+export type BoundSelector<S> = S extends (...args: infer A) => infer R
+  ? ((...args: A) => R) & Omit<Atom<Awaited<R>>, 'type'>
+  : never;
+
+/** Maps a module's selectors to their callable + reactive public surface. */
+export type BoundSelectors<S extends Record<string, (...args: any[]) => any>> = {
+  [K in keyof S]: BoundSelector<S[K]>;
+};
+
+/**
  * A module action method bound to its store: called with the creator's
  * arguments, it dispatches and returns the dispatch promise, which resolves
  * when processing completes (and rejects when the handler or thunk fails).
@@ -374,7 +391,7 @@ export interface FeatureModule<
   readonly destroyed: boolean;
   readonly data$: Streams<Selectors>;
   readonly actions: BoundActions<Actions>;
-  readonly selectors: Selectors;
+  readonly selectors: BoundSelectors<Selectors>;
   attachView: (view: ViewAttachment) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
   detachView: (view: ViewAttachment) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
   init: (store: Store<any>) => FeatureModule<State, ActionTypes, Actions, Selectors, Dependencies>;
