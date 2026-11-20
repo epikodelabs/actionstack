@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 
-import type { Action } from '@epikodelabs/actionstack';
+import { withMiddlewareState, type Action } from '@epikodelabs/actionstack';
 
 type LogLevelName = 'log' | 'warn' | 'error' | 'info' | 'debug' | 'group' | 'groupCollapsed' | 'groupEnd';
 
@@ -326,7 +326,7 @@ export const createLogger = (options: CreateLoggerOptions = {}): LoggerMiddlewar
   }
 
   loggerCreator.signature = '6.q.w.c.i.m.9.n.j.y';
-  return loggerCreator;
+  return logger === undefined ? loggerCreator : withMiddlewareState(loggerCreator);
 };
 
 /**

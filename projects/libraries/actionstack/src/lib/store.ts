@@ -13,7 +13,7 @@ import type {
   Dispatch,
   FeatureModule,
   Middleware,
-  MiddlewareAPI,
+  StatefulMiddlewareAPI,
   Reducer,
   StoreEnhancer,
 } from './types';
@@ -73,8 +73,8 @@ export type Store<TState = any, TDependencies = any> = {
 
     addReducer: (reducer: (state: TState, action: Action<any> | AsyncAction<TState, TDependencies>) => TState | void | Promise<TState | void>) => void;
 
-    middlewareAPI: MiddlewareAPI;
-    starter: Middleware;
+    middlewareAPI: StatefulMiddlewareAPI;
+    starter: Middleware<StatefulMiddlewareAPI>;
 };
 
 interface SystemState {
@@ -462,7 +462,7 @@ export function createStore<T = any>(
     strategy: () => pipeline.strategy,
     queue,
     registry,
-  } as MiddlewareAPI;
+  } as StatefulMiddlewareAPI;
 
   /**
    * Reads the state slice and executes the provided callback with the current state.

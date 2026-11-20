@@ -1,5 +1,5 @@
 import { applyChange } from "./mutations";
-import type { Action, AsyncReducer, Reducer, StoreCreator, StoreEnhancer, Tree } from "./types";
+import type { Action, AsyncReducer, Reducer, StatefulMiddlewareAPI, StoreCreator, StoreEnhancer, Tree } from "./types";
 
 export type PropertyPath = readonly (string | number)[];
 
@@ -333,6 +333,19 @@ const combineReducers = (reducers: Tree<Reducer | AsyncReducer>): AsyncReducer =
   };
 };
 
+const statefulMiddlewares = new WeakSet<Function>();
+
+/**
+ * Opts a middleware into direct state reads when installed with applyMiddleware.
+ *
+ * @param middleware - Middleware that explicitly needs the store state reader.
+ * @returns The supplied middleware with state access enabled.
+ */
+export function withMiddlewareState<T extends (api: StatefulMiddlewareAPI) => unknown>(middleware: T): T {
+  statefulMiddlewares.add(middleware);
+  return middleware;
+}
+
 /**
  * Applies middleware to the store's dispatch function.
  * Middleware enhances the dispatch function, allowing actions to be intercepted and modified.
@@ -345,13 +358,14 @@ const applyMiddleware = (...middlewares: Function[]): StoreEnhancer => {
     // Create the store with the original reducer and enhancer
     const store = next(settings, enhancer);
 
-    // Define middleware API
-    const middlewareAPI = store.middlewareAPI;
+    const statefulAPI = store.middlewareAPI;
+    const { getState: _getState, ...middlewareAPI } = statefulAPI;
 
     // Build middleware chain
     const chain: Array<(next: any) => any> = [];
     for (let i = 0; i < middlewares.length; i++) {
-      chain.push(middlewares[i](middlewareAPI));
+      const middleware = middlewares[i];
+      chain.push(middleware(statefulMiddlewares.has(middleware) ? statefulAPI : middlewareAPI));
     }
 
     // Compose the middleware chain into a single dispatch function

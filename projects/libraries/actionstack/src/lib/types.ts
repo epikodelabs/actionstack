@@ -194,20 +194,24 @@ export type AsyncReducer<T = any> = (state: T, action: Action) => Promise<T | vo
  * Provides access to state, dispatching actions, dependencies, processing strategy,
  * synchronization, and execution stack.
  *
- * @property {function([string[]]): any} getState - Retrieves the state or a specific slice of the state.
  * @property {function(Action|AsyncAction): Promise<void>} dispatch - Dispatches an action (synchronous or asynchronous).
  * @property {function(): any} dependencies - Retrieves the current dependencies in the pipeline.
  * @property {function(): ProcessingStrategy} strategy - Retrieves the current processing strategy.
  * @property {ActionQueue} queue - A queue to serialize store operations and middleware dispatches.
  */
 export type MiddlewareAPI<TState = any, TDependencies = any> = {
-  getState: (slice?: string | string[] | '*') => any;
   dispatch: Dispatch<TState, TDependencies>;
   dependencies: () => TDependencies;
   strategy: () => ProcessingStrategy;
   queue: ActionQueue;
   registry: ActionRegistry;
 }
+
+/** Middleware services with explicit access to the current store state. */
+export type StatefulMiddlewareAPI<TState = any, TDependencies = any> =
+  MiddlewareAPI<TState, TDependencies> & {
+    getState: (slice?: string | string[] | '*') => any;
+  };
 
 /**
  * Interface defining the structure of a middleware function.
@@ -227,8 +231,8 @@ export type MiddlewareAPI<TState = any, TDependencies = any> = {
  *  - An optional string property that can be used to define a signature for the middleware,
  *      aiding in type checking and documentation.
  */
-export interface Middleware {
-  (api: MiddlewareAPI): (next: Function) => (action: Action | AsyncAction) => Promise<any> | any;
+export interface Middleware<TAPI extends MiddlewareAPI = MiddlewareAPI> {
+  (api: TAPI): (next: Function) => (action: Action | AsyncAction) => Promise<any> | any;
   signature?: string;
 }
 

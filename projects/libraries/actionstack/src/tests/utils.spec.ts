@@ -1,7 +1,7 @@
 // utils.spec.ts - Jasmine Tests
 
 import type { StoreCreator, StoreEnhancer } from '@epikodelabs/actionstack';
-import { applyChange, applyMiddleware, combineEnhancers, combineReducers, deepMerge, getProperty, setProperty } from '@epikodelabs/actionstack';
+import { applyChange, applyMiddleware, combineEnhancers, combineReducers, createStore, deepMerge, getProperty, setProperty, withMiddlewareState } from '@epikodelabs/actionstack';
 import { atom } from '@epikodelabs/streamix';
 
 describe('getProperty', () => {
@@ -330,6 +330,20 @@ describe('combineReducers', () => {
 });
 
 describe('applyMiddleware', () => {
+  it('only supplies the state reader to middleware that opts in', async () => {
+    const plain = jasmine.createSpy('plain').and.returnValue((next: Function) => next);
+    const stateful = jasmine.createSpy('stateful').and.returnValue((next: Function) => next);
+    const store = createStore(applyMiddleware(plain, withMiddlewareState(stateful)));
+
+    await store.dispatch({ type: 'TEST' });
+
+    const plainAPI = plain.calls.mostRecent().args[0];
+    const statefulAPI = stateful.calls.mostRecent().args[0];
+    expect('getState' in plainAPI).toBeFalse();
+    expect(plainAPI.dispatch).toBe(statefulAPI.dispatch);
+    expect(statefulAPI.getState('system')).toBe(store.middlewareAPI.getState('system'));
+  });
+
   it('should apply middleware to dispatch', () => {
     const store = {
       getState: () => ({ counter: 0 }),

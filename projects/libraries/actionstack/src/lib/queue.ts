@@ -47,10 +47,7 @@ export function createQueue() {
       // Maintain ordering by ensuring `last` waits for both the previous chain
       // and this inline-started operation to settle. This prevents reordering
       // while still allowing parent/child awaits to proceed.
-      last = Promise.all([last, finalized]).then(
-        () => undefined,
-        () => undefined
-      );
+      last = Promise.allSettled([last, finalized]).then(() => undefined);
     } else {
       last = finalized.then(
         () => undefined,

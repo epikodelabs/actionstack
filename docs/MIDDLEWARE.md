@@ -21,6 +21,12 @@ import { logger, perfmon, storeFreeze } from '@epikodelabs/actionstack/tools';
 export const store = createStore(applyMiddleware(logger, perfmon, storeFreeze));
 ```
 
+Middleware installed with `applyMiddleware` receives dispatch and the other
+middleware services by default. If a middleware needs to read current state,
+import `withMiddlewareState` and install it with
+`applyMiddleware(withMiddlewareState(myMiddleware))`. The built-in logger
+already opts in.
+
 When an action hits:
 1. **Logger** scribbles what’s up in the console.
 2. **Performance Monitor** clocks the speed.

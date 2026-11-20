@@ -1,346 +1,282 @@
 import { getRegisteredThunks } from './actions';
 import { createQueue, type ActionQueue } from './queue';
-import type { Action, ActionRegistry, AsyncAction, Dispatch } from './types';
+import type { Action, ActionRegistry, AsyncAction, Dispatch, MiddlewareAPI, StatefulMiddlewareAPI } from './types';
 
 /**
- * @template TState - The overall type of your application's state.
- * @template {Record<string, any>} TDependencies - The type of the object containing application dependencies.
+ * Store services available to the starter's action handler.
  *
- * Configuration object for the middleware pipeline.
- * This object provides the necessary context and utilities to each middleware function.
- * It's the `config` parameter received by middleware functions like `exclusive` and `concurrent`.
+ * @typeParam TState - State exposed to legacy thunks.
+ * @typeParam TDependencies - Services injected into legacy thunks.
  */
 export interface MiddlewareConfig<TState = any, TDependencies extends Record<string, any> = Record<string, any>> {
+  /** The store's public dispatch function. */
   dispatch: Dispatch<TState, TDependencies>;
+  /** Reads the current state for legacy thunks. */
   getState: () => TState;
+  /** Retrieves the services to inject when a legacy thunk starts. */
   dependencies: () => TDependencies;
+  /** Serializes work that applies actions to the store. */
   queue: ActionQueue;
+  /** Holds the thunk creators eligible for post-action triggers. */
   registry: ActionRegistry;
 }
 
-/**
- * Functional handler for managing actions within middleware.
- *
- * @param {MiddlewareConfig} config - Configuration object for the middleware.
- * @returns {Function} - A function to handle actions.
- */
-export function createActionHandler(
-  config: MiddlewareConfig,
-  options: {
-    lockThunks?: boolean;
-    afterAction?: (action: Action, next: Function, isNestedDispatch: boolean) => Promise<void>;
-  } = {}
-) {
-  const getState = config.getState;
-  const dependencies = config.dependencies;
-  const queue = config.queue ?? { enqueue: async (operation: () => Promise<void> | void) => operation() };
-  const lockThunks = options.lockThunks ?? false;
-  const nestedQueue = lockThunks ? createQueue() : null;
-  const afterAction = options.afterAction;
+type DispatchInput = Action | AsyncAction;
+type Strategy = 'exclusive' | 'concurrent';
+type RegisteredThunk = ReturnType<typeof getRegisteredThunks>[number];
+type DispatchScope = 'topLevel' | 'nested' | 'standalone';
+type DispatchPhase =
+  | { phase: 'afterAction'; action: Action; nested: boolean }
+  | { phase: 'triggerSequentially' | 'triggerConcurrently'; action: Action };
+type ActionHandlerOptions = {
+  /** Lets nested dispatches reuse an active queue slot while serializing nested action application. */
+  lockThunks?: boolean;
+  /** Runs after downstream middleware resolves for a plain action. */
+  afterAction?: (action: Action, next: Function, isNestedDispatch: boolean) => Promise<void>;
+};
 
-  /**
-   * Handles the given action, processing it either synchronously or asynchronously.
-   *
-   * @param {Action | AsyncAction} action - The action to be processed.
-   * @param {Function} next - The next middleware function in the chain.
-   * @param {any} lockOrNested - Boolean flag or legacy lock arg used to infer nested dispatch.
-   * @param {boolean} maybeNestedDispatch - Indicates whether the action is dispatched from within another action.
-   * @returns {Promise<void> | void} - A promise if the action is asynchronous, otherwise void.
-   */
-  const handleAction = async (
-    action: Action | AsyncAction,
-    next: Function,
-    lockOrNested: any = false,
-    maybeNestedDispatch: boolean = false
-  ): Promise<any> => {
-    const isNestedDispatch =
-      typeof lockOrNested === 'boolean' ? lockOrNested : Boolean(maybeNestedDispatch);
+const immediateQueue = {
+  async enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
+    return operation();
+  },
+};
 
-    if (typeof action === 'function') {
-      const runThunk = async () =>
-        (action as AsyncAction)(
-          async (dispatchedAction: Action | AsyncAction) => {
-            return await handleAction(dispatchedAction, next, true);
-          },
-          getState,
-          dependencies()
-        );
-
-      // The thunk's return value becomes the dispatch promise's resolution.
-      return runThunk();
-    } else {
-      const run = () =>
-        queue.enqueue(() => next(action), {
-          inlineIfRunning: lockThunks && isNestedDispatch,
-        });
-
-      // Preserve `next`'s resolution (undefined for plain actions, a thunk's
-      // value when a middleware forwards one) while triggered thunks still
-      // run log-only after it.
-      let result: any;
-      if (lockThunks && isNestedDispatch && nestedQueue) {
-        result = await nestedQueue.enqueue(run);
-      } else {
-        result = await run();
-      }
-
-      if (afterAction) {
-        await afterAction(action, next, isNestedDispatch);
-      }
-
-      return result;
-    }
-  };
-
-  return handleAction;
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error ?? 'unknown');
 }
 
 /**
- * Function to create the starter middleware factory.
- * This factory function returns a middleware creator that takes strategy information as arguments and returns the actual middleware function.
+ * Creates a handler that queues plain actions and runs legacy thunks with nested dispatch.
  *
- * @returns Function - The middleware creator function.
+ * @param config - Store services used to apply actions and invoke thunks.
+ * @param options - Nested queue behavior and an optional post-action hook.
+ * @returns A handler that resolves with the downstream middleware or thunk result
+ * and rejects on failure.
  */
-export const createStarter = () => {
+export function createActionHandler(
+  config: MiddlewareConfig,
+  options: ActionHandlerOptions = {},
+) {
+  const run = createDispatchMachine(config, options);
+  return (
+    action: DispatchInput,
+    next: Function,
+    nestedOrLegacyLock: unknown = false,
+    legacyNested = false,
+  ) => {
+    const nested = typeof nestedOrLegacyLock === 'boolean' ? nestedOrLegacyLock : Boolean(legacyNested);
+    return run(action, next, nested ? 'nested' : 'standalone');
+  };
+}
+
+/**
+ * Creates a runner that drives one async generator per dispatch.
+ *
+ * @param config - Store services shared by dispatches.
+ * @param options - Nested queue behavior and the hook to run after a plain action.
+ * @param strategy - Scheduling policy for top-level dispatches from starter.
+ * @returns A runner that advances the lifecycle through any post-action work.
+ */
+function createDispatchMachine(
+  config: MiddlewareConfig,
+  options: ActionHandlerOptions,
+  strategy?: Strategy,
+) {
+  const { getState, dependencies } = config;
+  const { lockThunks = strategy === 'exclusive', afterAction } = options;
+  const queue = config.queue ?? immediateQueue;
+  const nestedQueue = lockThunks ? createQueue() : undefined;
+  const warn = console.warn;
+
   /**
-   * Determines if a thunk should be triggered by a given action.
+   * Applies an action or awaits a thunk under the selected scheduling policy.
+   * Exclusive top-level runs keep the store queue slot until the entire run
+   * settles. Concurrent runs queue each plain action individually.
    *
-   * Each thunk may define a `triggers` array. A trigger can be:
-   * 1. A string — representing an action type to match exactly.
-   * 2. A function — that receives the action and returns a boolean indicating
-   *    whether the thunk should run.
-   *
-   * This function evaluates all triggers for a given thunk and returns `true`
-   * if at least one trigger matches the action.
-   *
-   * @param {any} thunk - The thunk object that may have a `triggers` property.
-   * @param {Action} action - The action being dispatched in the middleware.
-   * @returns {boolean} `true` if the thunk should be executed for the given action; `false` otherwise.
-   *
-   * @example
-   * const thunk = { triggers: ['INCREMENT'] };
-   * matchesAction(thunk, { type: 'INCREMENT' }); // true
-   *
-   * const thunkFn = { triggers: [action => action.value > 10] };
-   * matchesAction(thunkFn, { type: 'SET_VALUE', value: 15 }); // true
+   * @param action - Plain action or legacy thunk to execute.
+   * @param next - Downstream middleware entry point.
+   * @param scope - Whether this run entered through starter, is nested, or is standalone.
+   * @yields Post-action work after downstream middleware succeeds.
+   * @returns The result of downstream middleware or the thunk.
    */
-  function matchesAction(thunk: any, action: Action) {
-    const triggers = thunk.triggers;
-    if (!Array.isArray(triggers) || triggers.length === 0) return false;
-    return triggers.some((t: any) => {
-      if (typeof t === 'string') return t === action?.type;
-      if (typeof t === 'function') {
-        try { return Boolean(t(action)); } catch { return false; }
-      }
-      return false;
-    });
+  async function* dispatchLifecycle(
+    action: DispatchInput,
+    next: Function,
+    scope: DispatchScope,
+  ): AsyncGenerator<DispatchPhase, any, void> {
+    if (scope === 'topLevel' && strategy === 'exclusive') {
+      // The queue owns the whole run. Its children reuse that ownership.
+      return queue.enqueue(() => run(action, next, 'nested'));
+    }
+
+    const nested = scope === 'nested';
+    if (typeof action === 'function') {
+      return action((child: DispatchInput) => run(child, next, 'nested'), getState, dependencies());
+    }
+
+    const apply = () => queue.enqueue(() => next(action), { inlineIfRunning: lockThunks && nested });
+    const result = await (nested && nestedQueue ? nestedQueue.enqueue(apply) : apply());
+    // The driver receives the action only after downstream middleware succeeds.
+    if (strategy === 'exclusive') {
+      yield { phase: 'triggerSequentially', action };
+    } else if (strategy === 'concurrent') {
+      yield { phase: 'triggerConcurrently', action };
+    } else if (afterAction) {
+      yield { phase: 'afterAction', action, nested };
+    }
+    return result;
   }
 
-  /**
-   * Ensures we execute the thunk body rather than the thunk creator itself.
-   * Registered thunks are creators, so we call them without arguments to
-   * retrieve the actual async action.
-   */
-  const resolveThunk = (thunk: any) => {
-    if (typeof thunk === 'function' && thunk.isThunk) {
-      try {
-        return thunk();
-      } catch (err: any) {
-        console.warn(`[starter] Failed to instantiate thunk "${thunk.type ?? 'unknown'}": ${err?.message ?? err}`);
-        return null;
+  async function runTriggers(
+    action: Action,
+    next: Function,
+    phase: 'triggerSequentially' | 'triggerConcurrently',
+  ): Promise<void> {
+    const thunks = getRegisteredThunks(config.registry);
+    const reportFailure = (error: unknown) => {
+      warn(`[starter] [${strategy}] Thunk error while processing action "${action?.type ?? 'unknown'}": ${errorMessage(error)}`);
+    };
+
+    if (phase === 'triggerSequentially') {
+      for (const thunk of thunks) {
+        if (!matchesAction(thunk, action)) continue;
+        const thunkAction = resolveThunk(thunk);
+        if (thunkAction) await run(thunkAction, next, 'nested').catch(reportFailure);
       }
+      return;
     }
-    return thunk;
-  };
 
-  /**
-   * Middleware function for handling actions exclusively.
-   *
-   * This middleware ensures only one action is processed at a time and queues new actions until the current one finishes.
-   *
-   * @param args - Arguments provided by the middleware pipeline.
-   *   * dispatch - Function to dispatch actions.
-   *   * getState - Function to get the current state.
-   *   * dependencies - Function to get dependencies.
-   * @param next - Function to call the next middleware in the chain.
-   * @returns Function - The actual middleware function that handles actions.
-   */
-  const exclusive = (config: MiddlewareConfig) => {
-    const queue = config.queue ?? { enqueue: async (operation: () => Promise<void> | void) => operation() };
-    const onError = console.warn;
-    let handler!: ReturnType<typeof createActionHandler>;
+    const runs = thunks.filter(thunk => matchesAction(thunk, action)).map(resolveThunk);
+    const results = await Promise.allSettled(
+      runs.filter(thunk => !!thunk).map(thunk => run(thunk, next, 'nested')),
+    );
+    for (const result of results) {
+      if (result.status === 'rejected') reportFailure(result.reason);
+    }
+  }
 
-    const runTriggeredThunks = async (action: Action, next: Function) => {
-      for (const thunk of getRegisteredThunks(config.registry)) {
-        if (!matchesAction(thunk, action)) {
-          continue;
+  async function run(
+    action: DispatchInput,
+    next: Function,
+    scope: DispatchScope,
+  ): Promise<any> {
+    const lifecycle = dispatchLifecycle(action, next, scope);
+    let step = await lifecycle.next();
+
+    while (!step.done) {
+      try {
+        const { value } = step;
+        if (value.phase === 'afterAction') {
+          await afterAction?.(value.action, next, value.nested);
+        } else {
+          await runTriggers(value.action, next, value.phase);
         }
-
-        const runnableThunk = resolveThunk(thunk);
-        if (!runnableThunk) {
-          continue;
-        }
-
-        try {
-          await handler(runnableThunk, next, true);
-        } catch (err: any) {
-          const msg =
-            err instanceof Error ? err.message : String(err ?? 'unknown');
-          onError(
-            `[starter] [exclusive] Thunk error while processing action "${action?.type ?? 'unknown'}": ${msg}`
-          );
-        }
+      } catch (error) {
+        await lifecycle.return(undefined);
+        throw error;
       }
-    };
+      step = await lifecycle.next();
+    }
 
-    handler = createActionHandler(config, {
-      lockThunks: true,
-      afterAction: async (action, next) => {
-        await runTriggeredThunks(action, next);
-      },
-    });
+    return step.value;
+  }
 
-    return (next: Function) => async (action: { type: string }) => {
-      return queue.enqueue(async () => {
-        try {
-          // `return await` so thunk results resolve the dispatch promise while
-          // the catch below still converts failures into rejections.
-          return await handler(action as any, next, true);
-        } catch (err: any) {
-          const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
-          onError(`[starter] [exclusive] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${msg}`);
-          // Directly dispatched actions reject the dispatch promise; triggered
-          // thunks above stay log-only so they never fail their trigger.
-          throw err;
-        }
-      });
-    };
-  };
+  return run;
+}
 
-  /**
-   * Middleware function for handling actions concurrently.
-   *
-   * This middleware allows multiple async actions to be processed simultaneously.
-   *
-   * @param args - Arguments provided by the middleware pipeline (same as exclusive).
-   * @param next - Function to call the next middleware in the chain.
-   * @returns Function - The actual middleware function that handles actions.
-   */
-  const concurrent = (config: MiddlewareConfig) => {
-    const inflight = new Set<Promise<void>>();
-    const onError = console.warn;
-    let handler!: ReturnType<typeof createActionHandler>;
+function matchesAction(thunk: RegisteredThunk, action: Action): boolean {
+  return Array.isArray(thunk.triggers) && thunk.triggers.some(trigger => {
+    if (typeof trigger === 'string') return trigger === action?.type;
+    if (typeof trigger !== 'function') return false;
+    try {
+      return Boolean(trigger(action));
+    } catch {
+      return false;
+    }
+  });
+}
 
-    const runTriggeredThunks = async (action: Action, next: Function) => {
-      const matching = getRegisteredThunks(config.registry)
-        .filter((thunk) => matchesAction(thunk, action));
+function resolveThunk(thunk: RegisteredThunk): AsyncAction | undefined {
+  if (typeof thunk === 'function' && thunk.isThunk) {
+    try {
+      return thunk();
+    } catch (error) {
+      console.warn(`[starter] Failed to instantiate thunk "${thunk.type ?? 'unknown'}": ${errorMessage(error)}`);
+      return;
+    }
+  }
+  return thunk as unknown as AsyncAction;
+}
 
-      const results = await Promise.allSettled(
-        matching
-          .map(resolveThunk)
-          .filter(Boolean)
-          .map((thunk) => handler(thunk as AsyncAction, next, true))
-      );
+function selectStrategy(readStrategy: MiddlewareAPI['strategy']): Strategy {
+  let name: string;
+  try {
+    name = String(readStrategy?.());
+  } catch {
+    name = 'unknown';
+  }
 
-      for (const r of results) {
-        if (r.status === 'rejected') {
-          const msg =
-            r.reason instanceof Error
-              ? r.reason.message
-              : String(r.reason ?? 'unknown');
-          onError(
-            `[starter] [concurrent] Thunk error while processing action "${action?.type ?? 'unknown'}": ${msg}`
-          );
-        }
+  if (name === 'exclusive' || name === 'concurrent') return name;
+  console.warn(`[starter] Unknown strategy: ${name}, default is used: concurrent`);
+  return 'concurrent';
+}
+
+/**
+ * Creates the outer middleware that schedules dispatches and runs post-action triggers.
+ *
+ * Exclusive mode serializes entire top-level dispatches and runs matching thunks
+ * in order. Concurrent mode serializes plain action application and lets matching
+ * thunks overlap. Failures from triggered thunks are logged independently of
+ * the triggering dispatch.
+ *
+ * @returns Middleware that selects the store's strategy when bound to the pipeline.
+ */
+export function createStarter() {
+  function starterMiddleware(api: StatefulMiddlewareAPI) {
+    return (next: Function) => {
+      const strategy = selectStrategy(api.strategy);
+      const exclusive = strategy === 'exclusive';
+      const warn = console.warn;
+      const inflight = new Set<Promise<any>>();
+
+      const runDispatch = createDispatchMachine(api, {}, strategy);
+
+      function reportDispatchFailure(action: DispatchInput, error: unknown) {
+        const type = (action as Partial<Action> | null)?.type ?? 'unknown';
+        warn(`[starter] [${strategy}] Unhandled error while processing action "${type}": ${errorMessage(error)}`);
       }
-    };
 
-    handler = createActionHandler(config, {
-      lockThunks: false,
-      afterAction: async (action, next) => {
-        await runTriggeredThunks(action, next);
-      },
-    });
+      if (exclusive) {
+        return async (action: DispatchInput) => {
+          try {
+            return await runDispatch(action, next, 'topLevel');
+          } catch (error) {
+            reportDispatchFailure(action, error);
+            throw error;
+          }
+        };
+      }
 
-    // Attach small control surface for diagnostics/teardown
-    const middleware = (next: Function) => {
-      // expose helpers on the returned function (non-enumerable to be unobtrusive)
-      const fn = async (action: { type: string }) => {
-        // DO NOT await; return quickly for true concurrency
-        const p = (async () =>
-          // handle main action; rejection and thunk results flow to the caller
-          handler(action, next))();
+      async function dispatch(action: DispatchInput) {
+        const pending = runDispatch(action, next, 'topLevel');
+        inflight.add(pending);
+        pending.catch(error => reportDispatchFailure(action, error)).finally(() => inflight.delete(pending));
+        return pending;
+      }
 
-        inflight.add(p);
-
-        // ensure cleanup + error reporting; the rejection still reaches the caller
-        p.catch(err => {
-          const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
-          onError(
-            `[starter] [concurrent] Unhandled error while processing action "${action?.type ?? 'unknown'}": ${msg}`
-          );
-        }).finally(() => {
-          inflight.delete(p);
-        });
-
-        // For compatibility, return the promise in case caller wants to await.
-        return p;
-      };
-
-      Object.defineProperties(fn, {
-        pendingCount: {
-          value: () => inflight.size,
-        },
-        waitForAll: {
-          value: async () => {
-            if (inflight.size === 0) return [];
-            // Snapshot to avoid mutation while awaiting
-            return Promise.allSettled(Array.from(inflight));
-          },
-        },
-      });
-
-      return fn as typeof fn & {
+      return Object.defineProperties(dispatch, {
+        pendingCount: { value: () => inflight.size },
+        waitForAll: { value: () => Promise.allSettled([...inflight]) },
+      }) as typeof dispatch & {
         pendingCount(): number;
         waitForAll(): Promise<PromiseSettledResult<void>[]>;
       };
     };
+  }
 
-    return middleware;
-  };
+  starterMiddleware.signature = 'i.p.5.j.7.0.2.1.8.b';
+  return starterMiddleware;
+}
 
-  // Map strategy names to functions
-  const strategies: Record<string, any> = {
-    'exclusive': exclusive,
-    'concurrent': concurrent
-  };
-
-  const defaultStrategy = 'concurrent';
-
-  // Create a method to select the strategy
-  const selectStrategy = ({ dispatch, getState, dependencies, strategy, queue, stack, registry }: any) => (next: Function) => {
-    let strategyName: string;
-    try {
-      strategyName = String(strategy?.());
-    } catch {
-      strategyName = 'unknown';
-    }
-
-    let strategyFunc = strategies[strategyName];
-    if (!strategyFunc) {
-      console.warn(`[starter] Unknown strategy: ${strategyName}, default is used: ${defaultStrategy}`);
-      strategyFunc = strategies[defaultStrategy];
-    }
-
-    return strategyFunc({ dispatch, getState, dependencies, queue, stack, registry })(next);
-  };
-
-  selectStrategy.signature = 'i.p.5.j.7.0.2.1.8.b';
-  return selectStrategy;
-};
-
-// Create the starter middleware
-/**
- * Default starter middleware instance.
- */
+/** Default starter middleware used by the store. */
 export const starter = createStarter();

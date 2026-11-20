@@ -38,6 +38,39 @@ describe("queue", () => {
 
     expect(events).toEqual(["A-start", "child", "A-end", "sibling"]);
   });
+
+  it("keeps siblings queued when an inline child rejects and its parent continues", async () => {
+    const q = createQueue();
+    const childSettled = deferred<void>();
+    const finishParent = deferred<void>();
+    const events: string[] = [];
+    const failure = new Error("child failed");
+
+    const parent = q.enqueue(async () => {
+      try {
+        await q.enqueue(() => { throw failure; }, { inlineIfRunning: true });
+      } catch (error) {
+        expect(error).toBe(failure);
+        events.push("child rejected");
+      } finally {
+        childSettled.resolve();
+      }
+      await finishParent.promise;
+      events.push("parent finished");
+    });
+
+    await childSettled.promise;
+    const sibling = q.enqueue(() => { events.push("sibling started"); });
+    try {
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      expect(events).toEqual(["child rejected"]);
+    } finally {
+      finishParent.resolve();
+      await Promise.all([parent, sibling]);
+    }
+
+    expect(events).toEqual(["child rejected", "parent finished", "sibling started"]);
+  });
   
   it("runs enqueued operations sequentially and tracks pending", async () => {
     const q = createQueue();
