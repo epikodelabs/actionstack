@@ -18,7 +18,7 @@ Every async action is managed by a `SimpleLock` to ensure safety and predictabil
 Thunks can dispatch other actions — even other thunks. The middleware recursively handles these calls, ensuring each is processed with its own lock and passed through the full middleware pipeline.
 
 ### 🎯 Trigger Matching
-After a synchronous action is processed, the middleware checks all registered thunks for matching triggers. If a thunk’s triggers array matches the action (by type or predicate), it’s executed immediately.
+After a synchronous action is processed, the middleware checks all registered thunks for matching triggers. If a thunk’s triggers array matches the action (by type or predicate), it starts immediately — before any sibling action already waiting in the queue applies — so it observes the state produced by the action that triggered it. In concurrent mode, the matched thunks then run alongside each other; in exclusive mode they run in registration order.
 
 ### 🔒 State Isolation
 By using a robust locking mechanism, the middleware guarantees state is isolated during each operation, preventing race conditions and ensuring predictable outcomes.

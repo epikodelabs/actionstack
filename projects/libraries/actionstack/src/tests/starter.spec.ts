@@ -546,6 +546,54 @@ describe('starter', () => {
       expect(lastStartIndex).toBeLessThan(firstEndIndex);
     });
 
+    it('concurrent mode: starts matching triggers before a queued sibling action applies', async () => {
+      const events: string[] = [];
+      const t1 = thunk(
+        'TEST/ORDER_CONCURRENT',
+        () => async () => {
+          events.push('trigger:A');
+        },
+        ['A']
+      );
+
+      registerTestModule({ t1 });
+
+      const { dispatch } = createHarness('concurrent', {
+        nextHook: (action) => {
+          events.push(`next:${action.type}`);
+        },
+      });
+
+      await Promise.all([dispatch({ type: 'A' }), dispatch({ type: 'B' })]);
+
+      expect(events).toEqual(['next:A', 'trigger:A', 'next:B']);
+    });
+
+    it('concurrent mode: triggers observe state before a queued sibling action', async () => {
+      let state = 'initial';
+      const seen: string[] = [];
+      const t1 = thunk(
+        'TEST/STATE_ORDER_CONCURRENT',
+        () => async () => {
+          seen.push(state);
+        },
+        ['A']
+      );
+
+      registerTestModule({ t1 });
+
+      const { dispatch } = createHarness('concurrent', {
+        nextHook: (action) => {
+          state = action.type;
+        },
+      });
+
+      await Promise.all([dispatch({ type: 'A' }), dispatch({ type: 'B' })]);
+
+      expect(seen).toEqual(['A']);
+      expect(state).toBe('B');
+    });
+
     it('propagates errors from matching thunks without crashing', async () => {
       const warn = spyOn(console, 'warn');
       const errorThunk = thunk(
